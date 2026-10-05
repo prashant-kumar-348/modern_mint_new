@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+.env*.local
+*.save
+.DS_Store
+App.zip
+backend.env
