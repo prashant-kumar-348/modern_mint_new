@@ -58,12 +58,72 @@ const safeSessionStorage = {
   }
 };
 
+const AVATAR_IMAGE_BY_ID = {
+  1: 'https://modernmintgame.com/cdn/shop/files/01.png?v=1772091663&width=2000',
+  2: 'https://modernmintgame.com/cdn/shop/files/03.png?v=1772091662&width=2000',
+  3: 'https://modernmintgame.com/cdn/shop/files/02.png?v=1772091663&width=2000',
+  4: 'https://modernmintgame.com/cdn/shop/files/05.png?v=1772091663&width=2000',
+  5: 'https://modernmintgame.com/cdn/shop/files/04.png?v=1772091663&width=2000',
+  6: 'https://modernmintgame.com/cdn/shop/files/06.png?v=1772091663&width=2000',
+};
+
 const getPlayerGradient = (color) => {
   if (color === '#ef4444') return 'from-[#571717] to-[#843040]';
   if (color === '#55ffb0') return 'from-[#112a20] to-[#1c4d3d]';
   if (color === '#d4af37') return 'from-[#2d2006] to-[#5e481b]';
   if (color === '#00e1ff') return 'from-[#072430] to-[#0e4e68]';
   return 'from-gray-800 to-gray-700';
+};
+
+const getPlayerPillStyle = (color, name = '') => {
+  const c = String(color || '').toLowerCase();
+  const n = String(name || '').toLowerCase();
+  if (n.includes('ruthless') || c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) {
+    return {
+      backgroundImage: "url('/Rectangle-24.png')",
+      backgroundSize: '100% 100%',
+      backgroundRepeat: 'no-repeat'
+    };
+  }
+  if (n.includes('robotic') || c.includes('55ffb0') || c.includes('teal') || c.includes('green') || c.includes('gt')) {
+    return {
+      backgroundImage: "url('/Rectangle-508.png')",
+      backgroundSize: '100% 100%',
+      backgroundRepeat: 'no-repeat'
+    };
+  }
+  if (c.includes('d4af37') || c.includes('ffc240') || c.includes('gold') || c.includes('gd') || c.includes('yellow')) {
+    return {
+      background: 'linear-gradient(to right, #4a3412, #291c07)',
+      border: '1px solid rgba(212, 175, 55, 0.4)'
+    };
+  }
+  if (c.includes('00e1ff') || c.includes('blue') || c.includes('bl')) {
+    return {
+      background: 'linear-gradient(to right, #0d3446, #071d28)',
+      border: '1px solid rgba(0, 225, 255, 0.4)'
+    };
+  }
+  return {
+    backgroundImage: "url('/Rectangle-508.png')",
+    backgroundSize: '100% 100%',
+    backgroundRepeat: 'no-repeat'
+  };
+};
+
+const getPlayerAvatarSrc = (player, idx = 0) => {
+  if (player?.avatarId && AVATAR_IMAGE_BY_ID[player.avatarId]) {
+    return AVATAR_IMAGE_BY_ID[player.avatarId];
+  }
+  const c = String(player?.color || '').toLowerCase();
+  const n = String(player?.name || '').toLowerCase();
+  if (n.includes('ruthless') || c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) {
+    return '/avatar-ruthless.png';
+  }
+  if (n.includes('robotic') || c.includes('55ffb0') || c.includes('teal') || c.includes('green') || c.includes('gt')) {
+    return '/avatar-robotic.png';
+  }
+  return `/player-avatar-${((idx % 4) + 1)}.png`;
 };
 
 const getCompanyShortName = (name) => {
@@ -106,22 +166,45 @@ const getLaunchedCompanyForMessage = (message) => {
 };
 
 const getCompanyLogoImage = (name) => {
-  if (!name) return '/company-wallet.png';
+  if (!name) return '/company-icon-tech.png';
   const upper = name.toUpperCase().trim();
-  if (upper.includes("FARM")) return '/company-contract-farming.png';
-  if (upper.includes("IOT")) return '/company-agri-iot.png';
+  if (upper.includes("FARM")) return '/company-icon-farma.png';
+  if (upper.includes("ROBO") || upper.includes("PACK") || upper.includes("IOT") || upper.includes("TECH")) return '/company-icon-tech.png';
   if (upper.includes("WALLET")) return '/company-wallet.png';
-  if (upper.includes("SNACK")) return '/company-snacks.png';
+  if (upper.includes("SNACK") || upper.includes("KHANAA")) return '/company-snacks.png';
   if (upper.includes("COMM")) return '/company-quick-commerce.png';
   if (upper.includes("STOR")) return '/company-smart-storage.png';
   if (upper.includes("RESTRO") || upper.includes("CHAIN")) return '/company-restro-chain.png';
   if (upper.includes("TRACE")) return '/company-traceability.png';
-  if (upper.includes("ROBO") || upper.includes("PACK")) return '/company-robo-packaging.png';
-  return '/company-wallet.png';
+  return '/company-icon-tech.png';
+};
+
+export const getStageTokenImage = (stage, playerIdx = 0, playerColor = null) => {
+  const stageMap = {
+    'L': 'L', '0': 'L', 0: 'L',
+    'R': 'R', '1': 'R', 1: 'R',
+    'G': 'G', '2': 'G', 2: 'G',
+    'S': 'S', '3': 'S', 3: 'S',
+    'Launch': 'L', 'LAUNCH': 'L',
+    'Retain': 'R', 'RETAIN': 'R',
+    'Grow': 'G', 'GROW': 'G',
+    'Scale': 'S', 'SCALE': 'S'
+  };
+  const letter = stageMap[stage] || 'L';
+  let type = ((playerIdx % 4) + 1);
+  if (playerColor) {
+    const c = String(playerColor).toLowerCase();
+    if (c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) type = 1;
+    else if (c.includes('55ffb0') || c.includes('36646c') || c.includes('teal') || c.includes('green') || c.includes('gt')) type = 2;
+    else if (c.includes('535252') || c.includes('00e1ff') || c.includes('charcoal') || c.includes('blue') || c.includes('bl')) type = 3;
+    else if (c.includes('ffc240') || c.includes('d4af37') || c.includes('gold') || c.includes('gd') || c.includes('yellow')) type = 4;
+  }
+  return `/stage-tokens/stage-${type}-${letter}.png`;
 };
 
 function App() {
   const [activeModal, setActiveModal] = useState(null); 
+  const [isHoverOpenedMat, setIsHoverOpenedMat] = useState(false);
   // 'deal', 'topup', 'mentor', 'team_action', 'pe_fund', 'phaseEnd'
   const [activeTopPanel, setActiveTopPanel] = useState(null);
   const [expandedPlayerId, setExpandedPlayerId] = useState(null);
@@ -583,19 +666,25 @@ function App() {
             </div>
             {/* Top-Right: Player Roster */}
             <div className="absolute right-6 top-6 pointer-events-auto flex flex-col items-end gap-2 w-[300px] z-50">
-              {augmentedPlayers.map(player => (
+              {augmentedPlayers.map((player, playerIdx) => (
                 <div key={player.id} className="w-full flex flex-col items-end gap-1">
                   <div className="flex gap-2 items-start w-full justify-end">
-                    {/* Figma Circular Avatar */}
+                    {/* Circular Avatar */}
                     <div 
                       onClick={() => setExpandedPlayerId(prev => prev === player.id ? null : player.id)}
-                      className="w-[30px] h-[30px] rounded-full flex items-center justify-center shrink-0 border-2 overflow-hidden bg-gray-900 transition-all cursor-pointer hover:opacity-95 select-none"
+                      className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 border-2 overflow-hidden bg-gray-900 transition-all cursor-pointer hover:opacity-95 select-none"
                       style={{ 
-                        borderColor: player.color,
-                        boxShadow: `0 0 10px ${player.color}80`
+                        borderColor: player.isLocked ? '#d4af37' : (player.color || '#55ffb0'),
+                        boxShadow: player.isLocked 
+                          ? '0 0 15px rgba(212, 175, 55, 0.9), inset 0 0 8px rgba(212, 175, 55, 0.4)' 
+                          : `0 0 12px ${player.color || '#55ffb0'}`
                       }}
                     >
-                      <Users size={14} style={{ color: player.color }} />
+                      <img 
+                        src={getPlayerAvatarSrc(player, playerIdx)} 
+                        alt={player.name} 
+                        className="w-full h-full object-cover select-none pointer-events-none" 
+                      />
                     </div>
                     
                     {/* Banner or Expanded Dropdown */}
@@ -604,36 +693,61 @@ function App() {
                       className="cursor-pointer hover:opacity-95 transition-opacity select-none"
                     >
                       {expandedPlayerId === player.id && !player.isLocal ? (
-                        <div className="w-[152px] min-h-[97px] rounded-[5px] bg-gradient-to-b from-[#36646C] to-[#201F1F] p-2 shadow-[0_4px_15px_rgba(0,0,0,0.5)] flex flex-col items-center font-sans animate-in fade-in zoom-in-[0.98] duration-200 border border-white/5">
-                          <div className="text-white text-[12px] mt-0.5 mb-2.5 font-normal tracking-wide drop-shadow-md">
-                            {player.name}
+                        <div 
+                          style={{
+                            backgroundImage: "url('/Rectangle-608.png')",
+                            backgroundSize: '100% 100%',
+                            backgroundRepeat: 'no-repeat'
+                          }}
+                          className="w-[220px] min-h-[115px] rounded-[6px] p-3 shadow-[0_6px_20px_rgba(0,0,0,0.6)] flex flex-col items-center font-sans animate-in fade-in zoom-in-[0.98] duration-200 border border-white/10"
+                        >
+                          <div className="text-white text-[12px] mb-2.5 font-bold tracking-wide drop-shadow-md text-center flex items-center justify-between w-full px-1">
+                            <span className="truncate">
+                              {player.name}
+                              {player.role && !player.name.includes(player.role) ? ` (${player.role})` : ''}
+                            </span>
+                            <span className="text-white/70 text-[9px] shrink-0 ml-1">▲</span>
                           </div>
-                          <div className="flex flex-col gap-2.5 w-full px-2 pb-1">
+                          <div className="flex flex-col gap-2.5 w-full px-1 pb-1">
                             {player.ownedCompanies.length > 0 ? (
                               player.ownedCompanies.map((c, i) => (
-                                <div key={i} className="flex items-center justify-between w-full">
-                                  <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                                <div key={i} className="flex items-center justify-between w-full px-2 py-0.5">
+                                  {/* Company 3D Icon */}
+                                  <div className="w-[36px] h-[36px] flex items-center justify-center shrink-0">
                                     <img src={getCompanyLogoImage(c.name)} alt={c.name} className="w-full h-full object-contain filter drop-shadow-md select-none" />
                                   </div>
-                                  <div className="w-[22px] h-[22px] bg-[#4B7981]/40 border border-[#64969E]/50 rounded-[3px] flex items-center justify-center text-white text-[11px] font-normal shadow-sm backdrop-blur-sm">
-                                    {c.stage}
-                                  </div>
-                                  <div className="w-[22px] h-[22px] rounded-full bg-gradient-to-br from-[#e5e5e5] to-[#737373] border border-[#a3a3a3] flex items-center justify-center shadow-[inset_0_1px_2px_rgba(255,255,255,0.8),0_2px_5px_rgba(0,0,0,0.6)]">
-                                    <span className="text-[9px] font-black text-gray-900 drop-shadow-[0_1px_1px_rgba(255,255,255,0.5)]">
-                                      {c.team === 'RN' ? '1' : c.team === 'GT' ? '2' : c.team === 'GD' ? '3' : '4'}
+                                  {/* Stage Level Badge using Rectangle 549 */}
+                                  <div className="w-[32px] h-[32px] relative flex items-center justify-center shrink-0 select-none">
+                                    <img src="/stage-badge-bg.png" alt="Stage" className="absolute inset-0 w-full h-full object-contain" />
+                                    <span className="relative z-10 text-white text-[13px] font-bold leading-none select-none drop-shadow-sm">
+                                      {c.stage}
                                     </span>
+                                  </div>
+                                  {/* Team Token Coin using team-token-2.png */}
+                                  <div className="w-[32px] h-[32px] flex items-center justify-center shrink-0 select-none">
+                                    <img 
+                                      src="/team-token-2.png" 
+                                      alt="Team Token" 
+                                      className="w-full h-full object-contain drop-shadow-md select-none" 
+                                    />
                                   </div>
                                 </div>
                               ))
                             ) : (
-                              <div className="text-[9px] text-white/40 italic text-center py-2 w-full">No assets owned</div>
+                              <div className="text-[11px] text-white/50 italic text-center py-2.5 w-full">No assets owned</div>
                             )}
                           </div>
                         </div>
                       ) : (
-                        <div className={`w-[152px] h-[30px] rounded-[5px] flex items-center justify-between px-3 bg-gradient-to-r ${getPlayerGradient(player.color)} shadow-lg border border-white/5`}>
-                          <span className="text-[10px] font-bold text-white tracking-wide truncate">{player.name}</span>
-                          <span className="text-white/80 text-[8px] ml-1">▼</span>
+                        <div 
+                          style={getPlayerPillStyle(player.color, player.name)}
+                          className="w-[220px] h-[36px] rounded-[5px] flex items-center justify-between px-3 shadow-lg border border-white/5 select-none"
+                        >
+                          <span className="text-[12px] font-bold text-white tracking-wide truncate drop-shadow-sm">
+                            {player.name}
+                            {player.role && !player.name.includes(player.role) && !player.isLocal ? ` (${player.role})` : ''}
+                          </span>
+                          <span className="text-white/80 text-[10px] ml-1">▼</span>
                         </div>
                       )}
                     </div>
@@ -641,90 +755,129 @@ function App() {
                   
                   {expandedPlayerId === player.id && player.isLocal && (
                       // Local Player Detailed Company List
-                      <div className="bg-gradient-to-b from-[#ebd6d6] to-[#fff4d4] border-2 border-[#d4af37] rounded-[20px] overflow-hidden mt-1.5 animate-in slide-in-from-top-2 w-full text-[10px] flex flex-col font-sans shadow-xl">
-                        <div className="grid grid-cols-[1.2fr_1fr_1.1fr_1fr_1fr] text-[9px] text-[#b87333] font-bold border-b border-[#b87333]/30 text-center leading-tight bg-white/20 uppercase tracking-wider py-1.5">
-                          <div className="flex flex-col items-center border-r border-[#b87333]/20 py-0.5">
-                            <span>Company</span>
-                            <span className="text-[6px] text-[#b87333]/70 lowercase mt-0.5">$k</span>
+                      <div 
+                        style={{
+                          background: 'linear-gradient(180deg, #2a181a 0%, #291719 60%, #342419 75%, #41351a 90%, #4b4219 100%)'
+                        }}
+                        className="w-[316px] h-[373px] border-[1.5px] border-[#dfa832] rounded-[24px] overflow-hidden mt-1.5 animate-in slide-in-from-top-2 flex flex-col font-sans shadow-[0_12px_36px_rgba(0,0,0,0.7)] select-none shrink-0"
+                      >
+                        {/* Header Row */}
+                        <div className="grid grid-cols-[82px_49px_68px_67px_1fr] h-[77px] shrink-0 text-center items-start pt-3">
+                          {/* Column 1: Company */}
+                          <div className="flex flex-col items-center border-r border-[#a87a3e]/30 h-full">
+                            <span className="text-[13px] font-medium text-[#dfa832] leading-tight">Company</span>
+                            <span className="text-[10px] font-normal text-[#ba9463] lowercase leading-none mt-1">$k</span>
+                            <div className="w-[62px] border-b border-[#a87a3e]/40 mt-2" />
                           </div>
-                          <div className="flex flex-col items-center border-r border-[#b87333]/20 py-0.5">
-                            <span>Invest</span>
-                            <span className="text-[6px] text-[#b87333]/70 lowercase mt-0.5">$k</span>
+                          {/* Column 2: Invest */}
+                          <div className="flex flex-col items-center border-r border-[#a87a3e]/30 h-full">
+                            <span className="text-[13px] font-medium text-[#dfa832] leading-tight">Invest</span>
+                            <span className="text-[10px] font-normal text-[#ba9463] lowercase leading-none mt-1">$k</span>
+                            <div className="w-[36px] border-b border-[#a87a3e]/40 mt-2" />
                           </div>
-                          <div className="flex flex-col items-center border-r border-[#b87333]/20 py-0.5">
-                            <span>Projected Rev</span>
-                            <span className="text-[6px] text-[#b87333]/70 lowercase mt-0.5">$k</span>
+                          {/* Column 3: Projected Rev */}
+                          <div className="flex flex-col items-center border-r border-[#a87a3e]/30 h-full">
+                            <span className="text-[12px] font-medium text-[#dfa832] leading-[1.1]">Projected<br/>Rev</span>
+                            <span className="text-[10px] font-normal text-[#ba9463] lowercase leading-none mt-0.5">$k</span>
+                            <div className="w-[52px] border-b border-[#a87a3e]/40 mt-1" />
                           </div>
-                          <div className="flex flex-col items-center border-r border-[#b87333]/20 py-0.5">
-                            <span>Valuation</span>
-                            <span className="text-[6px] text-[#b87333]/70 lowercase mt-0.5">$k</span>
+                          {/* Column 4: Valuation */}
+                          <div className="flex flex-col items-center border-r border-[#a87a3e]/30 h-full">
+                            <span className="text-[13px] font-medium text-[#dfa832] leading-tight">Valuation</span>
+                            <span className="text-[10px] font-normal text-[#ba9463] lowercase leading-none mt-1">$k</span>
+                            <div className="w-[50px] border-b border-[#a87a3e]/40 mt-2" />
                           </div>
-                          <div className="flex flex-col items-center py-0.5">
-                            <span>Loan</span>
-                            <span className="text-[6px] text-[#b87333]/70 lowercase mt-0.5">$k</span>
+                          {/* Column 5: Loan */}
+                          <div className="flex flex-col items-center h-full">
+                            <span className="text-[13px] font-medium text-[#dfa832] leading-tight">Loan</span>
+                            <span className="text-[10px] font-normal text-[#ba9463] lowercase leading-none mt-1">$k</span>
+                            <div className="w-[36px] border-b border-[#a87a3e]/40 mt-2" />
                           </div>
                         </div>
-                        {Array.from({ length: 4 }).map((_, idx) => {
-                          const c = player.ownedCompanies[idx];
-                          if (c) {
-                            
-                            let valInvest = c.invest;
-                            let valRev = c.revenue;
-                            let valVal = c.valuation;
-                            let valLoan = c.loan;
-                            
-                            if (companyDataMap[c.name] && companyDataMap[c.name][c.stage]) {
-                              valInvest = companyDataMap[c.name][c.stage][0];
-                              valRev = companyDataMap[c.name][c.stage][1];
-                              valVal = companyDataMap[c.name][c.stage][2];
-                              valLoan = companyDataMap[c.name][c.stage][3];
-                            }
-                            
-                            const loanPercent = valVal > 0 ? Math.round((valLoan / valVal) * 100) : (valLoan || 0);
-                            return (
-                              <div key={idx} className="grid grid-cols-[1.2fr_1fr_1.1fr_1fr_1fr] items-center text-center font-sans border-b border-[#b87333]/20 last:border-0 hover:bg-white/5 transition-colors">
-                                <div className="border-r border-[#b87333]/20 py-1.5 flex flex-col items-center justify-center">
-                                  <div className="flex items-center gap-1.5 relative">
-                                    <img src={getCompanyLogoImage(c.name)} alt={c.name} className="w-8 h-8 object-contain filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)] select-none shrink-0" />
-                                    <div className="flex flex-col gap-0.5 items-start">
-                                      <span className="bg-[#571717] text-white text-[6px] font-black px-1 py-0.5 rounded-[2px] uppercase tracking-wider leading-none">{c.stage}</span>
-                                      <div className="w-3.5 h-3.5 rounded-full bg-gray-600/80 border border-white/20 flex items-center justify-center text-[6px] font-black text-white leading-none">
-                                        {c.team || 'RN'}
+
+                        {/* 4 Data / Empty Rows */}
+                        <div className="flex-1 flex flex-col justify-between">
+                          {Array.from({ length: 4 }).map((_, idx) => {
+                            const c = player.ownedCompanies[idx];
+                            if (c) {
+                              let valInvest = c.invest;
+                              let valRev = c.revenue;
+                              let valVal = c.valuation;
+                              let valLoan = c.loan;
+                              
+                              if (companyDataMap[c.name] && companyDataMap[c.name][c.stage]) {
+                                valInvest = companyDataMap[c.name][c.stage][0];
+                                valRev = companyDataMap[c.name][c.stage][1];
+                                valVal = companyDataMap[c.name][c.stage][2];
+                                valLoan = companyDataMap[c.name][c.stage][3];
+                              }
+                              
+                              const loanPercent = valVal > 0 ? Math.round((valLoan / valVal) * 100) : (valLoan || 0);
+
+                              return (
+                                <div key={idx} className="grid grid-cols-[82px_49px_68px_67px_1fr] flex-1 items-center text-center font-sans">
+                                  {/* Company Identity */}
+                                  <div className="border-r border-[#a87a3e]/30 h-full flex flex-col items-center justify-center px-1">
+                                    <div className="flex items-center justify-center gap-1.5">
+                                      <img 
+                                        src={getCompanyLogoImage(c.name)} 
+                                        alt={c.name} 
+                                        className="w-[28px] h-[28px] object-contain drop-shadow-sm select-none shrink-0" 
+                                      />
+                                      <div className="flex flex-col items-center gap-1 shrink-0">
+                                        <div className="w-[18px] h-[18px] bg-[#6e2030] rounded-[3px] flex items-center justify-center shadow-sm select-none">
+                                          <span className="text-white text-[10px] font-bold leading-none select-none">
+                                            {c.stage}
+                                          </span>
+                                        </div>
+                                        <img 
+                                          src="/team-token-2.png" 
+                                          alt="Token" 
+                                          className="w-[16px] h-[16px] object-contain drop-shadow-sm select-none" 
+                                        />
                                       </div>
                                     </div>
+                                    <span className="font-black text-[10px] text-white tracking-wider uppercase text-center leading-none mt-1 select-none">
+                                      {getCompanyShortName(c.name)}
+                                    </span>
                                   </div>
-                                  <div className="mt-1.5 font-black text-[9px] text-white uppercase tracking-wider drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.9)] text-center leading-none">
-                                    {getCompanyShortName(c.name)}
+
+                                  {/* Invest */}
+                                  <div className="border-r border-[#a87a3e]/30 h-full flex items-center justify-center text-[15px] font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                                    {valInvest !== undefined ? valInvest : ''}
+                                  </div>
+
+                                  {/* Projected Rev */}
+                                  <div className="border-r border-[#a87a3e]/30 h-full flex items-center justify-center text-[15px] font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                                    {valRev !== undefined ? valRev : ''}
+                                  </div>
+
+                                  {/* Valuation */}
+                                  <div className="border-r border-[#a87a3e]/30 h-full flex items-center justify-center text-[15px] font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                                    {valVal !== undefined ? valVal : ''}
+                                  </div>
+
+                                  {/* Loan */}
+                                  <div className="h-full flex items-center justify-center text-[15px] font-medium text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]">
+                                    {loanPercent}%
                                   </div>
                                 </div>
-                                <div className="border-r border-[#b87333]/20 py-1.5 text-xs font-bold text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] font-sans">
-                                  {valInvest !== undefined ? valInvest : ''}
+                              );
+                            } else {
+                              return (
+                                <div key={idx} className="grid grid-cols-[82px_49px_68px_67px_1fr] flex-1 items-stretch text-center font-sans">
+                                  <div className="flex items-center justify-center border-r border-[#a87a3e]/30 h-full">
+                                    <span className="text-4xl font-black text-white/35 select-none">{idx + 1}</span>
+                                  </div>
+                                  <div className="border-r border-[#a87a3e]/30 h-full"></div>
+                                  <div className="border-r border-[#a87a3e]/30 h-full"></div>
+                                  <div className="border-r border-[#a87a3e]/30 h-full"></div>
+                                  <div className="h-full"></div>
                                 </div>
-                                <div className="border-r border-[#b87333]/20 py-1.5 text-xs font-bold text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] font-sans">
-                                  {valRev !== undefined ? valRev : ''}
-                                </div>
-                                <div className="border-r border-[#b87333]/20 py-1.5 text-xs font-bold text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] font-sans">
-                                  {valVal !== undefined ? valVal : ''}
-                                </div>
-                                <div className="py-1.5 text-xs font-bold text-white drop-shadow-[0_1.5px_1.5px_rgba(0,0,0,0.8)] font-sans">
-                                  {loanPercent}%
-                                </div>
-                              </div>
-                            );
-                          } else {
-                            return (
-                              <div key={idx} className="grid grid-cols-[1.2fr_1fr_1.1fr_1fr_1fr] items-stretch text-center font-sans border-b border-[#b87333]/20 last:border-0 h-[64px]">
-                                <div className="flex items-center justify-center border-r border-[#b87333]/20">
-                                  <span className="text-2xl font-black text-[#571717]/10 select-none">{idx + 1}</span>
-                                </div>
-                                <div className="border-r border-[#b87333]/20"></div>
-                                <div className="border-r border-[#b87333]/20"></div>
-                                <div className="border-r border-[#b87333]/20"></div>
-                                <div></div>
-                              </div>
-                            );
-                          }
-                        })}
+                              );
+                            }
+                          })}
+                        </div>
                       </div>
                   )}
                 </div>
@@ -733,7 +886,13 @@ function App() {
 
             {/* Center: Constrained Middle Board */}
             <div className="w-full max-w-[1450px] h-full max-h-[760px] pointer-events-auto relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[#1c4d3d] rounded-xl overflow-hidden bg-[#0a1914] scale-[0.9] origin-top">
-               <MiddleBoard players={augmentedPlayers} onDeckClick={() => setActiveModal('buy_mentor')} currentRound={gameRound} />
+               <MiddleBoard 
+                 players={augmentedPlayers} 
+                 onDeckClick={() => setActiveModal('buy_mentor')} 
+                 currentRound={gameRound} 
+                 onBankLoanClick={() => setActiveModal('loan')} 
+                 onPRServicesClick={() => setActiveModal('buy_pr')} 
+               />
             </div>
 
           </div>
@@ -791,8 +950,10 @@ function App() {
                       <div className="flex-1 flex items-center justify-between cursor-pointer hover:bg-white/5 rounded px-1 transition-colors h-full">
                         {/* Logo */}
                         <div className="w-6 h-6 rounded-full bg-[#112a20] border border-[#1c4d3d] flex items-center justify-center shadow-inner text-[10px]">{getCompanyIcon(comp.name)}</div>
-                        {/* Stage Level */}
-                        <div className="w-4 h-4 bg-red-900 border border-red-500 text-white text-[8px] font-bold flex items-center justify-center rounded-sm">{getStageInitial(comp.stage)}</div>
+                        {/* Stage Level Token */}
+                        <div className="w-6 h-6 flex items-center justify-center rounded-sm overflow-hidden shadow-sm shrink-0">
+                          <img src={getStageTokenImage(comp.stage, idx, player.color)} alt={getStageInitial(comp.stage)} className="w-full h-full object-contain select-none" />
+                        </div>
                         {/* Team (Token) */}
                         <div className="w-4 h-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 shadow-sm border border-white/20"></div>
                       </div>
@@ -808,7 +969,14 @@ function App() {
 
             {/* Desk Element 2: Mini Player Mat */}
             <div 
-              onClick={() => setActiveModal('playerMat')}
+              onMouseEnter={() => {
+                setActiveModal('playerMat');
+                setIsHoverOpenedMat(true);
+              }}
+              onClick={() => {
+                setActiveModal('playerMat');
+                setIsHoverOpenedMat(false);
+              }}
               className="pointer-events-auto cursor-pointer transition-all duration-300 scale-[0.65] translate-y-2 hover:scale-[0.95] hover:-translate-y-6 relative z-10 hover:z-50 shadow-[0_10px_30px_rgba(0,0,0,0.8)] rounded-lg bg-[#4A1720] border-2 border-[#2A0D12] p-2 flex gap-2 origin-bottom mb-6"
             >
               <div className="grid grid-cols-3 gap-1.5">
@@ -1090,7 +1258,15 @@ function App() {
         </div>
 
         {/* PHASE 2 MODAL MANAGER */}
-        {gamePhase === 2 && <Phase2Manager activeModal={activeModal} setActiveModal={setActiveModal} sendAction={sendAction} localPlayer={localPlayer} currentRound={gameRound} />}
+        {(gamePhase === 2 || ['launch', 'stage_up', 'buy_pr', 'upgrade_workforce'].includes(activeModal)) && (
+          <Phase2Manager 
+            activeModal={activeModal} 
+            setActiveModal={setActiveModal} 
+            sendAction={sendAction} 
+            localPlayer={localPlayer} 
+            currentRound={gameRound} 
+          />
+        )}
 
         {/* MENTOR CARD MODAL (Accessible Anytime) */}
         {activeModal === 'buy_mentor' && (
@@ -1111,7 +1287,11 @@ function App() {
 
         {/* POPUP MODALS WITH BACKDROP */}
         {activeModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm pointer-events-auto transition-opacity duration-300">
+          <div className={`fixed inset-0 z-50 flex items-center justify-center pointer-events-auto transition-all duration-300 ${
+            activeModal === 'playerMat' && isHoverOpenedMat 
+              ? 'p-0 bg-transparent' 
+              : 'p-4 bg-black/75 backdrop-blur-sm'
+          }`}>
             
             {/* DEAL SHEETS MODAL */}
             {activeModal === 'dealSheets' && (
@@ -1211,7 +1391,15 @@ function App() {
             )}
 
             {activeModal === 'playerMat' && (
-              <PlayerMatModal onClose={() => setActiveModal(null)} ownedCompanies={localPlayer?.ownedCompanies || []} />
+              <PlayerMatModal 
+                onClose={() => {
+                  setActiveModal(null);
+                  setIsHoverOpenedMat(false);
+                }} 
+                ownedCompanies={localPlayer?.ownedCompanies || []}
+                isHoverOpened={isHoverOpenedMat}
+                onPin={() => setIsHoverOpenedMat(false)}
+              />
             )}
 
             {activeModal === 'mentorInventory' && (

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock } from 'lucide-react';
 
-export default function PlayerMatModal({ onClose, ownedCompanies = [] }) {
+export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOpened = false, onPin }) {
   // Exact data extracted from your uploaded Player Mat screenshot
   const companies = [
     { id: 'c1', name: 'CONTRACT FARMING', icon: '🌾', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,250,200], [2000,2000,10000,400]] },
@@ -33,16 +33,44 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [] }) {
   return (
     // MODIFIED HERE: Added onClick={onClose} to allow clicking the background to close
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-2 sm:p-6 font-sans animate-in fade-in duration-300"
+      className={`fixed inset-0 z-50 flex items-center justify-center font-sans transition-colors duration-300 ${
+        isHoverOpened ? 'bg-black/40 backdrop-blur-sm p-1 sm:p-4' : 'bg-black/60 backdrop-blur-md p-2 sm:p-6'
+      }`}
       onClick={onClose}
+      onMouseLeave={() => {
+        if (isHoverOpened && onClose) {
+          onClose();
+        }
+      }}
     >
       
       {/* MODIFIED HERE: Added stopPropagation() so clicking the mat doesn't close it, and added animation classes */}
       <div 
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-[1400px] h-[95vh] bg-[#501625] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border-4 border-[#2A0D12] flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-[20%] duration-300 ease-out"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onPin) onPin();
+        }}
+        onMouseLeave={() => {
+          if (isHoverOpened && onClose) {
+            onClose();
+          }
+        }}
+        className={`relative w-full max-w-[1400px] h-[95vh] bg-[#501625] rounded-xl border-4 border-[#2A0D12] flex flex-col overflow-hidden transition-all duration-300 ease-out ${
+          isHoverOpened 
+            ? 'scale-[0.8] origin-bottom shadow-[0_0_40px_rgba(0,0,0,0.9)]' 
+            : 'scale-100 origin-center shadow-[0_0_50px_rgba(0,0,0,0.8)] animate-in zoom-in-95 slide-in-from-bottom-[20%]'
+        }`}
       >
         
+        {/* Hover preview indicator badge */}
+        {isHoverOpened && (
+          <div className="absolute top-3.5 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md px-3.5 py-1 rounded-full text-[10px] text-[#FFE8D6] font-bold tracking-widest uppercase border border-white/20 shadow-md pointer-events-none z-50 flex items-center gap-1.5 animate-pulse">
+            <span>Hover Preview</span>
+            <span className="text-white/40">•</span>
+            <span className="text-[#55ffb0]">Click to Expand</span>
+          </div>
+        )}
+
         {/* Close Button */}
         <button onClick={onClose} className="absolute top-4 right-4 text-white/50 hover:text-white z-50 transition-colors bg-black/40 rounded-full p-1.5">
           <X size={28} />
@@ -72,11 +100,11 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [] }) {
 
                   {/* LAUNCH OVERLAY */}
                   {!isLaunched && (
-                     <div className="absolute inset-0 top-5 z-20 flex flex-col items-center justify-center bg-[#7D3C4A]/20 backdrop-blur-[1px] rounded-b-xl border-t border-white/5">
-                        <Lock size={32} className="text-white/40 mb-4 drop-shadow-md" />
+                     <div className="absolute inset-0 top-5 z-20 flex flex-col items-center justify-center bg-black/10 rounded-b-xl border-t border-white/5 pointer-events-none">
+                        <Lock size={26} className="text-white/60 mb-2 drop-shadow-md" />
                         <button 
                           onClick={() => toggleLaunch(company.id)}
-                          className="bg-[#FFF2D8] text-[#4A1720] px-6 py-2.5 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest hover:bg-[#EAE4D3] hover:scale-105 transition-all shadow-lg text-xs"
+                          className="pointer-events-auto bg-[#FFF2D8] text-[#4A1720] px-5 py-2 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest hover:bg-[#EAE4D3] hover:scale-105 transition-all shadow-xl text-xs cursor-pointer"
                         >
                           Launch Company
                         </button>
@@ -85,7 +113,7 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [] }) {
 
                   {/* Undo Launch Button */}
                   {isLaunched && (
-                     <button onClick={() => toggleLaunch(company.id)} className="absolute top-3 right-3 text-[9px] text-white/30 hover:text-white uppercase font-bold z-10 transition-colors">
+                     <button onClick={() => toggleLaunch(company.id)} className="absolute top-3 right-3 text-[10px] text-white/50 hover:text-white uppercase font-bold z-10 transition-colors">
                        Undo Launch
                      </button>
                   )}
@@ -93,7 +121,7 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [] }) {
                   {/* Data Table */}
                   <div className="flex-1 w-full pt-2 flex flex-col">
                     {/* Headers */}
-                    <div className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[8px] text-[#FFD1DA] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight">
+                    <div className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[10px] text-[#FFE8D6] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight">
                       <div className="text-left">TEAM</div>
                       <div className="text-left">STAGE</div>
                       <div>Invest<br/>($K)</div>
@@ -105,20 +133,20 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [] }) {
                     {/* Rows */}
                     <div className="flex-1 flex flex-col justify-around pb-2">
                       {stages.map((stage, i) => (
-                        <div key={i} className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-[10px] text-white text-center">
+                        <div key={i} className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-[12px] text-white text-center font-bold">
                           <input
                             type="text" 
                             inputMode="numeric" 
                             maxLength="2" 
                             value={teamAllocations[`${company.id}-${i}`] || ""}
                             onChange={(e) => handleTeamChange(company.id, i, e.target.value)}
-                            className="w-6 h-6 bg-transparent border-2 border-white/30 rounded-sm text-center text-white text-xs font-bold outline-none focus:border-white focus:bg-white/10 transition-all placeholder-white/20"
+                            className="w-6 h-6 bg-transparent border-2 border-white/40 rounded-sm text-center text-white text-xs font-bold outline-none focus:border-white focus:bg-white/10 transition-all placeholder-white/20"
                           />
-                          <div className="text-left font-bold text-[11px]">{stage}</div>
-                          <div className="font-mono font-medium">{company.data[i][0]}</div>
-                          <div className="font-mono font-medium">{company.data[i][1]}</div>
-                          <div className="font-mono font-medium">{company.data[i][2]}</div>
-                          <div className="font-mono font-medium">{company.data[i][3]}</div>
+                          <div className="text-left font-bold text-[12px] text-[#FFE8D6]">{stage}</div>
+                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{company.data[i][0]}</div>
+                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{company.data[i][1]}</div>
+                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{company.data[i][2]}</div>
+                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{company.data[i][3]}</div>
                         </div>
                       ))}
                     </div>
@@ -126,16 +154,16 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [] }) {
 
                   {/* Equity Slider Ruler */}
                   <div className="mt-4 flex items-end gap-2 px-1">
-                    <div className="text-[7px] text-[#FFD1DA] uppercase font-bold leading-tight w-8 text-right">
+                    <div className="text-[8px] text-[#FFE8D6] uppercase font-bold leading-tight w-8 text-right">
                       EQUITY<br/>GIVEN
                     </div>
                     <div className="flex-1">
                       <div className="flex justify-between items-end h-3 border-b border-white/40 mb-0.5 px-0.5">
                         {[0,10,20,30,40,50,60,70,80,90,100].map(num => (
-                          <div key={num} className={`w-[1px] bg-white/60 ${num % 20 === 0 ? 'h-2' : 'h-1'}`}></div>
+                          <div key={num} className={`w-[1px] bg-white/70 ${num % 20 === 0 ? 'h-2' : 'h-1'}`}></div>
                         ))}
                       </div>
-                      <div className="flex justify-between text-[6.5px] text-white/80 font-mono font-medium px-0.5">
+                      <div className="flex justify-between text-[8px] text-white font-mono font-bold px-0.5">
                         {[0,10,20,30,40,50,60,70,80,90,100].map(num => (
                            <span key={num} className="w-3 text-center">{num}</span>
                         ))}

@@ -9,10 +9,42 @@ const AVATAR_IMAGE_BY_ID = {
   6: 'https://modernmintgame.com/cdn/shop/files/06.png?v=1772091663&width=2000',
 };
 
-export default function MiddleBoard({ players = [], onDeckClick, currentRound = 1 }) {
+/**
+ * @param {{
+ *   players?: any[],
+ *   onDeckClick?: () => void,
+ *   currentRound?: number,
+ *   onBankLoanClick?: () => void,
+ *   onPRServicesClick?: () => void
+ * }} props
+ */
+export default function MiddleBoard({ players = [], onDeckClick = () => {}, currentRound = 1, onBankLoanClick = undefined, onPRServicesClick = undefined }) {
   const totalRounds = 9;
 
   const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
+
+  const getStageTokenImage = (stage, playerIdx = 0, playerColor = null) => {
+    const stageMap = {
+      'L': 'L', '0': 'L', 0: 'L',
+      'R': 'R', '1': 'R', 1: 'R',
+      'G': 'G', '2': 'G', 2: 'G',
+      'S': 'S', '3': 'S', 3: 'S',
+      'Launch': 'L', 'LAUNCH': 'L',
+      'Retain': 'R', 'RETAIN': 'R',
+      'Grow': 'G', 'GROW': 'G',
+      'Scale': 'S', 'SCALE': 'S'
+    };
+    const letter = stageMap[stage] || 'L';
+    let type = (playerIdx % 4) + 1;
+    if (playerColor) {
+      const c = String(playerColor).toLowerCase();
+      if (c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) type = 1;
+      else if (c.includes('55ffb0') || c.includes('36646c') || c.includes('teal') || c.includes('green') || c.includes('gt')) type = 2;
+      else if (c.includes('535252') || c.includes('00e1ff') || c.includes('charcoal') || c.includes('blue') || c.includes('bl')) type = 3;
+      else if (c.includes('ffc240') || c.includes('d4af37') || c.includes('gold') || c.includes('gd') || c.includes('yellow')) type = 4;
+    }
+    return `/stage-tokens/stage-${type}-${letter}.png`;
+  };
 
   // 9 Companies in Orbit
   const baseCompanies = [
@@ -29,11 +61,16 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
 
   const companies = baseCompanies.map(comp => {
      const tags = [];
-     players.forEach(p => {
+     players.forEach((p, pIdx) => {
         if (p.ownedCompanies) {
            const owned = p.ownedCompanies.find(c => c.name.replace(/\s+/g, '').toLowerCase() === comp.name.replace(/\s+/g, '').toLowerCase());
            if (owned) {
-              tags.push({ color: p.color || '#55ffb0', text: getStageInitial(owned.stage) });
+              const letter = getStageInitial(owned.stage);
+              tags.push({ 
+                color: p.color || '#55ffb0', 
+                text: letter,
+                tokenImg: getStageTokenImage(owned.stage, pIdx, p.color)
+              });
            }
         }
      });
@@ -98,30 +135,34 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
             
             {/* Event Card 4-6 (Custom Image) */}
             <div className="w-full aspect-[2.5/3.5] bg-[#111] rounded-md shadow-[0_0_20px_rgba(0,225,255,0.2)] flex items-center justify-center relative overflow-hidden group hover:scale-105 transition-transform cursor-pointer border-2 border-[#1c4d3d]">
+               <img 
+                 src="/event-card.jpg" 
+                 alt="Event Card 4-6" 
+                 className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ${currentRound < 4 ? 'brightness-[0.75]' : ''}`} 
+               />
                {currentRound >= 4 ? (
-                 <>
-                   <img src="/event-card.jpg" alt="Event Card 4-6" className="absolute inset-0 w-full h-full object-cover" />
-                   <div className="absolute inset-0 bg-[#00e1ff]/10 mix-blend-overlay opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                 </>
+                 <div className="absolute inset-0 bg-[#00e1ff]/10 mix-blend-overlay opacity-50 group-hover:opacity-100 transition-opacity"></div>
                ) : (
-                 <div className="absolute inset-0 w-full h-full bg-gradient-to-b from-[#061c17] to-[#0a2e24] flex items-center justify-center flex-col border-2 border-dashed border-[#1c4d3d] p-2 text-center">
-                    <span className="text-[#30a887] text-[13px] leading-tight font-black uppercase tracking-widest drop-shadow-md">Round 4<br/>Event</span>
-                    <span className="text-4xl mt-3 opacity-50 drop-shadow-xl">🔒</span>
+                 <div className="absolute inset-0 bg-black/45 group-hover:bg-black/30 transition-colors flex items-center justify-center flex-col p-2 text-center select-none backdrop-blur-[0.5px]">
+                    <span className="text-[#55ffb0] text-[13px] leading-tight font-black uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">Round 4<br/>Event</span>
+                    <span className="text-3xl mt-2 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]">🔒</span>
                  </div>
                )}
             </div>
 
             {/* Event Card 7-9 (Custom Image) */}
             <div className="w-full aspect-[2.5/3.5] bg-[#111] rounded-md shadow-[0_0_20px_rgba(0,225,255,0.2)] flex items-center justify-center relative overflow-hidden group hover:scale-105 transition-transform cursor-pointer border-2 border-[#1c4d3d]">
+               <img 
+                 src="/event-card.jpg" 
+                 alt="Event Card 7-9" 
+                 className={`absolute inset-0 w-full h-full object-cover transition-all duration-300 ${currentRound < 7 ? 'brightness-[0.75]' : ''}`} 
+               />
                {currentRound >= 7 ? (
-                 <>
-                   <img src="/event-card.jpg" alt="Event Card 7-9" className="absolute inset-0 w-full h-full object-cover" />
-                   <div className="absolute inset-0 bg-[#00e1ff]/10 mix-blend-overlay opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                 </>
+                 <div className="absolute inset-0 bg-[#00e1ff]/10 mix-blend-overlay opacity-50 group-hover:opacity-100 transition-opacity"></div>
                ) : (
-                 <div className="absolute inset-0 w-full h-full bg-gradient-to-b from-[#061c17] to-[#0a2e24] flex items-center justify-center flex-col border-2 border-dashed border-[#1c4d3d] p-2 text-center">
-                    <span className="text-[#30a887] text-[13px] leading-tight font-black uppercase tracking-widest drop-shadow-md">Round 7<br/>Event</span>
-                    <span className="text-4xl mt-3 opacity-50 drop-shadow-xl">🔒</span>
+                 <div className="absolute inset-0 bg-black/45 group-hover:bg-black/30 transition-colors flex items-center justify-center flex-col p-2 text-center select-none backdrop-blur-[0.5px]">
+                    <span className="text-[#55ffb0] text-[13px] leading-tight font-black uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">Round 7<br/>Event</span>
+                    <span className="text-3xl mt-2 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]">🔒</span>
                  </div>
                )}
             </div>
@@ -176,12 +217,12 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
                 >
                   <div className="relative flex flex-col items-center gap-1">
                      
-                     {/* Floating Tags (L / G) */}
+                     {/* Floating Stage Tokens (L / R / G / S) */}
                      {comp.tags && comp.tags.length > 0 && (
-                        <div className="absolute -top-10 -right-8 flex flex-col gap-1 z-40 drop-shadow-lg">
+                        <div className="absolute -top-10 -right-7 flex flex-col gap-1 z-40 drop-shadow-lg">
                           {comp.tags.map((tag, tIdx) => (
-                            <div key={tIdx} className="w-8 h-8 rounded-md flex items-center justify-center text-base font-black text-white border-2 border-white/30 shadow-[0_4px_12px_rgba(0,0,0,0.6)]" style={{ backgroundColor: tag.color }}>
-                               {tag.text}
+                            <div key={tIdx} className="w-7 h-7 md:w-8 md:h-8 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.6)] rounded-sm overflow-hidden select-none hover:scale-110 transition-transform">
+                               <img src={tag.tokenImg} alt={tag.text} className="w-full h-full object-contain" />
                             </div>
                           ))}
                         </div>
@@ -218,14 +259,17 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
         <div className="flex flex-col justify-between items-end w-[280px] pointer-events-auto z-30 pt-6 pb-2">
           
           {/* Bank Loan Info */}
-          <div className="w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pb-8 shadow-xl relative overflow-hidden group">
-            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm"></div>
+          <div 
+            onClick={onBankLoanClick}
+            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pb-8 shadow-xl relative overflow-hidden group ${onBankLoanClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
+          >
+            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors"></div>
             <div className="absolute top-1 left-1 w-2 h-2 border-t border-l border-[#55ffb0]"></div>
             <div className="absolute top-1 right-1 w-2 h-2 border-t border-r border-[#55ffb0]"></div>
             <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l border-[#55ffb0]"></div>
             <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-[#55ffb0]"></div>
 
-            <h3 className="text-[#55ffb0] font-black text-[11px] uppercase tracking-[0.2em] mb-4 text-center relative z-10">Bank Loan</h3>
+            <h3 className="text-[#55ffb0] font-black text-[11px] uppercase tracking-[0.2em] mb-4 text-center relative z-10 group-hover:text-white transition-colors">Bank Loan</h3>
             <ul className="text-[9px] text-[#a4d8c2] space-y-3 leading-tight list-disc pl-5 font-sans pr-2 relative z-10">
               <li>Pay 10% interest each round</li>
               <li>Borrow up to your eligible limit<br/><span className="text-[7px] text-[#a4d8c2]/60">(see Player Mat)</span></li>
@@ -273,14 +317,17 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
           </div>
 
           {/* PR Services Info */}
-          <div className="w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pt-6 shadow-xl relative overflow-hidden group">
-            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm"></div>
+          <div 
+            onClick={onPRServicesClick}
+            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pt-6 shadow-xl relative overflow-hidden group ${onPRServicesClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
+          >
+            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors"></div>
             <div className="absolute top-1 left-1 w-2 h-2 border-t border-l border-[#55ffb0]"></div>
             <div className="absolute top-1 right-1 w-2 h-2 border-t border-r border-[#55ffb0]"></div>
             <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l border-[#55ffb0]"></div>
             <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-[#55ffb0]"></div>
 
-            <h3 className="text-[#55ffb0] font-black text-[11px] uppercase tracking-[0.2em] mb-4 text-center">PR Services</h3>
+            <h3 className="text-[#55ffb0] font-black text-[11px] uppercase tracking-[0.2em] mb-4 text-center group-hover:text-white transition-colors">PR Services</h3>
             <div className="flex flex-col items-center gap-1.5 text-[9px] text-[#a4d8c2] font-sans">
               <div>Team 3: Pay $500K</div>
               <div>Team 2: Pay $300K</div>
