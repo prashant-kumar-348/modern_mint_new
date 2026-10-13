@@ -48,15 +48,15 @@ export default function MiddleBoard({ players = [], onDeckClick = () => {}, curr
 
   // 9 Companies in Orbit
   const baseCompanies = [
-    { name: 'Wallet', icon: '👛', image: '/company-wallet.png', angle: 0 },
-    { name: 'Quick Commerce', icon: '🛒', image: '/company-quick-commerce.png', angle: 50 },
-    { name: 'Snacks', icon: '🍿', image: '/company-snacks.png', angle: 90 },
-    { name: 'Restro - Chain', icon: '🍽️', image: '/company-restro-chain.png', angle: 135 },
-    { name: 'Contract Farming', icon: '🌾', image: '/company-contract-farming.png', angle: 170 }, 
-    { name: 'Agri IoT', icon: '📡', image: '/company-agri-iot.png', angle: 205 }, 
-    { name: 'Smart Storage', icon: '📦', image: '/company-smart-storage.png', angle: 240 }, 
-    { name: 'Robo - Packaging', icon: '🤖', image: '/company-robo-packaging.png', angle: 275 }, 
-    { name: 'Traceability', icon: '🔗', image: '/company-traceability.png', angle: 320 },
+    { name: 'Wallet', icon: '/mat-icons/mat-icon-wallet.png', image: '/company-wallet.png', angle: 0 },
+    { name: 'Quick Commerce', icon: '/mat-icons/mat-icon-quick-commerce.png', image: '/company-quick-commerce.png', angle: 50 },
+    { name: 'Snacks', icon: '/mat-icons/mat-icon-snacks.png', image: '/company-snacks.png', angle: 90 },
+    { name: 'Restro - Chain', icon: '/mat-icons/mat-icon-restro-chain.png', image: '/company-restro-chain.png', angle: 135 },
+    { name: 'Contract Farming', icon: '/mat-icons/mat-icon-contract-farming.png', image: '/company-contract-farming.png', angle: 170 }, 
+    { name: 'Agri IoT', icon: '/mat-icons/mat-icon-agri-iot.png', image: '/company-agri-iot.png', angle: 205 }, 
+    { name: 'Smart Storage', icon: '/mat-icons/mat-icon-smart-storage.png', image: '/company-smart-storage.png', angle: 240 }, 
+    { name: 'Robo - Packaging', icon: '/mat-icons/mat-icon-robo-packaging.png', image: '/company-robo-packaging.png', angle: 275 }, 
+    { name: 'Traceability', icon: '/mat-icons/mat-icon-traceability.png', image: '/company-traceability.png', angle: 320 },
   ];
 
   const companies = baseCompanies.map(comp => {
@@ -261,7 +261,7 @@ export default function MiddleBoard({ players = [], onDeckClick = () => {}, curr
           {/* Bank Loan Info */}
           <div 
             onClick={onBankLoanClick}
-            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pb-8 shadow-xl relative overflow-hidden group ${onBankLoanClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
+            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pb-6 shadow-xl relative overflow-hidden group ${onBankLoanClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
           >
             <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors"></div>
             <div className="absolute top-1 left-1 w-2 h-2 border-t border-l border-[#55ffb0]"></div>
@@ -269,10 +269,10 @@ export default function MiddleBoard({ players = [], onDeckClick = () => {}, curr
             <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l border-[#55ffb0]"></div>
             <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-[#55ffb0]"></div>
 
-            <h3 className="text-[#55ffb0] font-black text-[11px] uppercase tracking-[0.2em] mb-4 text-center relative z-10 group-hover:text-white transition-colors">Bank Loan</h3>
-            <ul className="text-[9px] text-[#a4d8c2] space-y-3 leading-tight list-disc pl-5 font-sans pr-2 relative z-10">
+            <h3 className="text-[#55ffb0] font-black text-[14px] uppercase tracking-[0.2em] mb-3 text-center relative z-10 group-hover:text-white transition-colors">Bank Loan</h3>
+            <ul className="text-[12px] text-[#a4d8c2] space-y-2.5 leading-snug list-disc pl-5 font-sans pr-2 relative z-10 font-medium">
               <li>Pay 10% interest each round</li>
-              <li>Borrow up to your eligible limit<br/><span className="text-[7px] text-[#a4d8c2]/60">(see Player Mat)</span></li>
+              <li>Borrow up to your eligible limit<br/><span className="text-[10px] text-[#a4d8c2]/70 font-normal">(see Player Mat)</span></li>
             </ul>
           </div>
 
@@ -319,7 +319,7 @@ export default function MiddleBoard({ players = [], onDeckClick = () => {}, curr
           {/* PR Services Info */}
           <div 
             onClick={onPRServicesClick}
-            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pt-6 shadow-xl relative overflow-hidden group ${onPRServicesClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
+            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pt-5 pb-5 shadow-xl relative overflow-hidden group ${onPRServicesClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
           >
             <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors"></div>
             <div className="absolute top-1 left-1 w-2 h-2 border-t border-l border-[#55ffb0]"></div>
@@ -327,14 +327,14 @@ export default function MiddleBoard({ players = [], onDeckClick = () => {}, curr
             <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l border-[#55ffb0]"></div>
             <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-[#55ffb0]"></div>
 
-            <h3 className="text-[#55ffb0] font-black text-[11px] uppercase tracking-[0.2em] mb-4 text-center group-hover:text-white transition-colors">PR Services</h3>
-            <div className="flex flex-col items-center gap-1.5 text-[9px] text-[#a4d8c2] font-sans">
+            <h3 className="text-[#55ffb0] font-black text-[14px] uppercase tracking-[0.2em] mb-3 text-center group-hover:text-white transition-colors">PR Services</h3>
+            <div className="flex flex-col items-center gap-1.5 text-[12px] font-semibold text-[#a4d8c2] font-sans">
               <div>Team 3: Pay $500K</div>
               <div>Team 2: Pay $300K</div>
               <div>Team 1: Pay $100K</div>
             </div>
-            <div className="text-[8px] text-[#55ffb0] mt-4 text-center uppercase tracking-widest font-bold">Projected Revenue will be DOUBLED</div>
-            <div className="text-[6px] text-[#a4d8c2]/50 text-center uppercase tracking-widest mt-1">*One applies per company per round</div>
+            <div className="text-[10px] text-[#55ffb0] mt-3 text-center uppercase tracking-wider font-bold">Projected Revenue will be DOUBLED</div>
+            <div className="text-[8.5px] text-[#a4d8c2]/70 text-center uppercase tracking-wide mt-1 font-medium">*One applies per company per round</div>
           </div>
 
         </div>

@@ -33,6 +33,7 @@ import Lobby from './Lobby';
 import VoiceChatManager from './VoiceChatManager';
 import Phase2Dashboard from './board/Phase2Dashboard';
 import Phase2Manager from './board/Phase2Manager';
+import ActionTrackerTray from './dashboard/ActionTrackerTray';
 import Phase3DiceModal from './modals/Phase3DiceModal';
 import BankruptcyModal from './modals/BankruptcyModal';
 import FormalizeDealModal from './modals/FormalizeDealModal';
@@ -119,16 +120,18 @@ const getPlayerAvatarSrc = (player, idx = 0) => {
 };
 
 const getCompanyShortName = (name) => {
-  const upper = name.toUpperCase();
-  if (upper.includes("FARM")) return "FARMA";
-  if (upper.includes("SNACKS") || upper.includes("RESTRO")) return "KHANAA";
-  if (upper.includes("COMM")) return "QUICKY";
+  if (!name) return "";
+  const upper = name.toUpperCase().trim();
+  if (upper.includes("FARM") || upper.includes("CONTRACT")) return "CONTRACT FARMING";
+  if (upper.includes("IOT") || upper.includes("AGRI")) return "AGRI IoT";
   if (upper.includes("WALLET")) return "WALLET";
-  if (upper.includes("IOT")) return "AGRI";
-  if (upper.includes("STOR")) return "SMARTY";
-  if (upper.includes("TRACE")) return "TRACE";
-  if (upper.includes("ROBO")) return "ROBO";
-  return upper.split(' ')[0];
+  if (upper.includes("SNACK")) return "SNACKS";
+  if (upper.includes("COMM") || upper.includes("QUICK")) return "QUICK COMMERCE";
+  if (upper.includes("STOR")) return "SMART STORAGE";
+  if (upper.includes("RESTRO") || upper.includes("CHAIN")) return "RESTRO - CHAIN";
+  if (upper.includes("TRACE")) return "TRACEABILITY";
+  if (upper.includes("ROBO") || upper.includes("PACK")) return "ROBO - PACKAGING";
+  return name.toUpperCase();
 };
 
 const getLaunchedCompanyForMessage = (message) => {
@@ -137,15 +140,15 @@ const getLaunchedCompanyForMessage = (message) => {
   if (!msgUpper.includes("LAUNCHED")) return null;
   
   const baseCompanies = [
-    { name: 'Wallet', icon: '👛', image: '/company-wallet.png' },
-    { name: 'Quick Commerce', icon: '🛒', image: '/company-quick-commerce.png' },
-    { name: 'Snacks', icon: '🍿', image: '/company-snacks.png' },
-    { name: 'Restro - Chain', icon: '🍽️', image: '/company-restro-chain.png' },
-    { name: 'Contract Farming', icon: '🌾', image: '/company-contract-farming.png' }, 
-    { name: 'Agri IoT', icon: '📡', image: '/company-agri-iot.png' }, 
-    { name: 'Smart Storage', icon: '📦', image: '/company-smart-storage.png' }, 
-    { name: 'Robo - Packaging', icon: '🤖', image: '/company-robo-packaging.png' }, 
-    { name: 'Traceability', icon: '🔗', image: '/company-traceability.png' },
+    { name: 'Wallet', icon: '/mat-icons/mat-icon-wallet.png', image: '/company-wallet.png' },
+    { name: 'Quick Commerce', icon: '/mat-icons/mat-icon-quick-commerce.png', image: '/company-quick-commerce.png' },
+    { name: 'Snacks', icon: '/mat-icons/mat-icon-snacks.png', image: '/company-snacks.png' },
+    { name: 'Restro - Chain', icon: '/mat-icons/mat-icon-restro-chain.png', image: '/company-restro-chain.png' },
+    { name: 'Contract Farming', icon: '/mat-icons/mat-icon-contract-farming.png', image: '/company-contract-farming.png' }, 
+    { name: 'Agri IoT', icon: '/mat-icons/mat-icon-agri-iot.png', image: '/company-agri-iot.png' }, 
+    { name: 'Smart Storage', icon: '/mat-icons/mat-icon-smart-storage.png', image: '/company-smart-storage.png' }, 
+    { name: 'Robo - Packaging', icon: '/mat-icons/mat-icon-robo-packaging.png', image: '/company-robo-packaging.png' }, 
+    { name: 'Traceability', icon: '/mat-icons/mat-icon-traceability.png', image: '/company-traceability.png' },
   ];
 
   const match = baseCompanies.find(comp => {
@@ -158,17 +161,18 @@ const getLaunchedCompanyForMessage = (message) => {
 };
 
 const getCompanyLogoImage = (name) => {
-  if (!name) return '/company-icon-tech.png';
+  if (!name) return '/company-quick-commerce.png';
   const upper = name.toUpperCase().trim();
-  if (upper.includes("FARM")) return '/company-icon-farma.png';
-  if (upper.includes("ROBO") || upper.includes("PACK") || upper.includes("IOT") || upper.includes("TECH")) return '/company-icon-tech.png';
+  if (upper.includes("FARM") || upper.includes("CONTRACT")) return '/company-contract-farming.png';
+  if (upper.includes("IOT") || upper.includes("AGRI")) return '/company-agri-iot.png';
   if (upper.includes("WALLET")) return '/company-wallet.png';
-  if (upper.includes("SNACK") || upper.includes("KHANAA")) return '/company-snacks.png';
-  if (upper.includes("COMM")) return '/company-quick-commerce.png';
+  if (upper.includes("SNACK")) return '/company-snacks.png';
+  if (upper.includes("COMM") || upper.includes("QUICK")) return '/company-quick-commerce.png';
   if (upper.includes("STOR")) return '/company-smart-storage.png';
   if (upper.includes("RESTRO") || upper.includes("CHAIN")) return '/company-restro-chain.png';
   if (upper.includes("TRACE")) return '/company-traceability.png';
-  return '/company-icon-tech.png';
+  if (upper.includes("ROBO") || upper.includes("PACK")) return '/company-robo-packaging.png';
+  return '/company-quick-commerce.png';
 };
 
 export const getStageTokenImage = (stage, playerIdx = 0, playerColor = null) => {
@@ -192,6 +196,13 @@ export const getStageTokenImage = (stage, playerIdx = 0, playerColor = null) => 
     else if (c.includes('ffc240') || c.includes('d4af37') || c.includes('gold') || c.includes('gd') || c.includes('yellow')) type = 4;
   }
   return `/stage-tokens/stage-${type}-${letter}.png`;
+};
+
+export const getTeamTokenCoinImage = (teamLevel) => {
+  const lvl = Number(teamLevel);
+  if (lvl === 3) return '/team-token-3-coin.png';
+  if (lvl === 4) return '/team-token-4-coin.png';
+  return '/team-token-2-coin.png';
 };
 
 const AVATAR_IMAGE_BY_ID = {
@@ -235,12 +246,13 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
   const [isTalking, setIsTalking] = useState(false);
   const [dealTarget, setDealTarget] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '' });
+  const [isActionTrayOpen, setIsActionTrayOpen] = useState(true);
 
   const [launchedCompanies, setLaunchedCompanies] = useState({
-    1: { launched: true, logo: '🌾', stage: 'L', teamColor: 'from-gray-300 to-gray-500' },
-    2: { launched: true, logo: '📡', stage: 'G', teamColor: 'from-yellow-600 to-yellow-800' },
-    3: { launched: false, logo: '📦', stage: 'L', teamColor: 'from-[#b87333] to-[#8c5220]' },
-    4: { launched: false, logo: '🚚', stage: 'S', teamColor: 'from-blue-400 to-blue-600' }
+    1: { launched: true, logo: '/mat-icons/mat-icon-contract-farming.png', stage: 'L', teamColor: 'from-gray-300 to-gray-500' },
+    2: { launched: true, logo: '/mat-icons/mat-icon-agri-iot.png', stage: 'G', teamColor: 'from-yellow-600 to-yellow-800' },
+    3: { launched: false, logo: '/mat-icons/mat-icon-smart-storage.png', stage: 'L', teamColor: 'from-[#b87333] to-[#8c5220]' },
+    4: { launched: false, logo: '/mat-icons/mat-icon-quick-commerce.png', stage: 'S', teamColor: 'from-blue-400 to-blue-600' }
   });
 
   const [roomId, setRoomId] = useState(propRoomId);
@@ -278,6 +290,12 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
     : null;
   const tutorialVisualPhase = currentTutorialStep?.visualPhase || 1;
   const gamePhase = isPlayingTutorial ? tutorialVisualPhase : rawGamePhase;
+
+  useEffect(() => {
+    if (gamePhase !== 1 && isTalking) {
+      setIsTalking(false);
+    }
+  }, [gamePhase, isTalking]);
 
   const [isDiceRolling, setIsDiceRolling] = useState(false);
   const [pendingNotification, setPendingNotification] = useState(null);
@@ -570,7 +588,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                 <p className="text-[#d4af37] text-xs md:text-sm tracking-wider">Press 'Offer Deal' to proceed</p>
               </div>
             </div>
-          ) : isTalking ? (
+          ) : (isTalking && gamePhase === 1) ? (
             <div className="bg-gradient-to-b from-[#1a1202] to-black border border-[#d4af37] text-white px-8 py-3 rounded-lg text-center opacity-95 transition-opacity flex flex-col items-center shadow-[0_0_20px_rgba(212,175,55,0.2)] min-w-[300px]">
               <h3 className="text-sm font-bold tracking-widest uppercase text-[#d4af37] mb-2 flex items-center gap-2"><Mic size={16} /> Active Negotiations</h3>
               <div className="flex items-center gap-4 bg-black/50 border border-[#d4af37]/30 px-4 py-2 rounded-lg w-full">
@@ -628,55 +646,69 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
           <div className="absolute inset-0 flex justify-center pt-6 z-10">
             
             {/* Top-Left: Tokens & Action Prompts */}
-            <div className="absolute left-6 top-6 pointer-events-auto flex flex-col gap-6 z-50">
-              <div className="text-white font-bold text-[10px] md:text-xs uppercase tracking-[0.2em] leading-tight drop-shadow-md">
-                Team Tokens<br/>Available
-              </div>
-              <div className="flex items-start gap-4">
-                {/* Coins Column */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 shadow-[0_2px_10px_rgba(0,0,0,0.5)] border-2 border-gray-400"></div>
-                    <span className="text-white font-bold text-sm tracking-wider">X 12</span>
+            <div className="absolute left-7 top-6 pointer-events-auto flex items-start gap-11 z-50">
+              {/* Left Column: Title + Team Token Coins */}
+              <div className="flex flex-col gap-5">
+                <div className="text-white font-black text-[13px] uppercase tracking-wider leading-[1.2] drop-shadow-md select-none">
+                  TEAM TOKENS<br/>AVAILABLE
+                </div>
+                <div className="flex flex-col gap-3.5">
+                  <div className="flex items-center gap-3.5">
+                    <img 
+                      src="/team-token-2-coin.png" 
+                      alt="Team 2 Token" 
+                      className="w-[46px] h-[46px] object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.6)] select-none shrink-0" 
+                    />
+                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">X 12</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-yellow-600 to-yellow-800 shadow-[0_2px_10px_rgba(0,0,0,0.5)] border-2 border-yellow-700"></div>
-                    <span className="text-white font-bold text-sm tracking-wider">X 8</span>
+                  <div className="flex items-center gap-3.5">
+                    <img 
+                      src="/team-token-3-coin.png" 
+                      alt="Team 3 Token" 
+                      className="w-[46px] h-[46px] object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.6)] select-none shrink-0" 
+                    />
+                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">X 8</span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#b87333] to-[#8c5220] shadow-[0_2px_10px_rgba(0,0,0,0.5)] border-2 border-[#b87333]"></div>
-                    <span className="text-white font-bold text-sm tracking-wider">X 6</span>
+                  <div className="flex items-center gap-3.5">
+                    <img 
+                      src="/team-token-4-coin.png" 
+                      alt="Team 4 Token" 
+                      className="w-[46px] h-[46px] object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.6)] select-none shrink-0" 
+                    />
+                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">X 6</span>
                   </div>
                 </div>
+              </div>
 
-                {/* Buttons Column */}
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={() => setActiveTopPanel(prev => prev === 'prompts' ? null : 'prompts')}
-                    title="Toggle Prompts"
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-lg select-none relative overflow-hidden group ${
-                      activeTopPanel === 'prompts' 
-                        ? 'scale-105 shadow-[0_0_20px_rgba(255,194,64,0.8)]' 
-                        : 'hover:scale-105'
-                    }`}
-                  >
-                    {/* Outer Button Frame Image */}
-                    <img 
-                      src="/search-btn-frame.png" 
-                      alt="Button Frame" 
-                      className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" 
-                    />
-                    {/* Inner Magnification Glass Icon Image */}
-                    <img 
-                      src="/search-icon-gold.png" 
-                      alt="Magnification Icon" 
-                      className="w-5 h-5 object-contain relative z-10 pointer-events-none select-none transition-transform group-hover:scale-110" 
-                    />
-                  </button>
+              {/* Right Column: Action Buttons */}
+              <div className="flex flex-col gap-4">
+                <button 
+                  onClick={() => setActiveTopPanel(prev => prev === 'prompts' ? null : 'prompts')}
+                  title="Toggle Prompts"
+                  className={`w-[49px] h-[49px] rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-lg select-none relative overflow-hidden group ${
+                    activeTopPanel === 'prompts' 
+                      ? 'scale-105 shadow-[0_0_20px_rgba(255,194,64,0.8)]' 
+                      : 'hover:scale-105'
+                  }`}
+                >
+                  {/* Outer Button Frame Image */}
+                  <img 
+                    src="/search-btn-frame.png" 
+                    alt="Button Frame" 
+                    className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" 
+                  />
+                  {/* Inner Magnification Glass Icon Image */}
+                  <img 
+                    src="/search-icon-gold.png" 
+                    alt="Magnification Icon" 
+                    className="w-[26px] h-[26px] object-contain relative z-10 pointer-events-none select-none transition-transform group-hover:scale-110" 
+                  />
+                </button>
+                {gamePhase === 1 && (
                   <button 
                     onClick={() => setIsTalking(prev => !prev)}
                     title="Toggle Voice Chat"
-                    className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-lg select-none relative overflow-hidden group ${
+                    className={`w-[49px] h-[49px] rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-lg select-none relative overflow-hidden group ${
                       isTalking 
                         ? 'scale-105 shadow-[0_0_20px_rgba(255,194,64,0.8)]' 
                         : 'hover:scale-105'
@@ -692,17 +724,10 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                     <img 
                       src="/mic-icon-gold.png" 
                       alt="Microphone Icon" 
-                      className="w-5 h-5 object-contain relative z-10 pointer-events-none select-none transition-transform group-hover:scale-110" 
+                      className="w-[23px] h-[28px] object-contain relative z-10 pointer-events-none select-none transition-transform group-hover:scale-110" 
                     />
                   </button>
-                  <button 
-                    onClick={() => setActiveModal('transfer')}
-                    title="Transfer Cash"
-                    className="w-10 h-10 border rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-lg select-none bg-black/60 border-[#55ffb0] text-[#55ffb0] hover:bg-[#55ffb0]/20 hover:scale-105"
-                  >
-                    <Send size={18} />
-                  </button>
-                </div>
+                )}
               </div>
             </div>
             {/* Top-Right: Player Roster */}
@@ -742,12 +767,12 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                           }}
                           className="w-[220px] min-h-[115px] rounded-[6px] p-3 shadow-[0_6px_20px_rgba(0,0,0,0.6)] flex flex-col items-center font-sans animate-in fade-in zoom-in-[0.98] duration-200 border border-white/10"
                         >
-                          <div className="text-white text-[12px] mb-2.5 font-bold tracking-wide drop-shadow-md text-center flex items-center justify-between w-full px-1">
+                          <div className="text-white text-[14px] md:text-[15px] mb-2.5 font-bold tracking-wide drop-shadow-md text-center flex items-center justify-between w-full px-1">
                             <span className="truncate">
                               {player.name}
                               {player.role && !player.name.includes(player.role) ? ` (${player.role})` : ''}
                             </span>
-                            <span className="text-white/70 text-[9px] shrink-0 ml-1">▲</span>
+                            <span className="text-white/70 text-[10px] shrink-0 ml-1">▲</span>
                           </div>
                           <div className="flex flex-col gap-2.5 w-full px-1 pb-1">
                             {player.ownedCompanies.length > 0 ? (
@@ -782,13 +807,13 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                       ) : (
                         <div 
                           style={getPlayerPillStyle(player.color, player.name)}
-                          className="w-[220px] h-[36px] rounded-[5px] flex items-center justify-between px-3 shadow-lg border border-white/5 select-none"
+                          className="w-[230px] h-[38px] rounded-[6px] flex items-center justify-between px-3.5 shadow-lg border border-white/10 select-none"
                         >
-                          <span className="text-[12px] font-bold text-white tracking-wide truncate drop-shadow-sm">
+                          <span className="text-[14px] md:text-[15px] font-bold text-white tracking-wide truncate drop-shadow-sm">
                             {player.name}
                             {player.role && !player.name.includes(player.role) && !player.isLocal ? ` (${player.role})` : ''}
                           </span>
-                          <span className="text-white/80 text-[10px] ml-1">▼</span>
+                          <span className="text-white/80 text-[11px] ml-1.5 shrink-0">▼</span>
                         </div>
                       )}
                     </div>
@@ -878,7 +903,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                                         />
                                       </div>
                                     </div>
-                                    <span className="font-black text-[10px] text-white tracking-wider uppercase text-center leading-none mt-1 select-none">
+                                    <span className="font-black text-[9px] text-white tracking-tight uppercase text-center leading-tight mt-1 select-none px-0.5 break-words max-w-full">
                                       {getCompanyShortName(c.name)}
                                     </span>
                                   </div>
@@ -943,6 +968,13 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
             
             {/* Bottom-Left: Trackers */}
             <div data-tutorial="tutorial-trackers" className="absolute left-6 bottom-4 pointer-events-auto flex flex-col gap-3">
+              {isActionTrayOpen && (
+                <ActionTrackerTray
+                  actions={localPlayer?.roundActions || []}
+                  onUndo={(actionId) => sendAction('undo_action', { actionId })}
+                />
+              )}
+
               {gamePhase === 1 ? (
                 <>
                   <div 
@@ -952,14 +984,20 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                     <span className="text-[10px] font-bold uppercase tracking-wider text-white">Deal Tracker</span>
                     <span className="text-[40px] font-black bg-gradient-to-b from-white to-[#FFC240] bg-clip-text text-transparent leading-none select-none">{localDealCount}</span>
                   </div>
-                  <div className="bg-gradient-to-r from-black to-[#397564] border border-white/5 rounded-[10px] px-4 w-[214px] h-[42px] flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.4)]">
+                  <div 
+                    onClick={() => setIsActionTrayOpen(prev => !prev)}
+                    className="bg-gradient-to-r from-black to-[#397564] border border-white/5 rounded-[10px] px-4 w-[214px] h-[42px] flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.4)] cursor-pointer hover:opacity-90 transition-opacity"
+                  >
                     <span className="text-[10px] font-bold uppercase tracking-wider text-white">Action Tracker</span>
                     <span className="text-[40px] font-black bg-gradient-to-b from-white to-[#FFC240] bg-clip-text text-transparent leading-none select-none">{localActionCount}</span>
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="bg-gradient-to-r from-black to-[#397564] border border-white/5 rounded-[10px] px-4 w-[214px] h-[42px] flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.4)]">
+                  <div 
+                    onClick={() => setIsActionTrayOpen(prev => !prev)}
+                    className="bg-gradient-to-r from-black to-[#397564] border border-white/5 rounded-[10px] px-4 w-[214px] h-[42px] flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.4)] cursor-pointer hover:opacity-90 transition-opacity"
+                  >
                     <span className="text-[10px] font-bold uppercase tracking-wider text-white">Action Tracker</span>
                     <span className="text-[40px] font-black bg-gradient-to-b from-white to-[#FFC240] bg-clip-text text-transparent leading-none select-none">{localActionCount}</span>
                   </div>
@@ -975,33 +1013,57 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
             </div>
 
             {/* Desk Element 1: Launch Status List */}
-            <div className="flex flex-col gap-2 mb-2 pointer-events-auto">
-              {augmentedPlayers.map((player, idx) => {
-                const comp = player.ownedCompanies && player.ownedCompanies.length > 0 ? player.ownedCompanies[0] : null;
+            <div className="flex flex-col gap-2.5 mb-2 pointer-events-auto min-w-[145px]">
+              {Array.from({ length: 4 }).map((_, idx) => {
+                const comp = localPlayer?.ownedCompanies?.[idx] || null;
                 const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
-                const getCompanyIcon = (name) => {
-                  const map = {'CONTRACT FARMING': '🌾', 'AGRI IoT': '📡', 'WALLET': '👛', 'SNACKS': '🍿', 'QUICK COMMERCE': '🛒', 'SMART STORAGE': '📦', 'RESTRO - CHAIN': '🍽️', 'TRACEABILITY': '🔍', 'ROBO - PACKAGING': '🤖'};
-                  return map[name] || '🏢';
-                };
 
                 return (
-                  <div key={player.id} className="flex items-center gap-2 bg-[#0a1914]/80 border border-[#1c4d3d] p-1.5 rounded-lg shadow-md w-[140px] h-[36px]">
-                    <span className="text-[10px] font-mono text-gray-400 w-2 shrink-0">{idx + 1}.</span>
+                  <div key={idx} className="flex items-center gap-2.5 h-[36px]">
+                    <span className="text-sm md:text-base font-bold text-white w-4 shrink-0 text-left select-none">
+                      {idx + 1}.
+                    </span>
+
                     {comp ? (
-                      <div className="flex-1 flex items-center justify-between cursor-pointer hover:bg-white/5 rounded px-1 transition-colors h-full">
-                        {/* Logo */}
-                        <div className="w-6 h-6 rounded-full bg-[#112a20] border border-[#1c4d3d] flex items-center justify-center shadow-inner text-[10px]">{getCompanyIcon(comp.name)}</div>
-                        {/* Stage Level Token */}
-                        <div className="w-6 h-6 flex items-center justify-center rounded-sm overflow-hidden shadow-sm shrink-0">
-                          <img src={getStageTokenImage(comp.stage, idx, player.color)} alt={getStageInitial(comp.stage)} className="w-full h-full object-contain select-none" />
+                      <div 
+                        onClick={() => setActiveModal('playerMat')}
+                        className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                      >
+                        {/* Company Original 3D Logo */}
+                        <div className="w-9 h-9 flex items-center justify-center shrink-0">
+                          <img 
+                            src={getCompanyLogoImage(comp.name)} 
+                            alt={comp.name} 
+                            className="w-full h-full object-contain drop-shadow-md select-none" 
+                          />
                         </div>
-                        {/* Team (Token) */}
-                        <div className="w-4 h-4 rounded-full bg-gradient-to-br from-gray-300 to-gray-500 shadow-sm border border-white/20"></div>
+
+                        {/* Stage Level Token */}
+                        <div className="w-8 h-8 flex items-center justify-center rounded-sm overflow-hidden shadow-sm shrink-0">
+                          <img 
+                            src={getStageTokenImage(comp.stage, 0, localPlayer?.color)} 
+                            alt={getStageInitial(comp.stage)} 
+                            className="w-full h-full object-contain select-none" 
+                          />
+                        </div>
+
+                        {/* Team Token Coin */}
+                        <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                          <img 
+                            src={getTeamTokenCoinImage(comp.team)} 
+                            alt="Team Token" 
+                            className="w-full h-full object-contain drop-shadow-md select-none" 
+                          />
+                        </div>
                       </div>
                     ) : (
-                      <div className="flex-1 bg-[#112a20]/50 text-gray-500 text-[8px] font-bold uppercase h-full rounded shadow-inner flex items-center justify-center text-center">
-                        NO COMPANY
-                      </div>
+                      <button 
+                        onClick={() => setActiveModal('playerMat')}
+                        className="w-[78px] h-[32px] rounded-[8px] bg-[#546461] hover:bg-[#637571] text-white text-[9px] font-bold uppercase tracking-wider leading-tight flex flex-col items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
+                      >
+                        <span>LAUNCH</span>
+                        <span>COMPANY</span>
+                      </button>
                     )}
                   </div>
                 );
@@ -1141,10 +1203,10 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                       return (
                         <div 
                           key={p.id}
-                          className="w-2.5 h-2.5 rounded-full border border-black/50 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]"
+                          className="w-2.5 h-2.5 rounded-full border border-white/25"
                           style={{
-                            background: `radial-gradient(circle at 35% 35%, ${color} 0%, #000 120%)`,
-                            opacity: 0.3
+                            background: `radial-gradient(circle at 35% 35%, ${color} 45%, #000 100%)`,
+                            boxShadow: `0 0 5px ${color}90, inset 0 1px 2px rgba(255,255,255,0.45)`
                           }}
                         />
                       );

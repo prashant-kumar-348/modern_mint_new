@@ -30,6 +30,13 @@ const companyDataMap = {
   'ROBO - PACKAGING': [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]]
 };
 
+const getCompanyData = (name) => {
+  if (!name) return [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
+  const upper = name.toUpperCase().trim();
+  const foundKey = Object.keys(companyDataMap).find(k => k.toUpperCase().trim() === upper);
+  return foundKey ? companyDataMap[foundKey] : [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
+};
+
 // Physics Boundaries
 function Borders() {
   usePlane(() => ({ type: "Static", material: { restitution: 0.5 }, rotation: [-Math.PI / 2, 0, 0], position: [0, 0, 0] })); // Floor
@@ -40,6 +47,21 @@ function Borders() {
   usePlane(() => ({ type: "Static", material: { restitution: 0.5 }, rotation: [0, Math.PI, 0], position: [0, 0, 4] })); // Front Wall
   return null;
 }
+
+const getCompanyMatIcon = (name) => {
+  if (!name) return '/mat-icons/mat-icon-quick-commerce.png';
+  const clean = name.toUpperCase().replace(/[^A-Z]/g, '');
+  if (clean.includes("FARM") || clean.includes("CONTRACT")) return '/mat-icons/mat-icon-contract-farming.png';
+  if (clean.includes("IOT") || clean.includes("AGRI")) return '/mat-icons/mat-icon-agri-iot.png';
+  if (clean.includes("WALLET")) return '/mat-icons/mat-icon-wallet.png';
+  if (clean.includes("SNACK")) return '/mat-icons/mat-icon-snacks.png';
+  if (clean.includes("COMM") || clean.includes("QUICK")) return '/mat-icons/mat-icon-quick-commerce.png';
+  if (clean.includes("STOR")) return '/mat-icons/mat-icon-smart-storage.png';
+  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD")) return '/mat-icons/mat-icon-restro-chain.png';
+  if (clean.includes("TRACE")) return '/mat-icons/mat-icon-traceability.png';
+  if (clean.includes("ROBO") || clean.includes("PACK")) return '/mat-icons/mat-icon-robo-packaging.png';
+  return '/mat-icons/mat-icon-quick-commerce.png';
+};
 
 export default function Phase3DiceModal({ onClose, player, sendAction, gameState, roomId }) {
   const [isRolling, setIsRolling] = useState(false);
@@ -58,13 +80,6 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
     let grandTotal = 0;
     
     const companies = (player?.ownedCompanies || []).map(c => {
-      const getCompanyData = (name) => {
-        if (!name) return [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
-        const upper = name.toUpperCase().trim();
-        const foundKey = Object.keys(companyDataMap).find(k => k.toUpperCase().trim() === upper);
-        return foundKey ? companyDataMap[foundKey] : [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
-      };
-      
       const companyDataRows = getCompanyData(c.name);
       const stageIndex = (c.stage === 'L' || c.stage === 0) ? 0 : (c.stage === 'R' || c.stage === 1) ? 1 : (c.stage === 'G' || c.stage === 2) ? 2 : 3;
       const baseRev = (companyDataRows[stageIndex] || [0, 0, 0, 0])[1];
@@ -115,7 +130,7 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
       
       return {
         name: c.customName || c.name,
-        icon: c.icon || '🏢',
+        icon: getCompanyMatIcon(c.name),
         stageName: ["Launch", "Retain", "Grow", "Scale"][stageIndex],
         baseRev,
         hasPR,
@@ -355,28 +370,6 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                       player.ownedCompanies.map((c, idx) => {
                         const stages = ["Launch", "Retain", "Grow", "Scale"];
                         
-                        const getCompanyIcon = (name) => {
-                          const map = {
-                            'CONTRACT FARMING': '🌾',
-                            'AGRI IOT': '📡',
-                            'WALLET': '👛',
-                            'SNACKS': '🍿',
-                            'QUICK COMMERCE': '🛒',
-                            'SMART STORAGE': '📦',
-                            'RESTRO - CHAIN': '🍽️',
-                            'TRACEABILITY': '🔍',
-                            'ROBO - PACKAGING': '🤖'
-                          };
-                          return map[name?.toUpperCase()] || '🏢';
-                        };
-
-                        const getCompanyData = (name) => {
-                          if (!name) return [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
-                          const upper = name.toUpperCase().trim();
-                          const foundKey = Object.keys(companyDataMap).find(k => k.toUpperCase().trim() === upper);
-                          return foundKey ? companyDataMap[foundKey] : [[0,0,0,0], [0,0,0,0], [0,0,0,0], [0,0,0,0]];
-                        };
-
                         const companyDataRows = getCompanyData(c.name);
 
                         return (
@@ -384,8 +377,12 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                             
                             {/* Card Header (Cream Pill) */}
                             <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-2 px-3 flex items-center gap-3 shadow-md border border-[#3A141A]/20 -mt-7 mb-3 relative z-10">
-                              <div className="w-8 h-8 rounded-full border border-dashed border-gray-400 bg-white flex items-center justify-center text-lg shadow-inner shrink-0">
-                                {c.icon || getCompanyIcon(c.name)}
+                              <div className="w-8 h-8 rounded-full border border-dashed border-gray-400 bg-white flex items-center justify-center shadow-inner shrink-0 overflow-hidden p-1">
+                                <img 
+                                  src={getCompanyMatIcon(c.name)} 
+                                  alt={c.name} 
+                                  className="w-full h-full object-contain" 
+                                />
                               </div>
                               <h3 className="font-black text-xs md:text-sm text-[#4A1720] uppercase tracking-tight leading-none flex-1 text-center pr-4">
                                 {c.customName || c.name}
@@ -407,7 +404,8 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                               {/* Rows */}
                               <div className="flex-grow flex flex-col justify-around gap-1.5 pb-2">
                                 {stages.map((stage, i) => {
-                                  const isActiveStage = i === c.stage;
+                                  const currentStageIdx = (c.stage === 'L' || c.stage === 0) ? 0 : (c.stage === 'R' || c.stage === 1) ? 1 : (c.stage === 'G' || c.stage === 2) ? 2 : 3;
+                                  const isActiveStage = i === currentStageIdx;
                                   const teamLevel = c.team || 1;
                                   const isTeamUnlocked = i < teamLevel;
                                   const rowData = companyDataRows[i] || [0,0,0,0];
@@ -452,8 +450,12 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                         {breakdownCompanies.map((item, i) => (
                           <div key={i} className="flex flex-col bg-[#112a20]/60 border border-[#1c4d3d] rounded-lg p-2 text-[10px] text-white/80 leading-relaxed font-sans">
                             <div className="flex justify-between items-center mb-1 font-bold text-white">
-                              <span className="flex items-center gap-1">
-                                <span>{item.icon}</span>
+                              <span className="flex items-center gap-1.5">
+                                <img 
+                                  src={getCompanyMatIcon(item.name)} 
+                                  alt={item.name} 
+                                  className="w-4 h-4 object-contain rounded-full bg-white/20 p-0.5 shrink-0" 
+                                />
                                 <span>{item.name} ({item.stageName})</span>
                               </span>
                               <span className={item.finalRevenue < 0 ? "text-[#ff5555]" : "text-[#55ffb0]"}>

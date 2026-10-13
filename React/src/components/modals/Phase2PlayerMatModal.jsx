@@ -3,15 +3,15 @@ import { X, Lock } from 'lucide-react';
 
 export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, ownedCompanies, actionType, currentRound }) {
   const companies = [
-    { id: 'c1', name: 'CONTRACT FARMING', icon: '🌾', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
-    { id: 'c2', name: 'AGRI IoT', icon: '📡', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
-    { id: 'c3', name: 'WALLET', icon: '👛', data: [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]] },
-    { id: 'c4', name: 'SNACKS', icon: '🍿', data: [[10,20,1000,0], [300,200,1500,200], [1000,1100,7500,1500], [6000,4000,32000,8000]] },
-    { id: 'c5', name: 'QUICK COMMERCE', icon: '🛒', data: [[10,30,100,0], [200,400,2500,100], [2000,1200,10000,800], [10000,4000,50000,6000]] },
-    { id: 'c6', name: 'SMART STORAGE', icon: '📦', data: [[200,200,2000,200], [3000,1600,5000,2000], [3000,5400,9000,4000], [10000,7500,40000,12000]] },
-    { id: 'c7', name: 'RESTRO - CHAIN', icon: '🍽️', data: [[150, 300, 1000, 200], [300, 400, 2000, 500], [1200, 1400, 4000, 2000], [12000, 8000, 26000, 15000]] },
-    { id: 'c8', name: 'TRACEABILITY', icon: '🔍', data: [[30,30,300,0], [300,200,2000,200], [1200,2000,7500,1000], [10000,8000,38000,5000]] },
-    { id: 'c9', name: 'ROBO - PACKAGING', icon: '🤖', data: [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]] },
+    { id: 'c1', name: 'CONTRACT FARMING', icon: '/mat-icons/mat-icon-contract-farming.png', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
+    { id: 'c2', name: 'AGRI IoT', icon: '/mat-icons/mat-icon-agri-iot.png', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
+    { id: 'c3', name: 'WALLET', icon: '/mat-icons/mat-icon-wallet.png', data: [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]] },
+    { id: 'c4', name: 'SNACKS', icon: '/mat-icons/mat-icon-snacks.png', data: [[10,20,1000,0], [300,200,1500,200], [1000,1100,7500,1500], [6000,4000,32000,8000]] },
+    { id: 'c5', name: 'QUICK COMMERCE', icon: '/mat-icons/mat-icon-quick-commerce.png', data: [[10,30,100,0], [200,400,2500,100], [2000,1200,10000,800], [10000,4000,50000,6000]] },
+    { id: 'c6', name: 'SMART STORAGE', icon: '/mat-icons/mat-icon-smart-storage.png', data: [[200,200,2000,200], [3000,1600,5000,2000], [3000,5400,9000,4000], [10000,7500,40000,12000]] },
+    { id: 'c7', name: 'RESTRO - CHAIN', icon: '/mat-icons/mat-icon-restro-chain.png', data: [[150, 300, 1000, 200], [300, 400, 2000, 500], [1200, 1400, 4000, 2000], [12000, 8000, 26000, 15000]] },
+    { id: 'c8', name: 'TRACEABILITY', icon: '/mat-icons/mat-icon-traceability.png', data: [[30,30,300,0], [300,200,2000,200], [1200,2000,7500,1000], [10000,8000,38000,5000]] },
+    { id: 'c9', name: 'ROBO - PACKAGING', icon: '/mat-icons/mat-icon-robo-packaging.png', data: [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]] },
   ];
 
   const teamUpgradeCosts = {
@@ -132,14 +132,16 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
               <div 
                 key={company.id} 
                 onClick={() => !isLockedForAction && handleCompanyClick(company)}
-                className={`bg-[#7D3C4A] rounded-xl p-4 border border-[#3A141A] flex flex-col relative shadow-lg transition-transform duration-200 h-[280px] ${isLockedForAction ? 'opacity-40 cursor-not-allowed grayscale-[0.5]' : 'cursor-pointer hover:scale-[1.03] hover:shadow-[0_10px_30px_rgba(255,194,64,0.2)] hover:border-[#FFC240]/50'}`}
+                className={`bg-[#7D3C4A] rounded-xl p-4 border border-[#3A141A] flex flex-col relative shadow-lg transition-transform duration-200 min-h-[305px] ${isLockedForAction ? 'opacity-40 cursor-not-allowed grayscale-[0.5]' : 'cursor-pointer hover:scale-[1.03] hover:shadow-[0_10px_30px_rgba(255,194,64,0.2)] hover:border-[#FFC240]/50'}`}
               >
                 {/* Header Pill */}
-                <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-2 px-3 flex items-center gap-3 shadow-md border border-[#3A141A]/20 -mt-7 mb-4 relative z-10">
-                  <div className="w-10 h-10 rounded-full border border-dashed border-gray-400 bg-white flex items-center justify-center text-xl shadow-inner shrink-0">
-                    {company.icon}
-                  </div>
-                  <h3 className="font-black text-sm text-[#4A1720] uppercase tracking-tight flex-1 text-center pr-4">
+                <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-1.5 px-2 flex items-center shadow-md border-2 border-[#3A141A] -mt-7 mb-4 relative z-10">
+                  <img 
+                    src={company.icon} 
+                    alt={company.name} 
+                    className="w-8 h-8 rounded-full object-contain select-none shrink-0" 
+                  />
+                  <h3 className="font-black text-sm text-[#4A1720] uppercase tracking-tight flex-1 text-center pr-3 select-none">
                     {company.name}
                   </h3>
                 </div>
@@ -153,10 +155,10 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                 
                 {/* Data Rows */}
                 <div className={`flex-1 w-full pt-1 flex flex-col ${!isLaunched ? 'opacity-30' : 'opacity-100'} pointer-events-none transition-opacity duration-300`}>
-                  <div className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[9px] text-[#FFD1DA] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight">
-                    <div className="text-left">TEAM</div><div className="text-left">STAGE</div><div>Invest<br/>($K)</div><div>Projected<br/>Rev ($K)</div><div>Valuation<br/>($K)</div><div>Loan<br/>($K)</div>
+                  <div className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[9px] text-[#FFD1DA] uppercase font-black mb-2.5 pb-1 border-b border-white/20 text-center items-end leading-tight">
+                    <div className="text-left pr-1">TEAM</div><div className="text-left">STAGE</div><div>Invest<br/>($K)</div><div>Projected<br/>Rev ($K)</div><div>Valuation<br/>($K)</div><div>Loan<br/>($K)</div>
                   </div>
-                  <div className="flex-1 flex flex-col justify-evenly mb-2">
+                  <div className="flex-1 flex flex-col justify-between py-1 gap-2 mb-2">
                     {stages.map((stage, idx) => {
                       const rowData = company.data[idx];
                       const isActiveStage = idx === currentStageIdx;
@@ -213,8 +215,8 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
               {/* SCREEN 3: Payment UI */}
               {cinematicStep === 2 && (
                 <div className="flex-1 p-8 flex flex-col items-center justify-center relative animate-in slide-in-from-right duration-500">
-                  <div className="w-24 h-24 rounded-full border-4 border-dashed border-[#FFC240]/50 bg-white flex items-center justify-center text-6xl shadow-inner mb-6">
-                    {selectedCompany.icon}
+                  <div className="w-24 h-24 rounded-full border-4 border-[#FFC240]/50 bg-[#FFF2D8] flex items-center justify-center p-3 shadow-inner mb-6">
+                    <img src={selectedCompany.icon} alt={selectedCompany.name} className="w-full h-full object-contain" />
                   </div>
                   <h3 className="font-black text-3xl text-white uppercase tracking-tight mb-2 text-center">
                     {selectedCompany.name}

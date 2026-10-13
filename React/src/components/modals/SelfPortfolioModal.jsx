@@ -1,6 +1,21 @@
 import React, { useState } from 'react';
 import { X, Lock, Edit2 } from 'lucide-react';
 
+const getCompanyMatIcon = (name) => {
+  if (!name) return '/mat-icons/mat-icon-quick-commerce.png';
+  const clean = name.toUpperCase().replace(/[^A-Z]/g, '');
+  if (clean.includes("FARM") || clean.includes("CONTRACT")) return '/mat-icons/mat-icon-contract-farming.png';
+  if (clean.includes("IOT") || clean.includes("AGRI")) return '/mat-icons/mat-icon-agri-iot.png';
+  if (clean.includes("WALLET")) return '/mat-icons/mat-icon-wallet.png';
+  if (clean.includes("SNACK")) return '/mat-icons/mat-icon-snacks.png';
+  if (clean.includes("COMM") || clean.includes("QUICK")) return '/mat-icons/mat-icon-quick-commerce.png';
+  if (clean.includes("STOR")) return '/mat-icons/mat-icon-smart-storage.png';
+  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD")) return '/mat-icons/mat-icon-restro-chain.png';
+  if (clean.includes("TRACE")) return '/mat-icons/mat-icon-traceability.png';
+  if (clean.includes("ROBO") || clean.includes("PACK")) return '/mat-icons/mat-icon-robo-packaging.png';
+  return '/mat-icons/mat-icon-quick-commerce.png';
+};
+
 export default function SelfPortfolioModal({ onClose, player, sendAction }) {
   const [renamingCompany, setRenamingCompany] = useState(null);
   const [newName, setNewName] = useState('');
@@ -56,8 +71,12 @@ export default function SelfPortfolioModal({ onClose, player, sendAction }) {
                             {/* Card Header */}
                             <div className="bg-[#0a1914] border border-[#55ffb0]/20 rounded-lg p-3 flex flex-col mb-4 shadow-inner relative">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 rounded border border-[#55ffb0]/50 bg-[#1c4d3d]/50 flex items-center justify-center text-xl shadow-inner shrink-0">
-                                      {company.icon || '🏢'}
+                                  <div className="w-10 h-10 rounded border border-[#55ffb0]/50 bg-[#1c4d3d]/50 flex items-center justify-center shadow-inner shrink-0 overflow-hidden p-1">
+                                      <img 
+                                        src={getCompanyMatIcon(company.name)} 
+                                        alt={company.name} 
+                                        className="w-full h-full object-contain" 
+                                      />
                                   </div>
                                   <div className="flex-1">
                                       <h3 className="font-black text-sm text-white uppercase tracking-wider">{company.customName || company.name}</h3>

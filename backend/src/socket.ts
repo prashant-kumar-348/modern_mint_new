@@ -242,7 +242,7 @@ const io = new SocketServer(server, {
         break;
       }
       case 'quick_launch_retain': {
-        const compTemplate = { name: "CONTRACT FARM", icon: "🌾", invest: 50, revenue: 80, valuation: 100, loan: 10 };
+        const compTemplate = { name: "CONTRACT FARMING", icon: "/mat-icons/mat-icon-contract-farming.png", invest: 50, revenue: 80, valuation: 100, loan: 10 };
         const newComp = { ...compTemplate, stage: 'S', team: player.color === '#ef4444' ? 'RN' : 'GT' };
         player.ownedCompanies.push(newComp);
         player.cash -= 50;
@@ -516,6 +516,7 @@ const io = new SocketServer(server, {
         boughtMentorRound: 0,
         lifelines: 2,
         currentPhase3Roll: null,
+        roundActions: [],
         role: role,
         is_ai: true
       });
@@ -596,9 +597,15 @@ const io = new SocketServer(server, {
             const loan = dataRow[0][3];
 
             const icons: Record<string, string> = {
-              'CONTRACT FARMING': '🌾', 'AGRI IoT': '📡', 'WALLET': '👛', 'SNACKS': '🍿',
-              'QUICK COMMERCE': '⚡', 'SMART STORAGE': '📦', 'RESTRO - CHAIN': '🍔',
-              'TRACEABILITY': '🔍', 'ROBO - PACKAGING': '🤖'
+              'CONTRACT FARMING': '/mat-icons/mat-icon-contract-farming.png',
+              'AGRI IoT': '/mat-icons/mat-icon-agri-iot.png',
+              'WALLET': '/mat-icons/mat-icon-wallet.png',
+              'SNACKS': '/mat-icons/mat-icon-snacks.png',
+              'QUICK COMMERCE': '/mat-icons/mat-icon-quick-commerce.png',
+              'SMART STORAGE': '/mat-icons/mat-icon-smart-storage.png',
+              'RESTRO - CHAIN': '/mat-icons/mat-icon-restro-chain.png',
+              'TRACEABILITY': '/mat-icons/mat-icon-traceability.png',
+              'ROBO - PACKAGING': '/mat-icons/mat-icon-robo-packaging.png'
             };
 
             const newCompany = {
@@ -798,6 +805,8 @@ const io = new SocketServer(server, {
               p.mentorMultiplier = 0;
               p.riskMultiplierActive = 0;
               p.extraActions = 0;
+              p.actionCount = 0;
+              p.roundActions = [];
             });
 
             const firstPlayer = currentRoom.players[0];
@@ -925,6 +934,7 @@ const io = new SocketServer(server, {
           boughtMentorRound: 0,
           lifelines: 2,
           currentPhase3Roll: null,
+          roundActions: [],
           role: finalRole
         });
         
@@ -1329,6 +1339,8 @@ const io = new SocketServer(server, {
                   p.mentorMultiplier = 0;
                   p.riskMultiplierActive = 0;
                   p.extraActions = 0;
+                  p.actionCount = 0;
+                  p.roundActions = [];
                 });
 
                 const firstPlayer = room.players[0];
@@ -1385,15 +1397,15 @@ const io = new SocketServer(server, {
                   const loan = dataRow[0][3];
 
                   const icons: Record<string, string> = {
-                    'CONTRACT FARMING': '🌾',
-                    'AGRI IoT': '📡',
-                    'WALLET': '👛',
-                    'SNACKS': '🍿',
-                    'QUICK COMMERCE': '⚡',
-                    'SMART STORAGE': '📦',
-                    'RESTRO - CHAIN': '🍔',
-                    'TRACEABILITY': '🔍',
-                    'ROBO - PACKAGING': '🤖'
+                    'CONTRACT FARMING': '/mat-icons/mat-icon-contract-farming.png',
+                    'AGRI IoT': '/mat-icons/mat-icon-agri-iot.png',
+                    'WALLET': '/mat-icons/mat-icon-wallet.png',
+                    'SNACKS': '/mat-icons/mat-icon-snacks.png',
+                    'QUICK COMMERCE': '/mat-icons/mat-icon-quick-commerce.png',
+                    'SMART STORAGE': '/mat-icons/mat-icon-smart-storage.png',
+                    'RESTRO - CHAIN': '/mat-icons/mat-icon-restro-chain.png',
+                    'TRACEABILITY': '/mat-icons/mat-icon-traceability.png',
+                    'ROBO - PACKAGING': '/mat-icons/mat-icon-robo-packaging.png'
                   };
 
                   const newCompany = {
@@ -1413,6 +1425,17 @@ const io = new SocketServer(server, {
                   player.cash -= newCompany.invest;
                   player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
                   
+                  if (!player.roundActions) player.roundActions = [];
+                  player.roundActions.push({
+                    id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    type: 'launch',
+                    companyName: newCompany.name,
+                    text: `Launched ${newCompany.name}`,
+                    cost: newCompany.invest,
+                    round: room.round,
+                    timestamp: Date.now()
+                  });
+
                   room.actionCount += 1;
                   player.actionCount = (player.actionCount || 0) + 1;
                   
@@ -1448,6 +1471,19 @@ const io = new SocketServer(server, {
                        player.loan = player.loan - comp.loan + nextLoan;
                        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
 
+                       const stageName = ['Launch', 'Retain', 'Grow', 'Scale'][nextStageIndex] || 'Retain';
+                       if (!player.roundActions) player.roundActions = [];
+                       player.roundActions.push({
+                         id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                         type: 'stage_up',
+                         companyName: comp.name,
+                         stageName: stageName,
+                         text: `${comp.customName || comp.name} Upgraded to ${stageName} stage`,
+                         cost: stageUpCost,
+                         round: room.round,
+                         timestamp: Date.now()
+                       });
+
                        room.actionCount += 1;
                        player.actionCount = (player.actionCount || 0) + 1;
 
@@ -1475,6 +1511,17 @@ const io = new SocketServer(server, {
                   comp.prBoughtRound = room.round;
                   player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
                   
+                  if (!player.roundActions) player.roundActions = [];
+                  player.roundActions.push({
+                    id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    type: 'buy_pr',
+                    companyName: comp.name,
+                    text: `Bought PR Services for ${comp.customName || comp.name}`,
+                    cost: actualCost,
+                    round: room.round,
+                    timestamp: Date.now()
+                  });
+
                   room.actionCount += 1;
                   player.actionCount = (player.actionCount || 0) + 1;
                   
@@ -1500,6 +1547,17 @@ const io = new SocketServer(server, {
                   comp.workforceUpgradedRound = room.round;
                   player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
                   
+                  if (!player.roundActions) player.roundActions = [];
+                  player.roundActions.push({
+                    id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    type: 'upgrade_workforce',
+                    companyName: comp.name,
+                    text: `Upgraded Workforce for ${comp.customName || comp.name}`,
+                    cost: actualCost,
+                    round: room.round,
+                    timestamp: Date.now()
+                  });
+
                   room.actionCount += 1;
                   player.actionCount = (player.actionCount || 0) + 1;
                   
@@ -1711,6 +1769,20 @@ const io = new SocketServer(server, {
                  io.to(roomId).emit('notification', `${player.name.toUpperCase()} BOUGHT AND STORED: ${card.name.toUpperCase()}`);
               }
            }
+
+           if (!player.roundActions) player.roundActions = [];
+           player.roundActions.push({
+             id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+             type: 'mentor',
+             cardName: card?.name || 'Mentor Card',
+             text: card?.name || 'Mentor Card',
+             cost: 20,
+             round: room.round,
+             timestamp: Date.now(),
+             cardId: card?.id
+           });
+           room.actionCount = (room.actionCount || 0) + 1;
+           player.actionCount = (player.actionCount || 0) + 1;
            
            io.to(roomId).emit('game_state_update', room);
         }
@@ -1733,6 +1805,85 @@ const io = new SocketServer(server, {
               }
            }
         }
+      }
+    });
+
+    socket.on('undo_action', ({ roomId, actionId }) => {
+      if (rooms[roomId]) {
+        const room = rooms[roomId];
+        const player = room.players.find((p: any) => p.id === socket.id);
+        if (!player || !player.roundActions) return;
+
+        const actIndex = player.roundActions.findIndex((a: any) => a.id === actionId);
+        if (actIndex === -1) return;
+        const action = player.roundActions[actIndex];
+
+        if (action.type === 'launch') {
+          const wasUpgraded = player.roundActions.some((a: any, i: number) => i > actIndex && a.companyName === action.companyName);
+          if (wasUpgraded) {
+            socket.emit('notification', 'CANNOT UNDO: Revert subsequent upgrades on this company first.');
+            return;
+          }
+          const compIdx = player.ownedCompanies.findIndex((c: any) => c.name === action.companyName);
+          if (compIdx !== -1) {
+            const comp = player.ownedCompanies[compIdx];
+            player.cash += comp.invest;
+            player.valuation -= (comp.valuation / 1000);
+            player.loan -= comp.loan;
+            player.ownedCompanies.splice(compIdx, 1);
+          }
+        } else if (action.type === 'stage_up') {
+          const comp = player.ownedCompanies.find((c: any) => c.name === action.companyName);
+          if (comp) {
+            const currentIndex = getStageIndex(comp.stage);
+            if (currentIndex > 0) {
+              const prevIndex = currentIndex - 1;
+              const dataRow = COMPANY_DATA_MAP[comp.name];
+              if (dataRow) {
+                player.cash += action.cost;
+                const oldValuation = comp.valuation || 0;
+                const oldLoan = comp.loan || 0;
+                comp.stage = ['L', 'R', 'G', 'S'][prevIndex];
+                comp.upgradedRound = 0;
+                comp.valuation = dataRow[prevIndex][2];
+                comp.loan = dataRow[prevIndex][3];
+                player.valuation = player.valuation - (oldValuation / 1000) + (comp.valuation / 1000);
+                player.loan = player.loan - oldLoan + comp.loan;
+              }
+            }
+          }
+        } else if (action.type === 'buy_pr') {
+          const comp = player.ownedCompanies.find((c: any) => c.name === action.companyName);
+          if (comp) {
+            comp.prBoughtRound = 0;
+            player.cash += action.cost;
+          }
+        } else if (action.type === 'upgrade_workforce') {
+          const comp = player.ownedCompanies.find((c: any) => c.name === action.companyName);
+          if (comp) {
+            comp.team = Math.max(1, (comp.team || 1) - 1);
+            comp.workforceUpgradedRound = 0;
+            player.cash += action.cost;
+          }
+        } else if (action.type === 'mentor') {
+          player.cash += action.cost || 20;
+          player.boughtMentorRound = 0;
+          if (action.cardId) {
+            const cIdx = player.mentorCards.findIndex((c: any) => c.id === action.cardId);
+            if (cIdx !== -1) {
+              player.mentorCards.splice(cIdx, 1);
+            }
+          }
+        }
+
+        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+        player.actionCount = Math.max(0, (player.actionCount || 1) - 1);
+        room.actionCount = Math.max(0, (room.actionCount || 1) - 1);
+
+        player.roundActions.splice(actIndex, 1);
+
+        io.to(roomId).emit('game_state_update', room);
+        io.to(roomId).emit('notification', `ACTION UNDONE: ${action.text}`);
       }
     });
 
@@ -1790,15 +1941,15 @@ const io = new SocketServer(server, {
         const player = rooms[roomId].players.find((p: any) => p.id === targetPlayerId);
         if (player) {
           const COMPANY_TEMPLATES = [
-            { name: "CONTRACT FARM", icon: "🌾", invest: 50, revenue: 80, valuation: 100, loan: 10 },
-            { name: "AGRI IoT", icon: "📡", invest: 60, revenue: 100, valuation: 120, loan: 15 },
-            { name: "WALLET", icon: "💳", invest: 75, revenue: 120, valuation: 150, loan: 20 },
-            { name: "SNACKS", icon: "🍿", invest: 40, revenue: 60, valuation: 80, loan: 5 },
-            { name: "QUICK COMM", icon: "⚡", invest: 90, revenue: 150, valuation: 200, loan: 30 },
-            { name: "SMART STOR", icon: "📦", invest: 55, revenue: 90, valuation: 110, loan: 12 },
-            { name: "RESTRO CHAIN", icon: "🍔", invest: 70, revenue: 110, valuation: 140, loan: 18 },
-            { name: "TRACEABILITY", icon: "🔍", invest: 45, revenue: 70, valuation: 90, loan: 8 },
-            { name: "ROBO-PACK", icon: "🤖", invest: 80, revenue: 130, valuation: 160, loan: 25 }
+            { name: "CONTRACT FARMING", icon: "/mat-icons/mat-icon-contract-farming.png", invest: 50, revenue: 80, valuation: 100, loan: 10 },
+            { name: "AGRI IoT", icon: "/mat-icons/mat-icon-agri-iot.png", invest: 60, revenue: 100, valuation: 120, loan: 15 },
+            { name: "WALLET", icon: "/mat-icons/mat-icon-wallet.png", invest: 75, revenue: 120, valuation: 150, loan: 20 },
+            { name: "SNACKS", icon: "/mat-icons/mat-icon-snacks.png", invest: 40, revenue: 60, valuation: 80, loan: 5 },
+            { name: "QUICK COMMERCE", icon: "/mat-icons/mat-icon-quick-commerce.png", invest: 90, revenue: 150, valuation: 200, loan: 30 },
+            { name: "SMART STORAGE", icon: "/mat-icons/mat-icon-smart-storage.png", invest: 55, revenue: 90, valuation: 110, loan: 12 },
+            { name: "RESTRO - CHAIN", icon: "/mat-icons/mat-icon-restro-chain.png", invest: 70, revenue: 110, valuation: 140, loan: 18 },
+            { name: "TRACEABILITY", icon: "/mat-icons/mat-icon-traceability.png", invest: 45, revenue: 70, valuation: 90, loan: 8 },
+            { name: "ROBO - PACKAGING", icon: "/mat-icons/mat-icon-robo-packaging.png", invest: 80, revenue: 130, valuation: 160, loan: 25 }
           ];
 
           const companyIndex = player.ownedCompanies.length;

@@ -4,15 +4,15 @@ import { X, Lock } from 'lucide-react';
 export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOpened = false, onPin }) {
   // Exact data extracted from your uploaded Player Mat screenshot
   const companies = [
-    { id: 'c1', name: 'CONTRACT FARMING', icon: '🌾', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,250,200], [2000,2000,10000,400]] },
-    { id: 'c2', name: 'AGRI IoT', icon: '📡', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
-    { id: 'c3', name: 'WALLET', icon: '👛', data: [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]] },
-    { id: 'c4', name: 'SNACKS', icon: '🍿', data: [[10,20,1000,0], [300,200,1500,200], [1000,1100,7500,1500], [6000,4000,32000,8000]] },
-    { id: 'c5', name: 'QUICK COMMERCE', icon: '🛒', data: [[10,30,100,0], [200,400,2500,100], [2000,1200,10000,800], [10000,4000,50000,6000]] },
-    { id: 'c6', name: 'SMART STORAGE', icon: '📦', data: [[200,200,2000,200], [3000,1600,5000,2000], [3000,5400,9000,4000], [10000,7500,40000,12000]] },
-    { id: 'c7', name: 'RESTRO - CHAIN', icon: '🍽️', data: [[150, 300, 1000, 200], [300, 400, 2000, 500], [1200, 1400, 4000, 2000], [12000, 8000, 26000, 15000]] },
-    { id: 'c8', name: 'TRACEABILITY', icon: '🔍', data: [[30,30,300,0], [300,200,2000,200], [1200,2000,7500,1000], [10000,8000,38000,5000]] },
-    { id: 'c9', name: 'ROBO - PACKAGING', icon: '🤖', data: [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]] },
+    { id: 'c1', name: 'CONTRACT FARMING', icon: '/mat-icons/mat-icon-contract-farming.png', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
+    { id: 'c2', name: 'AGRI IoT', icon: '/mat-icons/mat-icon-agri-iot.png', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
+    { id: 'c3', name: 'WALLET', icon: '/mat-icons/mat-icon-wallet.png', data: [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]] },
+    { id: 'c4', name: 'SNACKS', icon: '/mat-icons/mat-icon-snacks.png', data: [[10,20,1000,0], [300,200,1500,200], [1000,1100,7500,1500], [6000,4000,32000,8000]] },
+    { id: 'c5', name: 'QUICK COMMERCE', icon: '/mat-icons/mat-icon-quick-commerce.png', data: [[10,30,100,0], [200,400,2500,100], [2000,1200,10000,800], [10000,4000,50000,6000]] },
+    { id: 'c6', name: 'SMART STORAGE', icon: '/mat-icons/mat-icon-smart-storage.png', data: [[200,200,2000,200], [3000,1600,5000,2000], [3000,5400,9000,4000], [10000,7500,40000,12000]] },
+    { id: 'c7', name: 'RESTRO - CHAIN', icon: '/mat-icons/mat-icon-restro-chain.png', data: [[150, 300, 1000, 200], [300, 400, 2000, 500], [1200, 1400, 4000, 2000], [12000, 8000, 26000, 15000]] },
+    { id: 'c8', name: 'TRACEABILITY', icon: '/mat-icons/mat-icon-traceability.png', data: [[30,30,300,0], [300,200,2000,200], [1200,2000,7500,1000], [10000,8000,38000,5000]] },
+    { id: 'c9', name: 'ROBO - PACKAGING', icon: '/mat-icons/mat-icon-robo-packaging.png', data: [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]] },
   ];
 
   const stages = ["Launch", "Retain", "Grow", "Scale"];
@@ -86,14 +86,16 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
               const isLaunched = ownedCompanies.some(c => c.name === company.name);
 
               return (
-                <div key={company.id} className="bg-[#7D3C4A] rounded-xl p-3 border border-[#3A141A] flex flex-col relative shadow-lg">
+                <div key={company.id} className="bg-[#7D3C4A] rounded-xl pt-2.5 px-3.5 pb-3 border border-[#3A141A] flex flex-col justify-between relative shadow-lg min-h-[315px]">
                   
                   {/* Card Header (Cream Pill) */}
-                  <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-2 px-3 flex items-center gap-3 shadow-md border border-[#3A141A]/20 -mt-6 mb-3 relative z-10">
-                    <div className="w-8 h-8 rounded-full border border-dashed border-gray-400 bg-white flex items-center justify-center text-lg shadow-inner">
-                      {company.icon}
-                    </div>
-                    <h3 className="font-black text-xs md:text-sm text-[#4A1720] uppercase tracking-tight leading-none flex-1 text-center pr-4">
+                  <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-1.5 px-2.5 flex items-center gap-2.5 shadow-md border-2 border-[#3A141A] -mt-5 mb-2.5 relative z-10 shrink-0">
+                    <img 
+                      src={company.icon} 
+                      alt={company.name} 
+                      className="w-8 h-8 rounded-full object-contain select-none shrink-0" 
+                    />
+                    <h3 className="font-black text-xs md:text-sm text-[#4A1720] uppercase tracking-wide leading-none flex-1 text-center pr-3 select-none">
                       {company.name}
                     </h3>
                   </div>
@@ -119,10 +121,10 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
                   )}
 
                   {/* Data Table */}
-                  <div className="flex-1 w-full pt-2 flex flex-col">
+                  <div className="w-full flex-1 flex flex-col justify-center">
                     {/* Headers */}
-                    <div className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[10px] text-[#FFE8D6] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight">
-                      <div className="text-left">TEAM</div>
+                    <div className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[10px] text-[#FFE8D6] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight">
+                      <div className="text-left pr-1">TEAM</div>
                       <div className="text-left">STAGE</div>
                       <div>Invest<br/>($K)</div>
                       <div>Projected<br/>Rev ($K)</div>
@@ -131,9 +133,9 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
                     </div>
 
                     {/* Rows */}
-                    <div className="flex-1 flex flex-col justify-around pb-2">
+                    <div className="flex flex-col gap-2 py-0.5">
                       {stages.map((stage, i) => (
-                        <div key={i} className="grid grid-cols-[28px_1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-[12px] text-white text-center font-bold">
+                        <div key={i} className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-[12px] text-white text-center font-bold">
                           <input
                             type="text" 
                             inputMode="numeric" 
@@ -142,7 +144,7 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
                             onChange={(e) => handleTeamChange(company.id, i, e.target.value)}
                             className="w-6 h-6 bg-transparent border-2 border-white/40 rounded-sm text-center text-white text-xs font-bold outline-none focus:border-white focus:bg-white/10 transition-all placeholder-white/20"
                           />
-                          <div className="text-left font-bold text-[12px] text-[#FFE8D6]">{stage}</div>
+                          <div className="text-left font-bold text-[12px] text-[#FFE8D6] tracking-wide">{stage}</div>
                           <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{company.data[i][0]}</div>
                           <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{company.data[i][1]}</div>
                           <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{company.data[i][2]}</div>
@@ -153,19 +155,19 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
                   </div>
 
                   {/* Equity Slider Ruler */}
-                  <div className="mt-4 flex items-end gap-2 px-1">
-                    <div className="text-[8px] text-[#FFE8D6] uppercase font-bold leading-tight w-8 text-right">
+                  <div className="mt-2.5 pt-2 border-t border-white/15 flex items-end gap-2 px-1 shrink-0">
+                    <div className="text-[8px] text-[#FFE8D6] uppercase font-bold leading-tight w-8 text-right shrink-0">
                       EQUITY<br/>GIVEN
                     </div>
                     <div className="flex-1">
-                      <div className="flex justify-between items-end h-3 border-b border-white/40 mb-0.5 px-0.5">
+                      <div className="flex justify-between items-end h-2.5 border-b border-white/40 mb-1 px-0.5">
                         {[0,10,20,30,40,50,60,70,80,90,100].map(num => (
                           <div key={num} className={`w-[1px] bg-white/70 ${num % 20 === 0 ? 'h-2' : 'h-1'}`}></div>
                         ))}
                       </div>
-                      <div className="flex justify-between text-[8px] text-white font-mono font-bold px-0.5">
+                      <div className="flex justify-between text-[8px] text-white font-mono font-bold px-0.5 leading-none">
                         {[0,10,20,30,40,50,60,70,80,90,100].map(num => (
-                           <span key={num} className="w-3 text-center">{num}</span>
+                           <span key={num} className="w-3 text-center leading-none">{num}</span>
                         ))}
                       </div>
                     </div>
@@ -182,19 +184,25 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
           <div className="flex-1 flex flex-col gap-4 min-w-[320px] max-w-sm mx-auto xl:mx-0">
             
             {/* Second Chance Tokens */}
-            <div className="bg-[#FFF2D8] rounded-xl border-2 border-[#3A141A] p-4 text-center shadow-lg">
-              <h3 className="font-black text-[#4A1720] uppercase tracking-widest mb-3 text-sm">Second Chance</h3>
-              <div className="flex justify-center gap-4">
-                {/* Active Tokens */}
-                <div className="w-14 h-14 rounded-full border-4 border-[#4A1720] bg-black shadow-inner overflow-hidden relative group cursor-pointer">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-red-600 to-orange-400 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+            <div className="bg-[#FFF2D8] rounded-xl border-2 border-[#3A141A] p-3 text-center shadow-lg">
+              <h3 className="font-black text-[#4A1720] uppercase tracking-widest mb-2.5 text-xs md:text-sm">Second Chance</h3>
+              <div className="bg-[#7D3C4A] border border-[#3A141A] rounded-full px-4 py-2 flex justify-center items-center gap-3 relative overflow-hidden">
+                {/* Active Token 1 */}
+                <div className="w-12 h-12 rounded-full overflow-hidden relative group cursor-pointer hover:scale-105 transition-transform shrink-0 drop-shadow-md">
+                  <img src="/mat-icons/second-chance-active.png" alt="Second Chance Active" className="w-full h-full object-contain select-none" />
                 </div>
-                <div className="w-14 h-14 rounded-full border-4 border-[#4A1720] bg-black shadow-inner overflow-hidden relative group cursor-pointer">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-red-600 to-orange-400 opacity-80 group-hover:opacity-100 transition-opacity"></div>
+                {/* Active Token 2 */}
+                <div className="w-12 h-12 rounded-full overflow-hidden relative group cursor-pointer hover:scale-105 transition-transform shrink-0 drop-shadow-md">
+                  <img src="/mat-icons/second-chance-active.png" alt="Second Chance Active" className="w-full h-full object-contain select-none" />
+                </div>
+                {/* Speed lines separator */}
+                <div className="w-[18px] h-9 flex items-center justify-center opacity-40 select-none">
+                  <div className="w-[2px] h-full bg-white rotate-12 mx-0.5"></div>
+                  <div className="w-[2px] h-full bg-white rotate-12 mx-0.5"></div>
                 </div>
                 {/* Inactive Token */}
-                <div className="w-14 h-14 rounded-full border-4 border-gray-500 bg-gray-800 shadow-inner overflow-hidden relative">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-gray-700 to-gray-500 opacity-80"></div>
+                <div className="w-12 h-12 rounded-full overflow-hidden relative shrink-0 opacity-80 drop-shadow-md">
+                  <img src="/mat-icons/second-chance-inactive.png" alt="Second Chance Inactive" className="w-full h-full object-contain select-none" />
                 </div>
               </div>
             </div>
@@ -236,7 +244,7 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
             </div>
 
             {/* Notes Section */}
-            <div className="bg-[#FFF2D8] rounded-xl border-2 border-[#3A141A] p-4 shadow-lg flex-1 flex flex-col min-h-[250px] relative">
+            <div className="bg-[#FFF2D8] rounded-xl border-2 border-[#3A141A] p-4 shadow-lg flex-1 flex flex-col min-h-[220px] relative">
               <h3 className="font-black text-[#4A1720] uppercase text-sm mb-2 text-center tracking-widest border-b border-[#3A141A]/10 pb-2">Notes / Calculations</h3>
               <textarea 
                 className="flex-1 w-full bg-transparent border-none outline-none resize-none text-[#4A1720] font-sans text-sm p-2 font-medium"
@@ -245,8 +253,8 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
                 onChange={(e) => setNotes(e.target.value)}
               />
               {/* Watermark Logo */}
-              <div className="absolute bottom-4 left-0 right-0 text-center pointer-events-none opacity-[0.15]">
-                 <h1 className="font-black tracking-[0.3em] text-[#4A1720] text-2xl">MODERN MINT</h1>
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center pointer-events-none opacity-85">
+                 <img src="/mat-icons/modern-mint-mat-logo.png" alt="Modern Mint" className="h-[20px] object-contain drop-shadow-sm select-none" />
               </div>
             </div>
 
