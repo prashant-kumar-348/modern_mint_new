@@ -1986,8 +1986,25 @@ const io = new SocketServer(server, {
       }
     });
 
+    socket.on('voice_signal', ({ roomId, to, signal, from }) => {
+      if (to) {
+        io.to(to).emit('voice_signal', { signal, from: socket.id, fromUsername: from });
+      } else if (roomId) {
+        socket.to(roomId).emit('voice_signal', { signal, from: socket.id, fromUsername: from });
+      }
+    });
+
+    socket.on('voice_state', ({ roomId, username, isTalking }) => {
+      if (roomId) {
+        socket.to(roomId).emit('voice_state_update', { socketId: socket.id, username, isTalking });
+      }
+    });
+
     socket.on('disconnect', () => {
       console.log('User disconnected:', socket.id);
+      for (const rId in rooms) {
+        socket.to(rId).emit('voice_state_update', { socketId: socket.id, username: '', isTalking: false });
+      }
     });
   });
 

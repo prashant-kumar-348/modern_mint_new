@@ -281,9 +281,28 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
     }
   }, [roomId]);
 
-  const { gameState, notification: serverNotification, sendAction, socketId, drawnCard, clearDrawnCard } = useMultiplayer(roomId, username, role, avatarId);
+  const { gameState, notification: serverNotification, sendAction, socketId, drawnCard, clearDrawnCard, socket } = useMultiplayer(roomId, username, role, avatarId);
   const rawGamePhase = gameState?.phase || 1;
   const gameRound = gameState?.round || 1;
+
+  const [activeSpeakers, setActiveSpeakers] = useState({});
+
+  useEffect(() => {
+    const handleVoiceState = (e) => {
+      const { username: speakerName, isTalking: speakerTalking } = e.detail || {};
+      if (speakerName) {
+        setActiveSpeakers(prev => ({
+          ...prev,
+          [speakerName]: Boolean(speakerTalking)
+        }));
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('voice_state_update', handleVoiceState);
+      return () => window.removeEventListener('voice_state_update', handleVoiceState);
+    }
+  }, []);
 
   const currentTutorialStep = isPlayingTutorial && tutorialStepIndex > 0 && tutorialStepIndex <= TUTORIAL_STEPS.length 
     ? TUTORIAL_STEPS[tutorialStepIndex - 1] 
@@ -514,7 +533,16 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
 
   return (
     <GameProvider>
-        <VoiceChatManager roomName={roomId} username={username} isTalking={isTalking} />
+        <VoiceChatManager 
+          roomName={roomId} 
+          username={username} 
+          isTalking={isTalking && gamePhase === 1} 
+          socket={socket}
+          onMicError={() => {
+            setIsTalking(false);
+            setNotification({ show: true, message: 'Microphone permission required for voice chat' });
+          }}
+        />
         <PhaseTransitionOverlay phase={gamePhase} />
         
         {isBankrupt && localPlayer && (
@@ -589,15 +617,29 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
               </div>
             </div>
           ) : (isTalking && gamePhase === 1) ? (
-            <div className="bg-gradient-to-b from-[#1a1202] to-black border border-[#d4af37] text-white px-8 py-3 rounded-lg text-center opacity-95 transition-opacity flex flex-col items-center shadow-[0_0_20px_rgba(212,175,55,0.2)] min-w-[300px]">
-              <h3 className="text-sm font-bold tracking-widest uppercase text-[#d4af37] mb-2 flex items-center gap-2"><Mic size={16} /> Active Negotiations</h3>
-              <div className="flex items-center gap-4 bg-black/50 border border-[#d4af37]/30 px-4 py-2 rounded-lg w-full">
-                <div className="w-8 h-8 rounded-full bg-black border border-[#d4af37] flex items-center justify-center animate-pulse shrink-0">
-                   <Mic size={14} className="text-[#d4af37]" />
+            <div 
+              onClick={() => setIsTalking(false)}
+              title="Click to Mute Microphone"
+              className="bg-gradient-to-b from-[#1a1202] to-black border border-[#d4af37] text-white px-8 py-3 rounded-lg text-center opacity-95 transition-all flex flex-col items-center shadow-[0_0_20px_rgba(212,175,55,0.4)] min-w-[300px] cursor-pointer hover:border-[#FFE885] group"
+            >
+              <h3 className="text-sm font-bold tracking-widest uppercase text-[#FFE885] mb-2 flex items-center gap-2">
+                <Mic size={16} className="text-[#FFE885] animate-pulse" /> Active Negotiations
+              </h3>
+              <div className="flex items-center gap-4 bg-black/60 border border-[#d4af37]/40 px-4 py-2 rounded-lg w-full group-hover:border-[#FFE885]/60 transition-colors">
+                <div className="w-8 h-8 rounded-full bg-emerald-950/80 border border-emerald-400 flex items-center justify-center animate-pulse shrink-0 shadow-[0_0_10px_rgba(16,185,129,0.5)]">
+                   <Mic size={14} className="text-emerald-400" />
                 </div>
-                <div className="text-left text-xs">
-                  <div className="font-bold text-white uppercase tracking-wider">Voice Channel</div>
-                  <div className="text-[#d4af37]">Speak to negotiate</div>
+                <div className="text-left text-xs flex-1">
+                  <div className="font-bold text-white uppercase tracking-wider flex items-center justify-between">
+                    <span>Voice Channel: LIVE</span>
+                    {/* Animated sound bars */}
+                    <div className="flex items-end gap-0.5 h-3">
+                      <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.6s_ease-in-out_infinite] h-2"></span>
+                      <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.4s_ease-in-out_infinite] h-3"></span>
+                      <span className="w-1 bg-emerald-400 rounded-full animate-[pulse_0.8s_ease-in-out_infinite] h-1.5"></span>
+                    </div>
+                  </div>
+                  <div className="text-[#d4af37]">Microphone on &bull; Click to mute</div>
                 </div>
               </div>
             </div>
@@ -707,51 +749,96 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                 {gamePhase === 1 && (
                   <button 
                     onClick={() => setIsTalking(prev => !prev)}
-                    title="Toggle Voice Chat"
+                    title={isTalking ? "Mute Microphone (Currently Live)" : "Unmute Microphone (Currently Muted)"}
                     className={`w-[49px] h-[49px] rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-lg select-none relative overflow-hidden group ${
                       isTalking 
-                        ? 'scale-105 shadow-[0_0_20px_rgba(255,194,64,0.8)]' 
-                        : 'hover:scale-105'
+                        ? 'scale-105 ring-2 ring-[#FFE885] shadow-[0_0_25px_rgba(255,194,64,0.9)] bg-black/60' 
+                        : 'hover:scale-105 bg-black/40'
                     }`}
                   >
                     {/* Outer Button Frame Image */}
                     <img 
                       src="/mic-btn-frame.png" 
                       alt="Mic Button Frame" 
-                      className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none" 
+                      className={`absolute inset-0 w-full h-full object-contain pointer-events-none select-none transition-opacity ${
+                        isTalking ? 'opacity-100' : 'opacity-70'
+                      }`} 
                     />
-                    {/* Inner Gold Microphone Icon Image */}
+
+                    {/* Microphone Icon */}
                     <img 
                       src="/mic-icon-gold.png" 
                       alt="Microphone Icon" 
-                      className="w-[23px] h-[28px] object-contain relative z-10 pointer-events-none select-none transition-transform group-hover:scale-110" 
+                      className={`w-[23px] h-[28px] object-contain relative z-10 pointer-events-none select-none transition-all ${
+                        isTalking 
+                          ? 'scale-110 drop-shadow-[0_0_10px_rgba(255,232,133,0.95)]' 
+                          : 'opacity-60 scale-95'
+                      }`} 
                     />
+
+                    {/* MUTED STATE: Prominent Red Diagonal Slash across the mic */}
+                    {!isTalking && (
+                      <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" viewBox="0 0 49 49">
+                        <line 
+                          x1="13" 
+                          y1="13" 
+                          x2="36" 
+                          y2="36" 
+                          stroke="#ef4444" 
+                          strokeWidth="3.2" 
+                          strokeLinecap="round" 
+                          className="drop-shadow-[0_0_5px_rgba(239,68,68,0.95)]" 
+                        />
+                      </svg>
+                    )}
+
+                    {/* Corner Status Indicator */}
+                    <div className="absolute bottom-1 right-1 z-30 pointer-events-none">
+                      {isTalking ? (
+                        <span className="flex h-2.5 w-2.5 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-black shadow-[0_0_6px_#10b981]"></span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full h-2 w-2 bg-red-500 border border-black/80 shadow-[0_0_3px_#ef4444]"></span>
+                      )}
+                    </div>
                   </button>
                 )}
               </div>
             </div>
             {/* Top-Right: Player Roster */}
             <div data-tutorial="tutorial-player-roster" className="absolute right-6 top-6 pointer-events-auto flex flex-col items-end gap-2 w-fit z-50">
-              {augmentedPlayers.map((player, playerIdx) => (
-                <div key={player.id} className="w-full flex flex-col items-end gap-1">
-                  <div className="flex gap-2 items-start w-full justify-end">
-                    {/* Circular Avatar */}
-                    <div 
-                      onClick={() => setExpandedPlayerId(prev => prev === player.id ? null : player.id)}
-                      className="w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 border-2 overflow-hidden bg-gray-900 transition-all cursor-pointer hover:opacity-95 select-none"
-                      style={{ 
-                        borderColor: player.isLocked ? '#d4af37' : (player.color || '#55ffb0'),
-                        boxShadow: player.isLocked 
-                          ? '0 0 15px rgba(212, 175, 55, 0.9), inset 0 0 8px rgba(212, 175, 55, 0.4)' 
-                          : `0 0 12px ${player.color || '#55ffb0'}`
-                      }}
-                    >
-                      <img 
-                        src={getPlayerAvatarSrc(player, playerIdx)} 
-                        alt={player.name} 
-                        className="w-full h-full object-cover select-none pointer-events-none" 
-                      />
-                    </div>
+              {augmentedPlayers.map((player, playerIdx) => {
+                const isPlayerTalking = player.isLocal ? isTalking : Boolean(activeSpeakers[player.name]);
+                return (
+                  <div key={player.id} className="w-full flex flex-col items-end gap-1">
+                    <div className="flex gap-2 items-start w-full justify-end">
+                      {/* Circular Avatar */}
+                      <div 
+                        onClick={() => setExpandedPlayerId(prev => prev === player.id ? null : player.id)}
+                        className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 border-2 overflow-hidden bg-gray-900 transition-all cursor-pointer hover:opacity-95 select-none relative ${
+                          (isPlayerTalking && gamePhase === 1) ? 'ring-2 ring-emerald-400' : ''
+                        }`}
+                        style={{ 
+                          borderColor: player.isLocked ? '#d4af37' : (player.color || '#55ffb0'),
+                          boxShadow: (isPlayerTalking && gamePhase === 1)
+                            ? '0 0 16px #34d399, inset 0 0 8px rgba(52,211,153,0.5)'
+                            : player.isLocked 
+                              ? '0 0 15px rgba(212, 175, 55, 0.9), inset 0 0 8px rgba(212, 175, 55, 0.4)' 
+                              : `0 0 12px ${player.color || '#55ffb0'}`
+                        }}
+                      >
+                        <img 
+                          src={getPlayerAvatarSrc(player, playerIdx)} 
+                          alt={player.name} 
+                          className="w-full h-full object-cover select-none pointer-events-none" 
+                        />
+                        {/* Speaking badge indicator on avatar */}
+                        {(isPlayerTalking && gamePhase === 1) && (
+                          <div className="absolute inset-0 bg-emerald-500/20 pointer-events-none animate-pulse"></div>
+                        )}
+                      </div>
                     
                     {/* Banner or Expanded Dropdown */}
                     <div 
@@ -947,7 +1034,8 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                       </div>
                   )}
                 </div>
-              ))}
+              );
+            })}
             </div>
 
             {/* Center: Constrained Middle Board */}

@@ -69,6 +69,12 @@ export function useMultiplayer(roomId, username, role) {
       }
     });
 
+    socketRef.current.on('voice_state_update', (data) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('voice_state_update', { detail: data }));
+      }
+    });
+
     return () => {
       socketRef.current.disconnect();
     };
@@ -80,5 +86,5 @@ export function useMultiplayer(roomId, username, role) {
     }
   };
 
-  return { gameState, notification, sendAction, socketId, drawnCard, clearDrawnCard: () => setDrawnCard(null) };
+  return { gameState, notification, sendAction, socketId, drawnCard, clearDrawnCard: () => setDrawnCard(null), socket: socketRef.current };
 }
