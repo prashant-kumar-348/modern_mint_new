@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,300..900;1,300..900&display=swap');
 
 /* ── Modern Mint Design Tokens ───────────────────────────────────────────── */
 :root {
@@ -9,7 +10,9 @@
   --teal-glow:  rgba(29, 233, 214, 0.22);
   --teal-glow-strong: rgba(29, 233, 214, 0.45);
 
-  /* Gold — "MODERN MINT" wordmark, coins, ranks */
+  /* Fonts */
+  --font-cinzel: 'Cinzel', Georgia, serif;
+  --font-jost:   'Jost', sans-serif;
   --gold:        #d4a843;
   --gold-bright: #f0c84e;
   --gold-dim:    #8a6820;
@@ -126,4 +129,8 @@ body::after {
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
   50%       { transform: translateY(-6px); }
+}
+
+.font-jost {
+  font-family: var(--font-jost), 'Jost', sans-serif;
 }

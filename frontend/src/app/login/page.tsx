@@ -75,12 +75,15 @@ export default function LoginPage() {
 
             <div className="mt-6 text-center">
               <h1
-                className="text-xl font-black uppercase tracking-[0.18em]"
-                style={{ color: "var(--text-primary)" }}
+                className="text-xl font-bold uppercase tracking-[0.18em]"
+                style={{ color: "var(--text-primary)", fontFamily: "'Jost', sans-serif" }}
               >
                 Commander Login
               </h1>
-              <p className="mt-2 text-xs uppercase tracking-[0.25em]" style={{ color: "var(--text-muted)" }}>
+              <p
+                className="mt-2 text-xs uppercase tracking-[0.25em]"
+                style={{ color: "var(--text-muted)", fontFamily: "'Jost', sans-serif" }}
+              >
                 Sign in to access your strategy dashboard
               </p>
             </div>
@@ -150,8 +153,16 @@ export default function LoginPage() {
                 size="lg"
                 loading={isSubmitting}
                 className="mt-2"
+                style={{
+                  fontFamily: "'Jost', sans-serif",
+                  fontWeight: 400,
+                  fontSize: "15px",
+                  lineHeight: "100%",
+                  letterSpacing: "0%",
+                  textAlign: "center",
+                }}
               >
-                Enter the Arena
+                Log In
               </Button>
             </div>
           </form>

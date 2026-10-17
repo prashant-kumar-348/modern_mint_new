@@ -23,6 +23,13 @@ export default function GameRoomPage({
     role: string;
     avatarId?: number;
   } | null>(null);
+  const [roomInfo, setRoomInfo] = useState<{
+    name: string;
+    mode: string;
+    privacy: string;
+    isHost: boolean;
+    maxPlayers: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!ready) return;
@@ -37,6 +44,17 @@ export default function GameRoomPage({
 
         const roomDetails = await fetchRoom(id);
         const rawRoom = roomDetails.raw;
+
+        const isHost = user.id === rawRoom.host_user_id;
+        const maxPlayers = (rawRoom.founders?.length || 4) + (rawRoom.investors?.length || 0);
+
+        setRoomInfo({
+          name: rawRoom.name,
+          mode: rawRoom.mode,
+          privacy: rawRoom.privacy,
+          isHost,
+          maxPlayers,
+        });
 
         // Search for user in founders or investors
         const founderSlot = rawRoom.founders.find(
@@ -104,6 +122,7 @@ export default function GameRoomPage({
       username={playerDetails.username}
       role={playerDetails.role}
       avatarId={playerDetails.avatarId}
+      roomInfo={roomInfo}
     />
   );
 }

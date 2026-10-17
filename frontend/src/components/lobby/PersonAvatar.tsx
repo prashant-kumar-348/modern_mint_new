@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 /**
  * Shared "person" representation used by both the navbar and the lobby slots:
  * the uploaded profile photo when available, otherwise name initials — always
@@ -29,6 +31,14 @@ export default function PersonAvatar({
   borderWidth = 2,
   glowPx,
 }: PersonAvatarProps) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  const showImage = Boolean(src && !hasError);
+
   return (
     <div
       className="rounded-full flex items-center justify-center font-black overflow-hidden select-none flex-shrink-0"
@@ -36,7 +46,7 @@ export default function PersonAvatar({
         width: size,
         height: size,
         fontSize: Math.max(8, Math.round(size * 0.3)),
-        background: src
+        background: showImage
           ? "#04190d"
           : "radial-gradient(circle at 38% 32%, rgba(40,220,110,0.55), rgba(4,26,13,0.96))",
         border: `${borderWidth}px solid #f2f7f3`,
@@ -46,9 +56,14 @@ export default function PersonAvatar({
           : undefined,
       }}
     >
-      {src ? (
+      {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="w-full h-full object-cover" />
+        <img
+          src={src!}
+          alt=""
+          className="w-full h-full object-cover"
+          onError={() => setHasError(true)}
+        />
       ) : (
         initials
       )}

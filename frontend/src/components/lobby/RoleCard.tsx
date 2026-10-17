@@ -9,136 +9,91 @@ interface RoleCardProps {
   onSelect: () => void;
 }
 
-const ROLE_DATA = {
-  founder: {
-    label:   "FOUNDER",
-    tagline: "Build. Risk. Survive.",
-    color:   "#1de9d6",
-    amounts: [
-      { label: "Round 1", value: "$ 500 K" },
-    ],
-    desc: "Build your vision, lead your team and pitch to investors.",
-    icon: (
-      <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
-        <path d="M12 2L2 7l10 5 10-5-10-5z" stroke="#1de9d6" strokeWidth="1.6"
-          strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M2 17l10 5 10-5" stroke="#1de9d6" strokeWidth="1.6"
-          strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M2 12l10 5 10-5" stroke="#1de9d6" strokeWidth="1.6"
-          strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    ),
-  },
-  investor: {
-    label:   "INVESTOR",
-    tagline: "Fund. Control. Multiply.",
-    color:   "#d4a843",
-    amounts: [
-      { label: "Round 1", value: "$ 2000 K" },
-      { label: "Round 4", value: "$ 5000 K" },
-      { label: "Round 7", value: "$ 10000 K" },
-    ],
-    desc: "Fund startups, control decisions and multiply your returns.",
-    icon: (
-      <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
-        <circle cx="12" cy="12" r="9" stroke="#d4a843" strokeWidth="1.6"/>
-        <path d="M12 6v12M9 9h4.5a1.5 1.5 0 0 1 0 3H9.5a1.5 1.5 0 0 0 0 3H15"
-          stroke="#d4a843" strokeWidth="1.6" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-} as const;
-
 export default function RoleCard({ role, selected, onSelect }: RoleCardProps) {
-  const data = ROLE_DATA[role];
+  const isFounder = role === "founder";
 
   return (
     <motion.button
+      type="button"
       onClick={onSelect}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       transition={{ duration: 0.15 }}
-      className="relative flex flex-col items-center p-6 rounded-2xl w-full h-full text-left cursor-pointer"
+      className={`relative flex flex-col items-center justify-between p-5 rounded-[24px] w-full h-[410px] cursor-pointer text-center select-none transition-all duration-200 focus:outline-none ${
+        selected ? "opacity-100 brightness-105" : "opacity-75 hover:opacity-90"
+      }`}
       style={{
-        background: selected
-          ? `rgba(${role === "founder" ? "29,233,214" : "212,168,67"},0.08)`
-          : "rgba(6,20,26,0.70)",
-        border: `1.5px solid ${selected ? data.color : "rgba(29,233,214,0.12)"}`,
+        backgroundImage: `url('${selected ? "/lobby/join/Rectangle 593.png" : "/lobby/join/Rectangle 592.png"}')`,
+        backgroundSize: "100% 100%",
+        backgroundRepeat: "no-repeat",
         boxShadow: selected
-          ? `0 0 28px ${data.color}22, inset 0 1px 0 ${data.color}10`
-          : "none",
-        transition: "all 0.18s",
+          ? "0 0 30px rgba(240, 207, 116, 0.50), inset 0 0 16px rgba(240, 207, 116, 0.25)"
+          : "0 8px 24px rgba(0,0,0,0.4)",
       }}
     >
-      {/* Selected checkmark */}
-      {selected && (
-        <motion.div
-          className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center"
-          style={{ background: data.color }}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 400, damping: 20 }}
-        >
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-            <path d="M2 6l3 3 5-5" stroke="#03090c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </motion.div>
-      )}
+      {/* Top section: Icon & Title & Tagline */}
+      <div className="flex flex-col items-center w-full pt-7 md:pt-8">
+        <div className="flex items-center justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={isFounder ? "/lobby/join/Frame-1.png" : "/lobby/join/Frame.png"}
+            alt=""
+            className="w-20 h-20 md:w-24 md:h-24 object-contain pointer-events-none drop-shadow"
+          />
+        </div>
 
-      {/* Icon */}
-      <div
-        className="w-20 h-20 rounded-full flex items-center justify-center mb-4"
-        style={{
-          background: selected
-            ? `${data.color}18`
-            : "rgba(29,233,214,0.05)",
-          border: `1px solid ${data.color}30`,
-        }}
-      >
-        {data.icon}
+        {/* Title */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={isFounder ? "/lobby/join/FOUNDER.png" : "/lobby/join/INVESTOR.png"}
+          alt={isFounder ? "FOUNDER" : "INVESTOR"}
+          className="h-4 md:h-5 w-auto object-contain pointer-events-none drop-shadow mt-5 md:mt-6"
+        />
+
+        {/* Tagline */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={
+            isFounder
+              ? "/lobby/join/Build . Risk . Survive.png"
+              : "/lobby/join/Fund . Controll . Multiply..png"
+          }
+          alt=""
+          className="h-3 md:h-3.5 w-auto object-contain pointer-events-none drop-shadow mt-2"
+        />
       </div>
 
-      {/* Role name */}
-      <span
-        className="text-lg font-black uppercase tracking-[0.2em] mb-1.5"
-        style={{ color: data.color }}
-      >
-        {data.label}
-      </span>
-
-      {/* Tagline */}
-      <span
-        className="text-[11px] font-semibold uppercase tracking-widest mb-4"
-        style={{ color: "var(--text-muted)" }}
-      >
-        {data.tagline}
-      </span>
-
-      {/* Amounts */}
-      <div className="flex flex-col gap-1 mb-3 w-full">
-        {data.amounts.map((a) => (
-          <div key={a.label} className="flex justify-between items-center">
-            <span className="text-[10px] uppercase tracking-wider"
-              style={{ color: "var(--text-faint)" }}>
-              {a.label}
-            </span>
-            <span className="text-[11px] font-bold"
-              style={{ color: data.color }}>
-              {a.value}
-            </span>
-          </div>
-        ))}
+      {/* Middle section: Round details */}
+      <div className="flex flex-col items-center justify-center my-auto py-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={
+            isFounder
+              ? "/lobby/join/Round 1 _ $500k.png"
+              : "/lobby/join/Round 1 _ $2000k Round 2 _ $5000k Round 7 _ $10000k.png"
+          }
+          alt="Rounds"
+          className={
+            isFounder
+              ? "h-5 md:h-5.5 w-auto object-contain pointer-events-none drop-shadow"
+              : "h-12 md:h-14 w-auto object-contain pointer-events-none drop-shadow"
+          }
+        />
       </div>
 
-      {/* Divider */}
-      <div className="w-full h-px mb-3"
-        style={{ background: `${data.color}18` }} />
-
-      {/* Description */}
-      <p className="text-[10px] text-center leading-relaxed"
-        style={{ color: "var(--text-muted)" }}>
-        {data.desc}
-      </p>
+      {/* Bottom section: Footer pitch */}
+      <div className="pb-3 px-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={
+            isFounder
+              ? "/lobby/join/Build your vision , lead the team and pitch the investors.png"
+              : "/lobby/join/Build your vision , lead the team and pitch the investors-1.png"
+          }
+          alt="Build your vision"
+          className="h-7 md:h-8 w-auto object-contain pointer-events-none drop-shadow"
+        />
+      </div>
     </motion.button>
   );
 }

@@ -4,23 +4,96 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import PlayerAvatar from "./PlayerAvatar";
-import type { GameRoom } from "@/lib/lobby/types";
+import PasswordModal from "./PasswordModal";
+import type { GameRoom, PlayerSlot } from "@/lib/lobby/types";
+import { AVATAR_IMAGE_BY_ID } from "@/lib/lobby/types";
+import { getUser } from "@/lib/auth";
+import { API_BASE_URL } from "@/lib/api";
 
-// ── Mode badge ────────────────────────────────────────────────────────────
+const AVATAR_IMAGE_MAP: Record<number, string> = {
+  1: "/lobby/join/founder-avatar-1.png",
+  2: "/lobby/join/founder-avatar-4.png",
+  3: "/lobby/join/founder-avatar-3.png",
+  4: "/lobby/join/founder-avatar-2.png",
+  5: "/lobby/join/Ellipse 197.png",
+  6: "/lobby/join/Ellipse 198.png",
+};
+
+function resolveSlotImage(slot: PlayerSlot): string | undefined {
+  if (slot.kind === "open" || slot.kind === "ai") return undefined;
+
+  // 1. If this slot represents the logged-in user, check their stored profile image
+  if (typeof window !== "undefined") {
+    const user = getUser();
+    if (
+      user &&
+      (slot.kind === "you" ||
+        (slot.name && user.username && slot.name.trim().toLowerCase() === user.username.trim().toLowerCase()))
+    ) {
+      if (user.profile_image_url) {
+        return user.profile_image_url.startsWith("http") || user.profile_image_url.startsWith("data:")
+          ? user.profile_image_url
+          : `${API_BASE_URL}${user.profile_image_url}`;
+      }
+    }
+  }
+
+  // 2. Backend-provided profile image for this player
+  if (slot.profileImageUrl) {
+    return slot.profileImageUrl.startsWith("http") || slot.profileImageUrl.startsWith("data:")
+      ? slot.profileImageUrl
+      : `${API_BASE_URL}${slot.profileImageUrl}`;
+  }
+
+  // No profile image uploaded -> return undefined so PlayerAvatar displays initials (e.g. "PR")
+  return undefined;
+}
+
+// ── Mode badge with user-provided vector symbols ──────────────────────────
 
 function ModeBadge({ mode }: { mode: GameRoom["mode"] }) {
   const cfg = {
-    "60mins": { icon: "⏱", label: "60 mins"    },
-    short:    { icon: "⚡", label: "Short Mode" },
-    full:     { icon: "👑", label: "Full Mode"  },
-  }[mode];
+    "60mins": {
+      icon: "/lobby/modes/clock.png",
+      label: "60 mins",
+      imgClass: "h-[44px] md:h-[48px] max-w-[50px]",
+    },
+    short: {
+      icon: "/lobby/modes/lightning.png",
+      label: "Short Mode",
+      imgClass: "h-[46px] md:h-[50px] max-w-[46px]",
+    },
+    full: {
+      icon: "/lobby/modes/crown.png",
+      label: "Full Mode",
+      imgClass: "h-[40px] md:h-[44px] max-w-[52px]",
+    },
+  }[mode] || {
+    icon: "/lobby/modes/clock.png",
+    label: mode,
+    imgClass: "h-[44px] md:h-[48px] max-w-[50px]",
+  };
 
   return (
-    <div className="flex items-center gap-1.5 w-28">
-      <span className="text-sm opacity-90">{cfg.icon}</span>
+    <div className="relative flex items-center justify-center w-28 h-11 select-none">
+      {/* Background symbol watermark from Figma */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={cfg.icon}
+        alt=""
+        className={`absolute inset-0 m-auto ${cfg.imgClass} w-auto object-contain opacity-60 pointer-events-none select-none`}
+      />
       <span
-        className="text-[11px] font-semibold tracking-wide"
-        style={{ color: "rgba(190,224,205,0.80)" }}
+        className="relative z-10 text-white select-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
+        style={{
+          fontFamily: "'Jost', sans-serif",
+          fontWeight: 400,
+          fontStyle: "normal",
+          fontSize: "15px",
+          lineHeight: "100%",
+          letterSpacing: "0%",
+          textAlign: "center",
+        }}
       >
         {cfg.label}
       </span>
@@ -28,25 +101,51 @@ function ModeBadge({ mode }: { mode: GameRoom["mode"] }) {
   );
 }
 
-// ── Slot group ────────────────────────────────────────────────────────────
+// ── Slot group (Padded to 4 for Founders and 2 for Investors) ─────────────
 
-function SlotGroup({ slots }: { slots: GameRoom["founders"] }) {
+function SlotGroup({
+  slots,
+  max,
+}: {
+  slots: GameRoom["founders"] | GameRoom["investors"];
+  max: number;
+}) {
+  const filled = slots || [];
+  const rendered = [...filled];
+  while (rendered.length < max) {
+    rendered.push({ kind: "open" } as (typeof filled)[number]);
+  }
+
+  const currentUser = typeof window !== "undefined" ? getUser() : null;
+
   return (
-    <div className="flex items-center gap-1">
-      {slots.map((slot, i) => {
-        // Human/you slot represents the PERSON: profile photo when they have one,
-        // otherwise their name initials (same as the navbar). Open slots keep "+",
-        // AI keeps the bot icon. Game avatar is no longer used for display here.
-        const isPlayer = slot.kind === "human" || slot.kind === "you";
+    <div className="flex items-center gap-2 justify-center">
+      {rendered.slice(0, max).map((slot, i) => {
+        const isOpen = slot.kind === "open";
+        const isCurrent =
+          slot.kind === "you" ||
+          Boolean(
+            currentUser &&
+              slot.name &&
+              currentUser.username &&
+              slot.name.trim().toLowerCase() === currentUser.username.trim().toLowerCase()
+          );
+
+        const personName = isOpen
+          ? undefined
+          : isCurrent
+          ? currentUser?.username || slot.name || "You"
+          : slot.name || "Player";
+
         return (
           <PlayerAvatar
             key={i}
             kind={slot.kind}
             avatarId={slot.avatarId}
-            imageSrc={isPlayer ? slot.profileImageUrl : undefined}
-            personName={isPlayer ? (slot.name ?? "") : undefined}
-            size="sm"
-            showStatus={slot.status === "online"}
+            imageSrc={isOpen ? undefined : resolveSlotImage(slot)}
+            personName={personName}
+            size="md"
+            showStatus={!isOpen}
           />
         );
       })}
@@ -54,59 +153,7 @@ function SlotGroup({ slots }: { slots: GameRoom["founders"] }) {
   );
 }
 
-// ── Password unlock panel ─────────────────────────────────────────────────
 
-function PasswordPanel({
-  onSubmit,
-  onCancel,
-}: {
-  onSubmit: (pw: string) => void;
-  onCancel: () => void;
-}) {
-  const [pw, setPw] = useState("");
-  return (
-    <motion.div
-      initial={{ opacity: 0, scaleY: 0.85 }}
-      animate={{ opacity: 1, scaleY: 1 }}
-      exit={{ opacity: 0, scaleY: 0.85 }}
-      className="flex items-center gap-2 mt-2 origin-top"
-    >
-      <input
-        type="password"
-        value={pw}
-        onChange={(e) => setPw(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && pw.trim() && onSubmit(pw)}
-        placeholder="Enter password"
-        className="flex-1 px-3 py-1.5 text-xs rounded border focus:outline-none"
-        style={{
-          background: "rgba(6,20,26,0.85)",
-          border: "1px solid rgba(29,233,214,0.25)",
-          color: "var(--text-primary)",
-          maxWidth: 140,
-        }}
-        autoFocus
-      />
-      <button
-        onClick={() => pw.trim() && onSubmit(pw)}
-        className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded cursor-pointer transition-all"
-        style={{
-          background: "rgba(29,233,214,0.12)",
-          border: "1px solid rgba(29,233,214,0.4)",
-          color: "#1de9d6",
-        }}
-      >
-        JOIN
-      </button>
-      <button
-        onClick={onCancel}
-        className="text-[10px] uppercase tracking-wider cursor-pointer transition-colors"
-        style={{ color: "var(--text-faint)" }}
-      >
-        Cancel
-      </button>
-    </motion.div>
-  );
-}
 
 // ── RoomRow ───────────────────────────────────────────────────────────────
 
@@ -129,7 +176,6 @@ export default function RoomRow({ room, index }: RoomRowProps) {
   }
 
   function handlePwSubmit(pw: string) {
-    // Remember the verified password so the join page doesn't ask again.
     try { sessionStorage.setItem(`mm_room_pw_${room.id}`, pw); } catch { /* ignore */ }
     router.push(`/lobby/join/${room.id}`);
   }
@@ -137,120 +183,102 @@ export default function RoomRow({ room, index }: RoomRowProps) {
   return (
     <motion.div
       className="w-full"
-      initial={{ opacity: 0, x: -12 }}
+      initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.35 }}
+      transition={{ delay: index * 0.04, duration: 0.3 }}
     >
-      {/* Capsule row — glassmorphism: green glass fading to transparent on the right,
-          so the JOIN/PASSWORD pill appears to float over the artwork (matches Figma). */}
+      {/* Sleek rounded capsule row using user-provided row-bg.png */}
       <div
-        className="group relative w-full rounded-full transition-all duration-150"
+        className="group relative w-full rounded-full transition-all duration-150 hover:brightness-110"
         style={{
-          background:
-            "linear-gradient(90deg, rgba(2,44,34,0.45) 0%, rgba(6,78,59,0.22) 46%, rgba(6,78,59,0) 100%)",
-          border: "1px solid rgba(120,255,180,0.16)",
-          backdropFilter: "blur(15px)",
-          WebkitBackdropFilter: "blur(15px)",
-          boxShadow:
-            "inset 0 1px 0 rgba(120,255,180,0.12), 0 1px 8px rgba(0,0,0,0.16)",
-        }}
-        onMouseEnter={(e) => {
-          const el = e.currentTarget as HTMLDivElement;
-          el.style.background =
-            "linear-gradient(90deg, rgba(4,60,44,0.55) 0%, rgba(8,96,72,0.30) 46%, rgba(6,78,59,0.04) 100%)";
-          el.style.boxShadow =
-            "inset 0 1px 0 rgba(120,255,180,0.18), 0 0 18px rgba(43,214,115,0.18)";
-        }}
-        onMouseLeave={(e) => {
-          const el = e.currentTarget as HTMLDivElement;
-          el.style.background =
-            "linear-gradient(90deg, rgba(2,44,34,0.45) 0%, rgba(6,78,59,0.22) 46%, rgba(6,78,59,0) 100%)";
-          el.style.boxShadow =
-            "inset 0 1px 0 rgba(120,255,180,0.12), 0 1px 8px rgba(0,0,0,0.16)";
+          backgroundImage: "url('/lobby/row-bg.png')",
+          backgroundSize: "100% 100%",
+          backgroundRepeat: "no-repeat",
         }}
       >
-        {/* Main row */}
-        <div className="flex items-center gap-4 pl-6 pr-2.5 py-2.5 min-h-[60px]">
+        {/* Main row items matching TableHeader columns */}
+        <div className="flex items-center w-full min-h-[46px] pl-16 md:pl-20 pr-12 md:pr-16 py-1">
           {/* Game name */}
-          <div className="flex-1 min-w-0">
+          <div className="w-[180px] lg:w-[200px] flex-shrink-0 text-left min-w-0 pr-4">
             <span
-              className="text-xs font-bold tracking-wide truncate block"
-              style={{ color: "#eafff2" }}
+              className="truncate block text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+              style={{
+                fontFamily: "'Jost', sans-serif",
+                fontWeight: 400,
+                fontSize: "15px",
+                lineHeight: "100%",
+                letterSpacing: "0%",
+              }}
             >
               {room.name}
             </span>
           </div>
 
           {/* Mode */}
-          <div className="w-28 flex-shrink-0">
+          <div className="w-[110px] lg:w-[120px] flex-shrink-0 flex items-center justify-center">
             <ModeBadge mode={room.mode} />
           </div>
 
-          {/* Founders */}
-          <div className="w-[150px] flex-shrink-0">
-            <SlotGroup slots={room.founders} />
+          {/* Founders (Max 4) */}
+          <div className="w-[220px] lg:w-[240px] flex-shrink-0 flex items-center justify-center">
+            <SlotGroup slots={room.founders} max={4} />
           </div>
 
-          {/* Investors */}
-          <div className="w-[80px] flex-shrink-0">
-            <SlotGroup slots={room.investors} />
+          {/* Investors (Max 2) */}
+          <div className="w-[180px] lg:w-[200px] flex-shrink-0 flex items-center justify-center">
+            <SlotGroup slots={room.investors} max={2} />
           </div>
 
-          {/* Join / Password — Figma: rounded pill at the row's right edge */}
-          <div className="w-[116px] flex-shrink-0 flex justify-end">
+          {/* Join / Password Button */}
+          <div className="flex-1 flex items-center justify-end">
             {isPassword ? (
               <button
+                type="button"
                 onClick={handleJoin}
-                className="w-full py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.18em] transition-all cursor-pointer"
+                className="w-[130px] md:w-[138px] h-7 md:h-8 rounded-full flex items-center justify-center transition-transform cursor-pointer hover:scale-105 active:scale-95 focus:outline-none shadow-md"
                 style={{
-                  background: showPw
-                    ? "rgba(43,214,115,0.18)"
-                    : "rgba(6,32,17,0.92)",
-                  border: "1px solid rgba(43,214,115,0.45)",
-                  color: "#bff0d2",
+                  backgroundImage: "url('/lobby/password-btn-bg.png')",
+                  backgroundSize: "100% 100%",
+                  backgroundRepeat: "no-repeat",
                 }}
               >
-                PASSWORD
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/lobby/PASSWORD.png"
+                  alt="PASSWORD"
+                  className="h-[18px] md:h-[20px] w-auto object-contain pointer-events-none drop-shadow translate-y-[1.5px]"
+                />
               </button>
             ) : (
               <button
+                type="button"
                 onClick={handleJoin}
-                className="w-full py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all cursor-pointer"
+                className="w-[130px] md:w-[138px] h-7 md:h-8 rounded-full flex items-center justify-center transition-transform cursor-pointer hover:scale-105 active:scale-95 focus:outline-none shadow-md"
                 style={{
-                  background:
-                    "linear-gradient(180deg, #2fd877 0%, #18a258 100%)",
-                  border: "1px solid rgba(120,255,180,0.45)",
-                  color: "#04240f",
-                  boxShadow: "0 0 14px rgba(43,214,115,0.30)",
-                }}
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget as HTMLButtonElement;
-                  el.style.background =
-                    "linear-gradient(180deg, #46e98c 0%, #1eb866 100%)";
-                  el.style.boxShadow = "0 0 22px rgba(43,214,115,0.50)";
-                }}
-                onMouseLeave={(e) => {
-                  const el = e.currentTarget as HTMLButtonElement;
-                  el.style.background =
-                    "linear-gradient(180deg, #2fd877 0%, #18a258 100%)";
-                  el.style.boxShadow = "0 0 14px rgba(43,214,115,0.30)";
+                  backgroundImage: "url('/lobby/Rectangle 561.png')",
+                  backgroundSize: "100% 100%",
+                  backgroundRepeat: "no-repeat",
                 }}
               >
-                JOIN
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/lobby/JOIN.png"
+                  alt="JOIN"
+                  className="h-[18px] md:h-[20px] w-auto object-contain pointer-events-none drop-shadow translate-y-[1.5px]"
+                />
               </button>
             )}
           </div>
         </div>
 
-        {/* Inline password panel */}
+        {/* Password unlock modal */}
         <AnimatePresence>
           {showPw && (
-            <div className="px-6 pb-3">
-              <PasswordPanel
-                onSubmit={handlePwSubmit}
-                onCancel={() => setShowPw(false)}
-              />
-            </div>
+            <PasswordModal
+              roomName={room.name}
+              onConfirm={handlePwSubmit}
+              onCancel={() => setShowPw(false)}
+            />
           )}
         </AnimatePresence>
       </div>

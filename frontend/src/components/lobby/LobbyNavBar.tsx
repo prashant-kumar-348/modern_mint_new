@@ -254,59 +254,51 @@ export default function LobbyNavBar({ title: _title }: LobbyNavBarProps) {
         <ProfileAvatar />
       </div>
 
-      {/* Center: MODERN MINT wordmark — emerald metallic serif, the dominant element */}
-      <div className="flex-1 flex items-center justify-center pointer-events-none">
-        <h1
-          className="uppercase select-none"
-          style={{
-            fontFamily: "var(--font-cinzel), Georgia, serif",
-            fontWeight: 900,
-            fontSize: "clamp(34px, 5.2vw, 64px)",
-            letterSpacing: "0.10em",
-            backgroundImage:
-              "linear-gradient(180deg, #fff3c4 0%, #f4d779 22%, #e7b53e 48%, #b8841f 74%, #8a5e16 100%)",
-            WebkitBackgroundClip: "text",
-            WebkitTextFillColor: "transparent",
-            backgroundClip: "text",
-            WebkitTextStroke: "0.6px rgba(122,84,18,0.55)",
-            filter:
-              "drop-shadow(0 2px 1px rgba(40,24,4,0.55)) drop-shadow(0 0 20px rgba(231,181,62,0.55))",
-          }}
-        >
-          MODERN MINT
-        </h1>
+      {/* Center: MODERN MINT wordmark image provided by user */}
+      <div className="flex-1 flex items-center justify-center pointer-events-none px-28">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/lobby/modern-mint-logo.png"
+          alt="MODERN MINT"
+          className="h-12 md:h-14 lg:h-16 w-auto max-w-[580px] object-contain select-none filter drop-shadow-[0_4px_22px_rgba(43,214,115,0.45)] drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]"
+        />
       </div>
 
-      {/* Right: action icons — Figma order: logout, then settings */}
-      <div className="absolute right-7 top-1/2 -translate-y-1/2 flex items-center gap-2.5">
-        {/* Logout / exit */}
-        <NavIconButton title="Logout" onClick={handleLogout} hoverColor="#ff8a8a">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
-              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            />
-            <polyline
-              points="16 17 21 12 16 7"
-              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            />
-            <line
-              x1="21" y1="12" x2="9" y2="12"
-              stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
-            />
-          </svg>
-        </NavIconButton>
+      {/* Right: action icons — Figma mockup: Group 345 exit icon, then settings */}
+      <div className="absolute right-7 top-1/2 -translate-y-1/2 flex items-center gap-3">
+        {/* Logout / Exit (Figma Group 345) */}
+        <button
+          onClick={handleLogout}
+          title="Logout"
+          className="w-[46px] h-[46px] rounded-xl overflow-hidden cursor-pointer transition-transform duration-150 hover:scale-105 active:scale-95 shadow-md flex items-center justify-center focus:outline-none"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/lobby/Group 345.png"
+            alt="Logout"
+            className="w-full h-full object-cover pointer-events-none"
+          />
+        </button>
 
-        {/* Settings */}
-        <NavIconButton title="Settings">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+        {/* Settings (Matching emerald glass button with teal gear) */}
+        <button
+          title="Settings"
+          className="w-[46px] h-[46px] rounded-xl flex items-center justify-center cursor-pointer transition-transform duration-150 hover:scale-105 active:scale-95 shadow-md focus:outline-none"
+          style={{
+            background: "linear-gradient(180deg, #1d4638 0%, #0d2820 100%)",
+            border: "1px solid rgba(43, 214, 115, 0.45)",
+            boxShadow: "0 0 10px rgba(43, 214, 115, 0.20)",
+          }}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#23d3c4" strokeWidth="1.9">
+            <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.9" />
             <path
               d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-              stroke="currentColor" strokeWidth="1.8"
+              stroke="currentColor"
+              strokeWidth="1.9"
             />
           </svg>
-        </NavIconButton>
+        </button>
       </div>
     </motion.header>
   );

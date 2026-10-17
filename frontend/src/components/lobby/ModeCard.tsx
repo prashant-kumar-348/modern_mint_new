@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useState } from "react";
 import type { GameMode } from "@/lib/lobby/types";
 
 interface ModeCardProps {
@@ -10,83 +9,100 @@ interface ModeCardProps {
   onSelect: () => void;
 }
 
-const MODE_DATA: Record<GameMode, {
-  icon:  string;
-  label: string;
-  sub:   string;
-  color: string;
-}> = {
+const MODE_CONFIG: Record<
+  GameMode,
+  {
+    titleImg: string;
+    titleAlt: string;
+    subImg: string;
+    subAlt: string;
+    subHeight: string;
+    symbol: string;
+    symbolClass: string;
+  }
+> = {
   "60mins": {
-    icon:  "⏱",
-    label: "60 MINS",
-    sub:   "Standard gameplay for 60 minutes",
-    color: "#1de9d6",
+    titleImg: "/lobby/create/60 Mins.png",
+    titleAlt: "60 Mins",
+    subImg: "/lobby/create/Standard Gameplay for 60 mins.png",
+    subAlt: "Standard Gameplay for 60 mins",
+    subHeight: "h-9 max-h-[38px]",
+    symbol: "/lobby/modes/clock.png",
+    symbolClass: "w-[185px] h-[185px]",
   },
   short: {
-    icon:  "⚡",
-    label: "SHORT MODE",
-    sub:   "Fast-paced game for quick play",
-    color: "#d4a843",
+    titleImg: "/lobby/create/Short Mode.png",
+    titleAlt: "Short Mode",
+    subImg: "/lobby/create/Fast paced game for quick play.png",
+    subAlt: "Fast paced game for quick play",
+    subHeight: "h-9 max-h-[38px]",
+    symbol: "/lobby/modes/lightning.png",
+    symbolClass: "w-[165px] h-[215px]",
   },
   full: {
-    icon:  "👑",
-    label: "FULL MODE",
-    sub:   "Unlimited time — no time limit",
-    color: "#b06aff",
+    titleImg: "/lobby/create/Full Mode.png",
+    titleAlt: "Full Mode",
+    subImg: "/lobby/create/Unlimited time.png",
+    subAlt: "Unlimited time",
+    subHeight: "h-4 max-h-[18px]",
+    symbol: "/lobby/modes/crown.png",
+    symbolClass: "w-[185px] h-[165px]",
   },
 };
 
-// Selected → Modern Mint green; hovering an unselected card → gold hover state.
-const GREEN = "#22c462";
-const GOLD  = "#d4a843";
-
 export default function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
-  const data = MODE_DATA[mode];
-  const [hovered, setHovered] = useState(false);
-
-  // Accent: green when selected, gold when hovering an unselected card.
-  const accent = selected ? GREEN : hovered ? GOLD : null;
-  const background = selected
-    ? "rgba(34,196,98,0.12)"
-    : hovered
-    ? "rgba(212,168,67,0.12)"
-    : "rgba(6,20,26,0.65)";
+  const cfg = MODE_CONFIG[mode];
 
   return (
     <motion.button
+      type="button"
       onClick={onSelect}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
-      whileHover={{ scale: 1.04 }}
-      whileTap={{ scale: 0.97 }}
-      transition={{ duration: 0.14 }}
-      className="flex flex-col items-center gap-1.5 p-3 rounded-xl flex-1 cursor-pointer text-center"
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.15 }}
+      className={`relative w-[192px] h-[304px] rounded-[20px] flex flex-col items-center justify-center p-4 overflow-hidden cursor-pointer select-none transition-all duration-200 focus:outline-none flex-shrink-0 ${
+        selected ? "opacity-100 brightness-105" : "opacity-75 hover:opacity-90"
+      }`}
       style={{
-        background,
-        border: `1.5px solid ${accent ?? "rgba(29,233,214,0.10)"}`,
-        boxShadow: accent ? `0 0 24px ${accent}25` : "none",
-        // Smoothly animate the green ↔ gold ↔ idle transition.
-        transition: "all 0.18s",
+        width: "192px",
+        height: "304px",
+        borderRadius: "20px",
+        border: selected
+          ? "1px solid transparent"
+          : "1px solid rgba(135, 110, 55, 0.35)",
+        background: selected
+          ? "url('/lobby/create/mode-selected-bg.png') center/100% 100% no-repeat"
+          : "url('/lobby/create/Rectangle 592.png') center/100% 100% no-repeat, radial-gradient(ellipse at 50% 20%, rgba(16, 44, 30, 0.85) 0%, rgba(8, 22, 15, 0.92) 65%, rgba(42, 32, 14, 0.85) 100%)",
+        boxShadow: selected
+          ? "0 0 28px rgba(240, 207, 116, 0.50), inset 0 0 16px rgba(240, 207, 116, 0.20)"
+          : "0 8px 24px rgba(0,0,0,0.45)",
       }}
     >
-      {/* Icon */}
-      <span className="text-2xl">{data.icon}</span>
+      {/* ── Mode Symbol Watermark (User-provided Figma Vectors) ── */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={cfg.symbol}
+          alt=""
+          className={`${cfg.symbolClass} object-contain opacity-35 filter drop-shadow pointer-events-none select-none transition-opacity duration-200`}
+        />
+      </div>
 
-      {/* Label */}
-      <span
-        className="text-[11px] font-black uppercase tracking-[0.15em]"
-        style={{ color: selected ? GREEN : hovered ? GOLD : "var(--text-primary)" }}
-      >
-        {data.label}
-      </span>
-
-      {/* Subtitle */}
-      <span
-        className="text-[9px] uppercase tracking-wide leading-snug"
-        style={{ color: "var(--text-faint)" }}
-      >
-        {data.sub}
-      </span>
+      {/* ── Text Content using Figma embossed graphics ── */}
+      <div className="relative z-10 flex flex-col items-center justify-center text-center px-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={cfg.titleImg}
+          alt={cfg.titleAlt}
+          className="h-5 max-h-[22px] w-auto object-contain pointer-events-none drop-shadow"
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={cfg.subImg}
+          alt={cfg.subAlt}
+          className={`${cfg.subHeight} w-auto object-contain pointer-events-none drop-shadow mt-3`}
+        />
+      </div>
     </motion.button>
   );
 }

@@ -6,48 +6,27 @@ import { motion } from "framer-motion";
 import PageBackground from "@/components/PageBackground";
 import LobbyNavBar   from "@/components/lobby/LobbyNavBar";
 import RoleCard       from "@/components/lobby/RoleCard";
-import Button         from "@/components/ui/Button";
 import { getUser }    from "@/lib/auth";
 import { fetchRoom, joinRoom, joinRoomWithPassword } from "@/lib/lobby/api";
 import { ApiError } from "@/lib/api";
 import type { GameRoom, GameMode, PlayerRole } from "@/lib/lobby/types";
 import { useAuthGuard } from "@/lib/useAuthGuard";
 
-// ── Role-specific avatars (external Modern Mint artwork) ────────────────────
-// Founders pick from 4 avatars, investors from 2. The numeric `id` is what we
-// send to the backend as `avatar_id` (avatar-selection logic preserved).
+// ── Role-specific avatars matching Modern Mint Figma design ───────────────
 const FOUNDER_AVATARS = [
-  { id: 1, src: "https://modernmintgame.com/cdn/shop/files/01.png?v=1772091663&width=2000" },
-  { id: 2, src: "https://modernmintgame.com/cdn/shop/files/03.png?v=1772091662&width=2000" },
-  { id: 3, src: "https://modernmintgame.com/cdn/shop/files/02.png?v=1772091663&width=2000" },
-  { id: 4, src: "https://modernmintgame.com/cdn/shop/files/05.png?v=1772091663&width=2000" },
+  { id: 1, src: "/lobby/join/founder-avatar-1.png" },
+  { id: 4, src: "/lobby/join/founder-avatar-2.png" },
+  { id: 3, src: "/lobby/join/founder-avatar-3.png" },
+  { id: 2, src: "/lobby/join/founder-avatar-4.png" },
 ];
 const INVESTOR_AVATARS = [
-  { id: 5, src: "https://modernmintgame.com/cdn/shop/files/04.png?v=1772091663&width=2000" },
-  { id: 6, src: "https://modernmintgame.com/cdn/shop/files/06.png?v=1772091663&width=2000" },
+  { id: 5, src: "/lobby/join/Ellipse 197.png" },
+  { id: 6, src: "/lobby/join/Ellipse 198.png" },
 ];
 
 function avatarsForRole(role: PlayerRole) {
   return role === "founder" ? FOUNDER_AVATARS : INVESTOR_AVATARS;
 }
-
-// ── Section label — gold pill ──────────────────────────────────────────────
-function PanelLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className="text-[10px] font-black uppercase tracking-[0.3em] px-4 py-1.5 rounded-full"
-      style={{
-        color: "var(--gold)",
-        border: "1px solid rgba(222,186,98,0.45)",
-        background: "rgba(10,40,22,0.45)",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
-// ── Page ─────────────────────────────────────────────────────────────────
 
 export default function JoinGamePage({
   params,
@@ -58,36 +37,23 @@ export default function JoinGamePage({
   const { id }   = use(params);
   const router   = useRouter();
 
-  const [room,      setRoom]      = useState<GameRoom | null>(null);
-  const [loading,   setLoading]   = useState(true);
+  const [room,       setRoom]       = useState<GameRoom | null>(null);
+  const [loading,    setLoading]    = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  const [role,      setRole]      = useState<PlayerRole>("founder");
-  const [name,      setName]      = useState("");
-  const [avatarId,  setAvatarId]  = useState<number | null>(FOUNDER_AVATARS[0].id);
-  const [password,  setPassword]  = useState(() => {
+  const [role,       setRole]       = useState<PlayerRole>("founder");
+  const [name,       setName]       = useState("");
+  const [avatarId,   setAvatarId]   = useState<number | null>(FOUNDER_AVATARS[0].id);
+  const [password,   setPassword]   = useState(() => {
     if (typeof window !== "undefined") {
       return sessionStorage.getItem(`mm_room_pw_${id}`) || "";
     }
     return "";
   });
-  const [starting,  setStarting]  = useState(false);
-  const [joinError, setJoinError] = useState<string | null>(null);
-  const [copied,    setCopied]    = useState(false);
+  const [starting,   setStarting]   = useState(false);
+  const [joinError,  setJoinError]  = useState<string | null>(null);
 
-  const handleShareRoom = () => {
-    const inviteLink = `${window.location.origin}/lobby/join/${id}`;
-    navigator.clipboard.writeText(inviteLink)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch((err) => {
-        console.error("Failed to copy link:", err);
-      });
-  };
-
-  // Display name comes from the signed-in user (no visible input, per Figma).
+  // Display name comes from the signed-in user
   useEffect(() => {
     const user = getUser();
     if (user?.username) setName(user.username);
@@ -114,13 +80,12 @@ export default function JoinGamePage({
     load();
   }, [ready, id]);
 
-  const modeLabel: Record<GameMode, string> = {
-    "60mins": "60 Mins",
-    short:    "Short Mode",
-    full:     "Full Mode",
+  const modeInfo: Record<GameMode, { label: string; icon: string }> = {
+    "60mins": { label: "60 mins",    icon: "/lobby/modes/clock.png"     },
+    short:    { label: "Short Mode", icon: "/lobby/modes/lightning.png" },
+    full:     { label: "Full Mode",  icon: "/lobby/modes/crown.png"     },
   };
 
-  // Switching role immediately swaps the avatar set and selects its first avatar.
   function selectRole(r: PlayerRole) {
     setRole(r);
     setAvatarId(avatarsForRole(r)[0].id);
@@ -166,14 +131,11 @@ export default function JoinGamePage({
   // ── Loading state ──
   if (loading) {
     return (
-      <div className="relative flex flex-col h-screen overflow-hidden">
-        <PageBackground variant="lobby" />
-        <LobbyNavBar title="Join Game" />
+      <div className="relative flex flex-col h-screen overflow-hidden select-none">
+        <PageBackground variant="lobby" blurred />
+        <LobbyNavBar />
         <div className="flex-1 flex items-center justify-center">
-          <span
-            className="text-[11px] font-black uppercase tracking-[0.35em] animate-pulse"
-            style={{ color: "var(--text-muted)" }}
-          >
+          <span className="text-[11px] font-black uppercase tracking-[0.35em] animate-pulse text-white/70">
             Loading room...
           </span>
         </div>
@@ -184,19 +146,19 @@ export default function JoinGamePage({
   // ── Error state ──
   if (fetchError || !room) {
     return (
-      <div className="relative flex flex-col h-screen overflow-hidden">
-        <PageBackground variant="lobby" />
-        <LobbyNavBar title="Join Game" />
+      <div className="relative flex flex-col h-screen overflow-hidden select-none">
+        <PageBackground variant="lobby" blurred />
+        <LobbyNavBar />
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <p
-            className="text-[11px] font-black uppercase tracking-[0.3em]"
-            style={{ color: "#ef4444" }}
-          >
+          <p className="text-[11px] font-black uppercase tracking-[0.3em] text-red-400">
             ▲ {fetchError ?? "Room not found."}
           </p>
-          <Button variant="ghost" size="md" onClick={() => router.push("/lobby")}>
-            ◀ Back to Lobby
-          </Button>
+          <button
+            onClick={() => router.push("/lobby")}
+            className="px-6 py-2 rounded-full text-[11px] uppercase tracking-[0.22em] font-black cursor-pointer text-[#f0d89a] border border-[rgba(214,178,90,0.6)] bg-[rgba(10,38,24,0.9)]"
+          >
+            ← Back to Lobby
+          </button>
         </div>
       </div>
     );
@@ -205,185 +167,264 @@ export default function JoinGamePage({
   const avatars = avatarsForRole(role);
 
   return (
-    <div className="relative flex flex-col h-screen overflow-hidden">
-      <PageBackground variant="lobby" />
-      <LobbyNavBar title="Join Game" />
+    <div className="relative flex flex-col h-screen overflow-hidden select-none">
+      <PageBackground variant="lobby" blurred />
+      <LobbyNavBar />
 
-      {/* Body — panel height-capped to the viewport; inner content scrolls only if tight */}
-      <div className="flex-1 min-h-0 px-6 py-3 flex items-center justify-center">
+      <div className="flex-1 min-h-0 px-6 py-2 flex flex-col items-center justify-center">
         <motion.div
-          className="w-full max-w-[1060px] max-h-full flex"
-          initial={{ opacity: 0, y: 18 }}
+          className="w-full max-w-[1080px] flex flex-col h-full max-h-[620px]"
+          initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.45 }}
         >
-          {/* ── Single gold-bordered floating panel ── */}
+          {/* Main Frame Card with gold border and background seal */}
           <div
-            className="relative overflow-hidden rounded-[28px] flex flex-col w-full max-h-full"
+            className="relative overflow-hidden rounded-[26px] flex flex-col flex-1 p-6 md:p-8 shadow-2xl"
             style={{
-              background: "rgba(16,46,30,0.26)",
-              border: "1.5px solid rgba(222,186,98,0.70)",
-              backdropFilter: "blur(16px)",
-              WebkitBackdropFilter: "blur(16px)",
+              backgroundImage: "url('/lobby/main-card-bg.png')",
+              backgroundSize: "100% 100%",
+              backgroundRepeat: "no-repeat",
               boxShadow:
-                "0 12px 60px rgba(0,0,0,0.40), 0 0 38px rgba(222,186,98,0.18), inset 0 1px 0 rgba(222,186,98,0.22)",
+                "0 16px 60px rgba(0,0,0,0.65), 0 0 35px rgba(214, 178, 90, 0.18)",
             }}
           >
-            {/* Scrollable content — scrolls internally only when vertical space is tight.
-                overflow-x-hidden prevents a stray horizontal scrollbar (the green strip). */}
-            <div className="min-h-0 overflow-y-auto overflow-x-hidden px-10 py-9">
-            <div className="grid grid-cols-[1fr_auto_300px] gap-10 items-stretch">
-              {/* ── LEFT: title + meta + role cards ── */}
-              <div className="flex flex-col">
-                <div className="mb-4">
-                  <p
-                    className="text-[9px] font-bold uppercase tracking-[0.45em] mb-1 text-center"
-                    style={{ color: "rgba(200,220,210,0.50)" }}
-                  >
+            {/* Main content grid: Left 2/3 (Role selection), Divider, Right 1/3 (Avatar & Join) */}
+            <div className="flex-1 flex items-stretch min-h-0 gap-6 md:gap-8">
+              {/* Left side: Header + 2 Role Cards */}
+              <div className="flex-1 flex flex-col min-h-0">
+                {/* Header */}
+                <div className="mb-4 text-center">
+                  <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.35em] text-[#3dd6b5]">
                     You are joining
-                  </p>
-                  {/* Large room title — always the ROOM's name */}
-                  <h1
-                    className="font-black uppercase text-center break-words"
+                  </span>
+                  <h1 className="text-2xl md:text-3xl font-black uppercase tracking-[0.06em] text-white mt-1 drop-shadow truncate">
+                    {room.name || "Global Leader Summit"}
+                  </h1>
+                  <div
+                    className="flex items-center justify-center gap-2 text-white/80 mt-1.5"
                     style={{
-                      fontSize: "clamp(24px, 2.6vw, 40px)",
-                      color: "#eef3ee",
-                      letterSpacing: "0.06em",
-                      textShadow: "0 0 30px rgba(34,196,98,0.25)",
-                      lineHeight: 1.05,
+                      fontFamily: "'Jost', sans-serif",
+                      fontWeight: 400,
+                      fontSize: "14px",
+                      lineHeight: "100%",
+                      letterSpacing: "0%",
+                      textAlign: "center",
                     }}
                   >
-                    {room.name || "Game Room"}
-                  </h1>
-
-                  {/* Small room metadata */}
-                  <div
-                    className="flex items-center justify-center gap-2 text-[11px] mt-2"
-                    style={{ color: "rgba(200,220,210,0.55)" }}
-                  >
-                    <span>⏱ {modeLabel[room.mode]}</span>
-                    {(room.privacy === "password" || room.privacy === "closed") && (
-                      <>
-                        <span style={{ color: "rgba(200,220,210,0.25)" }}>|</span>
-                        <span>
-                          {room.privacy === "password" ? "🔒 Password Protected" : "🔒 Invite Only"}
-                        </span>
-                      </>
-                    )}
-                    {room.privacy === "open" && (
-                      <>
-                        <span style={{ color: "rgba(200,220,210,0.25)" }}>|</span>
-                        <span style={{ color: "#22c462" }}>✓ Open Room</span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Invite Friends Button */}
-                  <div className="flex justify-center mt-4">
-                    <button
-                      onClick={handleShareRoom}
-                      className="text-[10px] font-black uppercase tracking-[0.25em] px-5 py-2.5 rounded-full cursor-pointer hover:bg-[#55ffb0]/15 transition-all flex items-center gap-2 active:scale-95 shadow-[0_4px_12px_rgba(85,255,176,0.05)]"
-                      style={{
-                        color: copied ? "#22c462" : "#55ffb0",
-                        border: `1.5px solid ${copied ? "rgba(34,196,98,0.5)" : "rgba(85,255,176,0.35)"}`,
-                        background: "rgba(17,42,34,0.25)",
-                        backdropFilter: "blur(4px)",
-                      }}
-                    >
-                      {copied ? "✓ Link Copied!" : "🔗 Invite Friends"}
-                    </button>
+                    <span className="flex items-center gap-1.5">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={modeInfo[room.mode]?.icon || "/lobby/modes/clock.png"}
+                        alt=""
+                        className="w-4.5 h-4.5 object-contain opacity-85"
+                      />
+                      {modeInfo[room.mode]?.label || room.mode}
+                    </span>
+                    <span className="text-white/40">|</span>
+                    <span className="flex items-center gap-1.5">
+                      {room.privacy === "password" ? (
+                        <>🔒 Password Protected</>
+                      ) : room.privacy === "closed" ? (
+                        <>🔒 Private Room</>
+                      ) : (
+                        <>✓ Open Room</>
+                      )}
+                    </span>
                   </div>
                 </div>
 
-                {/* Two large role cards */}
-                <div className="grid grid-cols-2 gap-6 flex-1">
-                  {/* role cards stretch to fill the left column for prominence */}
-                  <RoleCard role="founder"  selected={role === "founder"}  onSelect={() => selectRole("founder")}  />
-                  <RoleCard role="investor" selected={role === "investor"} onSelect={() => selectRole("investor")} />
+                {/* Two Role Cards */}
+                <div className="flex-1 grid grid-cols-2 gap-5 items-stretch min-h-0 max-h-[420px]">
+                  <RoleCard
+                    role="founder"
+                    selected={role === "founder"}
+                    onSelect={() => selectRole("founder")}
+                  />
+                  <RoleCard
+                    role="investor"
+                    selected={role === "investor"}
+                    onSelect={() => selectRole("investor")}
+                  />
                 </div>
               </div>
 
-              {/* Vertical divider */}
-              <div className="w-px self-stretch" style={{ background: "rgba(222,186,98,0.22)" }} />
+              {/* Vertical Gold Divider using Line 2.png */}
+              <div className="w-[1px] self-stretch my-2 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/lobby/join/Line 2.png" alt="" className="h-full w-[1px] object-cover pointer-events-none" />
+              </div>
 
-              {/* ── RIGHT: avatar selection + Join ── */}
-              <div className="flex flex-col items-center">
-                <div className="mb-5">
-                  <PanelLabel>Choose Your Avatar</PanelLabel>
+              {/* Right side: Avatar selection, Password, Join */}
+              <div className="w-[280px] lg:w-[310px] flex-shrink-0 flex flex-col items-center justify-between py-1">
+                {/* Avatar Selection Group: Header Badge + Avatars directly connected */}
+                <div className="flex flex-col items-center my-auto">
+                  {/* Choose your avatar header badge */}
+                  <div
+                    className="w-[245px] h-[33px] rounded-full flex items-center justify-center select-none shadow-md mb-4"
+                    style={{
+                      backgroundImage: "url('/lobby/join/Rectangle 601.png')",
+                      backgroundSize: "100% 100%",
+                      backgroundRepeat: "no-repeat",
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/lobby/join/CHOOSE YOUR AVATAR.png"
+                      alt="CHOOSE YOUR AVATAR"
+                      className="h-[18px] md:h-5 w-auto object-contain pointer-events-none drop-shadow translate-y-[2px]"
+                    />
+                  </div>
+
+                  {/* Avatar choices: 2x2 for Founder, vertical 2 for Investor */}
+                  <div className="flex items-center justify-center">
+                    {role === "founder" ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        {avatars.map((a) => {
+                          const active = avatarId === a.id;
+                          return (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => setAvatarId(a.id)}
+                              className={`relative rounded-full overflow-hidden cursor-pointer transition-transform duration-150 focus:outline-none ${
+                                active ? "scale-105" : "opacity-80 hover:opacity-100 hover:scale-102"
+                              }`}
+                              style={{
+                                width: 78,
+                                height: 78,
+                                boxShadow: active
+                                  ? "0 0 20px rgba(240, 207, 116, 0.7), 0 0 0 2.5px #f0cf74"
+                                  : "0 0 0 1px rgba(240, 207, 116, 0.25)",
+                              }}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={a.src} alt="" className="w-full h-full object-contain pointer-events-none" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-5">
+                        {avatars.map((a) => {
+                          const active = avatarId === a.id;
+                          return (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => setAvatarId(a.id)}
+                              className={`relative rounded-full overflow-hidden cursor-pointer transition-transform duration-150 focus:outline-none ${
+                                active ? "scale-105" : "opacity-80 hover:opacity-100 hover:scale-102"
+                              }`}
+                              style={{
+                                width: 86,
+                                height: 86,
+                                boxShadow: active
+                                  ? "0 0 20px rgba(240, 207, 116, 0.7), 0 0 0 2.5px #f0cf74"
+                                  : "none",
+                              }}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={a.src} alt="" className="w-full h-full object-contain pointer-events-none" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Role-specific avatar grid — founders 2×2, investors stacked vertically */}
-                <div className={`grid gap-6 ${role === "investor" ? "grid-cols-1" : "grid-cols-2"}`}>
-                  {avatars.map((a) => {
-                    const active = avatarId === a.id;
-                    return (
-                      <button
-                        key={a.id}
-                        onClick={() => setAvatarId(a.id)}
-                        className="rounded-full overflow-hidden cursor-pointer transition-all"
+                {/* Bottom action section: Password (if required) + Join button */}
+                <div className="w-full flex flex-col items-center gap-3">
+                  {room.privacy === "password" && (
+                    <div
+                      className="w-full max-w-[275px] h-[78px] rounded-xl flex flex-col items-center justify-center px-4"
+                      style={{
+                        backgroundImage: "url('/lobby/join/Rectangle 602.png')",
+                        backgroundSize: "100% 100%",
+                        backgroundRepeat: "no-repeat",
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/lobby/join/PASSWORD.png"
+                        alt="PASSWORD"
+                        className="h-3.5 w-auto object-contain pointer-events-none drop-shadow mb-1"
+                      />
+                      <div
+                        className="w-full h-7 rounded-full flex items-center justify-center px-3 relative"
                         style={{
-                          width: 112,
-                          height: 112,
-                          border: `3px solid ${active ? "var(--gold)" : "rgba(222,186,98,0.30)"}`,
-                          boxShadow: active
-                            ? "0 0 30px rgba(222,186,98,0.65), 0 0 0 4px rgba(222,186,98,0.20)"
-                            : "none",
-                          transform: active ? "scale(1.06)" : "scale(1)",
+                          backgroundImage: "url('/lobby/join/Rectangle 603.png')",
+                          backgroundSize: "100% 100%",
+                          backgroundRepeat: "no-repeat",
                         }}
                       >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={a.src} alt="Avatar" className="w-full h-full object-cover" />
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Join — directly beneath the avatar section, centered */}
-                <div className="mt-auto pt-8 w-full flex flex-col items-center gap-2">
-                  {room.privacy === "password" && (
-                    <div className="w-full mb-3 flex flex-col gap-1.5 items-stretch">
-                      <label className="text-[10px] font-black uppercase tracking-[0.25em] text-center" style={{ color: "var(--gold)" }}>
-                        Room Password
-                      </label>
-                      <input 
-                        type="password"
-                        placeholder="Enter password..."
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full bg-[#112a22]/80 text-white placeholder-white/30 p-2.5 rounded-xl border border-[#55ffb0]/30 outline-none focus:border-[#55ffb0] font-sans text-sm text-center"
-                      />
+                        <input
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleStart()}
+                          placeholder="••••••••"
+                          className="w-full bg-transparent text-center text-white placeholder-white/35 tracking-[0.35em] text-xs focus:outline-none"
+                        />
+                      </div>
                     </div>
                   )}
-                  <Button
-                    size="lg"
-                    loading={starting}
-                    disabled={!name.trim() || !avatarId || (room.privacy === "password" && !password.trim())}
+
+                  {/* Join Button */}
+                  <button
+                    type="button"
                     onClick={handleStart}
+                    disabled={starting || !name.trim() || !avatarId || (room.privacy === "password" && !password.trim())}
+                    className="w-[146px] h-[33px] rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none shadow-lg"
+                    style={{
+                      backgroundImage: "url('/lobby/join/Rectangle 561.png')",
+                      backgroundSize: "100% 100%",
+                      backgroundRepeat: "no-repeat",
+                    }}
                   >
-                    ▶ Join
-                  </Button>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/lobby/join/JOIN.png"
+                      alt="JOIN"
+                      className="h-[20px] md:h-[22px] w-auto object-contain pointer-events-none drop-shadow translate-y-[2px]"
+                    />
+                  </button>
+
                   {joinError && (
-                    <span className="text-[11px] text-center" style={{ color: "#ef4444" }}>
-                      {joinError}
+                    <span className="text-[10px] text-center font-bold text-red-400">
+                      ▲ {joinError}
                     </span>
                   )}
                 </div>
               </div>
             </div>
+          </div>
 
-            {/* Back — bottom-left */}
-            <div className="flex items-center pt-5">
-              <button
-                onClick={() => router.push("/lobby")}
-                className="text-[10px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 cursor-pointer transition-colors duration-150"
-                style={{ color: "var(--text-muted)" }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#22c462")}
-                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--text-muted)")}
-              >
-                ← BACK
-              </button>
-            </div>
-            </div>
+          {/* ← BACK button */}
+          <div className="flex items-center pt-3 px-1">
+            <button
+              type="button"
+              onClick={() => router.push("/lobby")}
+              className="px-6 py-2 rounded-full text-[11px] uppercase tracking-[0.22em] font-black flex items-center gap-2 cursor-pointer transition-all duration-150 shadow-md hover:scale-105 active:scale-95 focus:outline-none"
+              style={{
+                background: "rgba(10, 38, 24, 0.90)",
+                border: "1.5px solid rgba(214, 178, 90, 0.60)",
+                color: "#f0d89a",
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.boxShadow = "0 0 16px rgba(222,186,98,0.35)";
+                el.style.borderColor = "rgba(43,214,115,0.7)";
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLElement;
+                el.style.boxShadow = "none";
+                el.style.borderColor = "rgba(214, 178, 90, 0.60)";
+              }}
+            >
+              ← BACK
+            </button>
           </div>
         </motion.div>
       </div>

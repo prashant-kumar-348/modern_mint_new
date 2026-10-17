@@ -4,9 +4,13 @@ import { motion } from "framer-motion";
 
 interface PageBackgroundProps {
   variant?: "default" | "lobby";
+  blurred?: boolean;
 }
 
-export default function PageBackground({ variant = "default" }: PageBackgroundProps) {
+export default function PageBackground({
+  variant = "default",
+  blurred = false,
+}: PageBackgroundProps) {
   if (variant === "lobby") {
     return (
       <div className="fixed inset-0 -z-10 overflow-hidden" aria-hidden>
@@ -14,24 +18,29 @@ export default function PageBackground({ variant = "default" }: PageBackgroundPr
         <div className="absolute inset-0" style={{ background: "#05080a" }} />
 
         {/* The SAME lobby-bg.jpg artwork as the full-page environment — same image/theme,
-            but dimmed and de-glossed so it reads as a cinematic backdrop, not a bright,
-            reflective surface. */}
+            blurred into soft cinematic bokeh when blurred is true. */}
         <div
           className="absolute inset-0"
           style={{
             backgroundImage: "url('/lobby-bg.jpg')",
             backgroundSize: "cover",
             backgroundPosition: "center",
-            // Lower brightness + slightly lower contrast/saturation tames the reflections.
-            filter: "brightness(0.55) contrast(0.92) saturate(0.9)",
+            filter: blurred
+              ? "blur(5px) brightness(0.62) contrast(0.98) saturate(1.05)"
+              : "brightness(0.55) contrast(0.92) saturate(0.9)",
+            transform: blurred ? "scale(1.03)" : "none",
           }}
         />
 
         {/* Neutral darkening overlay — pushes the artwork back so the UI panels are the
-            primary focus. Kept neutral (not green) to preserve the theme. */}
+            primary focus. */}
         <div
           className="absolute inset-0"
-          style={{ background: "rgba(2,6,4,0.45)" }}
+          style={{
+            background: blurred
+              ? "radial-gradient(ellipse at 50% 40%, rgba(0,0,0,0.12) 0%, rgba(2,6,4,0.60) 100%)"
+              : "rgba(2,6,4,0.45)",
+          }}
         />
       </div>
     );

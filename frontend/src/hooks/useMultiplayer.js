@@ -5,7 +5,7 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:5001";
 
-export function useMultiplayer(roomId, username, role, avatarId) {
+export function useMultiplayer(roomId, username, role, avatarId, maxPlayers) {
   const [gameState, setGameState] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '' });
   const [drawnCard, setDrawnCard] = useState(null);
@@ -24,7 +24,7 @@ export function useMultiplayer(roomId, username, role, avatarId) {
     socketRef.current.on('connect', () => {
       console.log('Connected to multiplayer server', socketRef.current.id);
       setSocketId(socketRef.current.id);
-      socketRef.current.emit('join_room', { roomId, username, role: role || 'Founder', avatarId });
+      socketRef.current.emit('join_room', { roomId, username, role: role || 'Founder', avatarId, maxPlayers });
     });
 
     socketRef.current.on('game_state_update', (newState) => {
@@ -79,7 +79,7 @@ export function useMultiplayer(roomId, username, role, avatarId) {
     return () => {
       socketRef.current.disconnect();
     };
-  }, [roomId, username, role, avatarId]);
+  }, [roomId, username, role, avatarId, maxPlayers]);
 
   const sendAction = (actionType, payload) => {
     if (socketRef.current) {
@@ -87,5 +87,9 @@ export function useMultiplayer(roomId, username, role, avatarId) {
     }
   };
 
-  return { gameState, notification, sendAction, socketId, drawnCard, clearDrawnCard: () => setDrawnCard(null), socket: socketRef.current };
+  const startGame = () => {
+    sendAction('start_game');
+  };
+
+  return { gameState, notification, sendAction, startGame, socketId, drawnCard, clearDrawnCard: () => setDrawnCard(null), socket: socketRef.current };
 }

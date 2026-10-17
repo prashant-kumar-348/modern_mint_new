@@ -25,7 +25,7 @@ const sizes = {
 };
 
 // ── AI Bot SVG icon ───────────────────────────────────────────────────────
-function BotIcon({ size }: { size: number }) {
+export function BotIcon({ size }: { size: number }) {
   const s = size * 0.55;
   return (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
@@ -58,7 +58,7 @@ function PlusIcon({ size }: { size: number }) {
   const s = size * 0.45;
   return (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-      <path d="M12 5v14M5 12h14" stroke="rgba(160,255,200,0.85)" strokeWidth="2.2" strokeLinecap="round" />
+      <path d="M12 4v16M4 12h16" stroke="#ffffff" strokeWidth="2.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -87,15 +87,15 @@ export default function PlayerAvatar({
         className={clsx(
           "rounded-full flex items-center justify-center flex-shrink-0",
           "transition-all duration-150",
-          onClick && "cursor-pointer hover:border-[rgba(43,214,115,0.7)]"
+          onClick && "cursor-pointer hover:scale-105"
         )}
         style={{
           width: dim,
           height: dim,
-          border: "1.5px solid rgba(43,214,115,0.45)",
+          border: "1px solid rgba(255, 255, 255, 0.35)",
           background:
-            "radial-gradient(circle at 38% 32%, rgba(43,214,115,0.22), rgba(6,30,16,0.85))",
-          boxShadow: selected ? "0 0 0 2px #2bd673" : undefined,
+            "radial-gradient(circle at 35% 30%, #5dcbb0 0%, #369c81 60%, #206b57 100%)",
+          boxShadow: "0 0 10px rgba(54, 156, 129, 0.40)",
         }}
       >
         <PlusIcon size={dim} />
@@ -143,7 +143,7 @@ export default function PlayerAvatar({
     <div className="relative flex-shrink-0">
       {personName !== undefined ? (
         // Lobby: represent the person — profile photo, else name initials.
-        <PersonAvatar src={imageSrc} initials={personInitials(personName)} size={dim} borderWidth={1.5} />
+        <PersonAvatar src={imageSrc} initials={personInitials(personName)} size={dim} borderWidth={2} glowPx={10} />
       ) : (
         // Create page: keep the selected game-avatar representation.
         <div

@@ -82,11 +82,14 @@ function assembleRoom(
 
 export async function listRooms(currentUserId?: string): Promise<RoomResponse[]> {
   // Only show waiting rooms, newest first, cap at 50
+  // Closed rooms are private/invite-only: hide them from public listing unless current user is host
   const roomsResult = await pool.query<RoomRow>(
     `SELECT * FROM rooms
      WHERE status = 'waiting'
+       AND (privacy != 'closed' OR host_user_id = $1)
      ORDER BY created_at DESC
-     LIMIT 50`
+     LIMIT 50`,
+    [currentUserId || null]
   );
   const rooms = roomsResult.rows;
   if (rooms.length === 0) return [];
@@ -209,33 +212,8 @@ export async function createRoom(
       [room.id, hostUserId, avatar_id, display_name.trim()]
     );
 
-    // Pre-fill AI founder slots
-    const safeAiFounders = Math.min(
-      Math.max(0, ai_founders ?? 0),
-      max_founders - 1  // reserve at least 1 for the host
-    );
-    for (let i = 0; i < safeAiFounders; i++) {
-      await client.query(
-        `INSERT INTO room_players
-           (room_id, user_id, role, avatar_id, display_name, is_ai)
-         VALUES ($1,NULL,'founder',1,$2,true)`,
-        [room.id, `AI Bot ${i + 1}`]
-      );
-    }
-
-    // Pre-fill AI investor slots
-    const safeAiInvestors = Math.min(
-      Math.max(0, ai_investors ?? 0),
-      max_investors
-    );
-    for (let i = 0; i < safeAiInvestors; i++) {
-      await client.query(
-        `INSERT INTO room_players
-           (room_id, user_id, role, avatar_id, display_name, is_ai)
-         VALUES ($1,NULL,'investor',1,$2,true)`,
-        [room.id, `AI Investor ${i + 1}`]
-      );
-    }
+    // No AI bots in multiplayer rooms
+    // (Only the host joins initially; other slots remain open for human players)
 
     await client.query("COMMIT");
 
@@ -327,10 +305,7 @@ export async function joinRoom(
     }
     const room = roomResult.rows[0];
 
-    // Only allow joining open rooms through this endpoint
-    if (room.privacy === "closed") {
-      throw { status: 403, message: "This room is closed." };
-    }
+    // Password rooms must be joined through the password endpoint
     if (room.privacy === "password") {
       throw { status: 403, message: "This room requires a password." };
     }

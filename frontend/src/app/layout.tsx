@@ -1,15 +1,6 @@
 import type { Metadata } from "next";
-import { Cinzel } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
-
-// Trajan-style serif for the emerald "MODERN MINT" wordmark (matches Figma)
-const cinzel = Cinzel({
-  subsets: ["latin"],
-  weight: ["500", "700", "900"],
-  variable: "--font-cinzel",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "Modern Mint — Strategy Awaits",
@@ -21,8 +12,14 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`h-full ${cinzel.variable}`}>
+    <html lang="en" className="h-full">
       <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,300..900;1,300..900&display=swap"
+          rel="stylesheet"
+        />
         <Script
           id="suppress-extension-errors"
           strategy="beforeInteractive"

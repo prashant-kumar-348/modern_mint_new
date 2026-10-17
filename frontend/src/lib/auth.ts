@@ -41,6 +41,9 @@ export function setStoredProfileImage(profileImageUrl: string | null): void {
   const user = getUser();
   if (!user) return;
   localStorage.setItem(USER_KEY, JSON.stringify({ ...user, profile_image_url: profileImageUrl }));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("mm_profile_updated"));
+  }
 }
 
 export function isAuthenticated(): boolean {

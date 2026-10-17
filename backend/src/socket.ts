@@ -99,7 +99,7 @@ function shuffle<T>(array: T[]): T[] {
   return array;
 }
 
-const createEmptyRoom = () => {
+const createEmptyRoom = (maxPlayers = 4) => {
   const eventDeck = shuffle(generateEventDeck());
   return {
     players: [] as any[],
@@ -115,7 +115,9 @@ const createEmptyRoom = () => {
     phase: 2,
     round: 1,
     turn: 'All',
-    phase2TurnIndex: 0
+    phase2TurnIndex: 0,
+    isStarted: false,
+    maxPlayers: maxPlayers
   };
 };
 
@@ -865,14 +867,17 @@ const io = new SocketServer(server, {
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join_room', ({ roomId, username, role, avatarId }) => {
+    socket.on('join_room', ({ roomId, username, role, avatarId, maxPlayers, isVsAi }) => {
       console.log(`Socket ${socket.id} is attempting to join room ${roomId} as username: "${username}" with role: "${role}" and avatarId: ${avatarId}`);
       if (!rooms[roomId]) {
-        rooms[roomId] = createEmptyRoom();
+        rooms[roomId] = createEmptyRoom(maxPlayers || 4);
       }
       
       socket.join(roomId);
       const roomState = rooms[roomId];
+      if (maxPlayers && maxPlayers > 0) {
+        roomState.maxPlayers = maxPlayers;
+      }
       
       let finalRole = role ? (role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()) : 'Founder';
       if (finalRole === 'Investor') {
@@ -905,21 +910,13 @@ const io = new SocketServer(server, {
       } else {
         console.log(`Creating new player entry for "${username}" with socket ID ${socket.id} and avatarId ${avatarId}`);
 
-        // Remove an AI bot if we are adding a human player and the room is full (>= 4 players)
-        if (roomState.players.length >= 4) {
-           const aiIndex = roomState.players.findIndex((p: any) => p.is_ai);
-           if (aiIndex !== -1) {
-              console.log(`Evicting AI bot ${roomState.players[aiIndex].name} to make room for human player ${username}`);
-              roomState.players.splice(aiIndex, 1);
-           }
-        }
-
         const startCash = finalRole === 'Investor' ? 2000 : 500;
         const startCapital = startCash / 1000;
+        const playerColors = ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff', '#b06aff', '#ff7a2a'];
         roomState.players.push({
           id: socket.id,
           name: username || `Player ${roomState.players.length + 1}`,
-          color: ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff'][roomState.players.length % 4],
+          color: playerColors[roomState.players.length % playerColors.length],
           isLocked: false,
           ownedCompanies: [],
           capital: startCapital,
@@ -935,30 +932,49 @@ const io = new SocketServer(server, {
           lifelines: 2,
           currentPhase3Roll: null,
           roundActions: [],
-          role: finalRole
+          role: finalRole,
+          is_ai: false
         });
         
-        if (roomState.players.filter((p: any) => !p.is_ai).length === 1) {
+        // Singleplayer / VS AI mode only
+        if (isVsAi && roomState.players.filter((p: any) => !p.is_ai).length === 1) {
           addAIPlayers(roomState);
+          roomState.isStarted = true;
         }
 
-        if (roomState.round === 1) {
-          shuffle(roomState.players);
+        // Multiplayer: Start game automatically ONLY when all player slots are full
+        if (!roomState.isStarted && roomState.players.length >= (roomState.maxPlayers || 4)) {
+          roomState.isStarted = true;
+          io.to(roomId).emit('notification', 'All player slots are filled! The game is starting now!');
         }
       }
 
       io.to(roomId).emit('game_state_update', roomState);
       
-      if (roomState.round === 1) {
-        setTimeout(() => {
-          socket.emit('notification', 'ROUND 1: SKIPPING INVESTMENT PHASE. START BUILDING YOUR EMPIRE!');
-        }, 1000);
+      if (roomState.isStarted) {
+        if (roomState.round === 1) {
+          setTimeout(() => {
+            socket.emit('notification', 'ROUND 1: SKIPPING INVESTMENT PHASE. START BUILDING YOUR EMPIRE!');
+          }, 1000);
+        }
+        
+        triggerAIIfNeeded(roomState, io, roomId);
       }
-      
-      if (roomState.phase === 3) {
-        triggerAIIfNeeded(roomState, io, roomId);
-      } else {
-        triggerAIIfNeeded(roomState, io, roomId);
+    });
+
+    socket.on('start_game', ({ roomId }) => {
+      const room = rooms[roomId];
+      if (room && !room.isStarted && room.players.length >= 2) {
+        room.isStarted = true;
+        shuffle(room.players);
+        io.to(roomId).emit('game_state_update', room);
+        io.to(roomId).emit('notification', 'Game started by host!');
+        if (room.round === 1) {
+          setTimeout(() => {
+            io.to(roomId).emit('notification', 'ROUND 1: SKIPPING INVESTMENT PHASE. START BUILDING YOUR EMPIRE!');
+          }, 1000);
+        }
+        triggerAIIfNeeded(room, io, roomId);
       }
     });
 

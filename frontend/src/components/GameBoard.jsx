@@ -30,6 +30,7 @@ import MiddleBoard from './board/MiddleBoard';
 import { GameProvider } from '../context/GameContext';
 import { useMultiplayer } from '../hooks/useMultiplayer';
 import Lobby from './Lobby';
+import MultiplayerWaitingRoom from './MultiplayerWaitingRoom';
 import VoiceChatManager from './VoiceChatManager';
 import Phase2Dashboard from './board/Phase2Dashboard';
 import Phase2Manager from './board/Phase2Manager';
@@ -214,7 +215,7 @@ const AVATAR_IMAGE_BY_ID = {
   6: 'https://modernmintgame.com/cdn/shop/files/06.png?v=1772091663&width=2000',
 };
 
-function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole, avatarId }) {
+function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole, avatarId, roomInfo }) {
   const [activeModal, setActiveModal] = useState(null); 
   const [isHoverOpenedMat, setIsHoverOpenedMat] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(true);
@@ -281,7 +282,8 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
     }
   }, [roomId]);
 
-  const { gameState, notification: serverNotification, sendAction, socketId, drawnCard, clearDrawnCard, socket } = useMultiplayer(roomId, username, role, avatarId);
+  const maxRoomCapacity = roomInfo?.maxPlayers || 4;
+  const { gameState, notification: serverNotification, sendAction, startGame, socketId, drawnCard, clearDrawnCard, socket } = useMultiplayer(roomId, username, role, avatarId, maxRoomCapacity);
   const rawGamePhase = gameState?.phase || 1;
   const gameRound = gameState?.round || 1;
 
@@ -419,6 +421,25 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
           <div>Connecting to Server...</div>
         </div>
       </div>
+    );
+  }
+
+  if (gameState && gameState.isStarted === false) {
+    return (
+      <MultiplayerWaitingRoom
+        roomId={roomId}
+        roomInfo={roomInfo}
+        gameState={gameState}
+        isHost={roomInfo?.isHost}
+        maxPlayers={roomInfo?.maxPlayers || 4}
+        onStartGame={startGame}
+        onLeave={() => {
+          if (typeof window !== 'undefined') {
+            window.location.href = '/lobby';
+          }
+        }}
+        localUsername={username}
+      />
     );
   }
 
