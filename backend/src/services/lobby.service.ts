@@ -212,8 +212,36 @@ export async function createRoom(
       [room.id, hostUserId, avatar_id, display_name.trim()]
     );
 
-    // No AI bots in multiplayer rooms
-    // (Only the host joins initially; other slots remain open for human players)
+    // Insert AI bots if requested (e.g., VS AI mode or filled AI slots)
+    if (ai_founders && ai_founders > 0) {
+      const aiFounderNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
+      const effectiveAiFounders = Math.min(ai_founders, max_founders - 1);
+      for (let i = 0; i < effectiveAiFounders; i++) {
+        const name = aiFounderNames[i] || `AI Founder ${i + 1}`;
+        const avId = (i % 4) + 1;
+        await client.query(
+          `INSERT INTO room_players
+             (room_id, user_id, role, avatar_id, display_name, is_ai)
+           VALUES ($1, NULL, 'founder', $2, $3, true)`,
+          [room.id, avId, name]
+        );
+      }
+    }
+
+    if (ai_investors && ai_investors > 0) {
+      const aiInvestorNames = ["Sigma Bot", "Apex Bot"];
+      const effectiveAiInvestors = Math.min(ai_investors, max_investors);
+      for (let i = 0; i < effectiveAiInvestors; i++) {
+        const name = aiInvestorNames[i] || `AI Investor ${i + 1}`;
+        const avId = 5 + (i % 2);
+        await client.query(
+          `INSERT INTO room_players
+             (room_id, user_id, role, avatar_id, display_name, is_ai)
+           VALUES ($1, NULL, 'investor', $2, $3, true)`,
+          [room.id, avId, name]
+        );
+      }
+    }
 
     await client.query("COMMIT");
 

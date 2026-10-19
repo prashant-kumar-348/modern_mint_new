@@ -1,0 +1,341 @@
+<USER_REQUEST>
+MODERN MINT — RULEBOOK-BASED GAMEPLAY SPECIFICATION & COMPLIANCE AUDIT
+Source: Modern Mint Rulebook, dated 16 September 2025 (24-page PDF supplied by the user)
+
+ANTIGRAVITY AUDIT PROMPT — AUDIT ONLY, DO NOT CHANGE THE PROJECT
+I have already completed Modern Mint. Use the rulebook-based specification in this document to check whether the existing game implements every rule correctly. Inspect the entire existing project: frontend, backend, game-state logic, player mats/data, event and mentor cards, deal systems, revenue calculations, and multiplayer/Socket.IO behavior.
+
+For every individual rule, mark exactly one status:
+- PASS — implementation is present and evidence supports correct behavior.
+- FAIL — rule is missing or implemented incorrectly.
+- PARTIAL — only some of the rule is implemented.
+- UNVERIFIED — the available code/data/tests do not let you confirm it.
+- NEEDS CLARIFICATION — the source rule itself is ambiguous or inconsistent.
+
+Do not count a button, label, comment, or placeholder as implementation. Trace each important rule through actual server logic and state updates. Use existing project data/player mats/card data for numbers; never invent values. If a rule refers to a value not available in the code/data or legible source, mark it UNVERIFIED. Report source-rule contradictions separately as NEEDS CLARIFICATION.
+
+STRICT RESTRICTIONS: This is a read-only audit. DO NOT edit, create, delete, format, or rename files. DO NOT fix bugs, implement missing rules, redesign the UI, change dependencies/configuration, or deploy. You may run existing tests or safe read-only checks if available, but do not alter project files. If a test cannot safely be run without changing files, report it as not run.
+
+FINAL REPORT REQUIRED:
+1. Total rules checked and counts of PASS, FAIL, PARTIAL, UNVERIFIED, and NEEDS CLARIFICATION.
+2. A complete rule-by-rule checklist covering every rule in sections A–P below, not just a sample or summary.
+3. For each result, include the rule ID/name, status, evidence (file path and function/component/data key where possible), and a brief explanation. For FAIL/PARTIAL, state what is missing or wrong. For UNVERIFIED, state what evidence is missing. For NEEDS CLARIFICATION, quote or describe the conflicting source instructions.
+4. List missing or incorrect rules separately, with reproduction steps if you can establish them safely.
+5. End with a clear conclusion: fully compliant, partially compliant, or not compliant based on the evidence.
+6. Do not make any project changes. Return the audit report only.
+
+RULEBOOK-BASED SPECIFICATION TO CHECK
+The following sections convert the supplied 24-page Modern Mint Rulebook (16 September 2025) into an implementation checklist. Check every bullet and numbered rule below against the existing game. This is a structured rule specification, not permission to invent or silently resolve any ambiguity in the source.
+
+IMPORTANT AUDIT METHOD
+1. Inspect the real code, data files, cards, player mats, backend logic, frontend actions, Socket.IO events, and current game-state model.
+2. Trace each rule end-to-end: UI action -> server validation -> authoritative state update -> broadcast -> UI display -> round/revenue calculations.
+3. Do not mark a rule compliant merely because a button or label exists. Verify the actual game logic.
+4. Treat the server/backend as authoritative in multiplayer. Validate every important action server-side and prevent clients from changing money, equity, stage, dice results, loans, action points, event effects, or winner calculations arbitrarily.
+5. Use the numeric costs, valuations, projected revenues, team multipliers, D10 result multipliers, loan limits, PR fees, and other values already present in the supplied project’s player mats/card data. Do not invent missing numbers. If the rulebook refers to a Player Mat or card for a value that is not readable in the PDF text, locate that value in the game assets/data or flag it as unresolved.
+6. Do not change the rules to make implementation easier. If the rulebook is internally inconsistent or incomplete, report the conflict and ask for a decision instead of silently choosing a rule.
+7. Produce a rule-by-rule compliance report with: Rule ID, expected behavior, relevant code/data location, test performed (if any), status, and evidence.
+8. Test normal play, edge cases, multiplayer synchronization, reconnect/reload behavior where applicable, and a complete game only where this can be done without modifying project files. Do not claim full compliance without evidence.
+
+A. GAME OVERVIEW, PLAYERS, COMPONENTS, AND OBJECTIVE
+- Game title: Modern Mint.
+- Standard game: 2–6 players, approximately 60–150 minutes, age 14+.
+- Standard game lasts 9 rounds.
+- The game has Founders and Investors. For 4–6 players, choose 2 Investors and make all remaining players Founders. For 2–3 players, all human players are Founders and one Dummy Investor is selected at random.
+- At the end of the standard game, winners are determined by Net Value:
+  Net Value = sum of (equity percentage owned in each company × that company’s valuation at its current stage) + cash in hand − outstanding loans including unpaid interest.
+- In a 2–3-player game, there is one winner: the Founder with the highest Net Value.
+- In a 4–6-player game, there are two category winners: the Founder with the highest Founder Net Value and the Investor with the highest Investor Net Value.
+- Track each player's cash, equity/ownership, investments, royalty/revenue-sharing rights, loans, interest, company stages, team levels, action points, and relevant card effects accurately.
+- Physical-board components described by the rulebook include a main board, 12 Event Cards, 36 Mentor Cards, 4 Founder Player Mats, 2 Investor Player Mats, a D10 die, a Round Tracker coin, 4 Turn Order tokens (one per Founder), 1 Bankruptcy Action Card, 40 Founder Sheets, 20 Investor Sheets, 6 Dummy Investor Cards, 4 Action Point Tracker discs, 24 Team Tokens (12 for Team 2, 8 for Team 3, 4 for Team 4), four stage cubes per Founder marked L/R/G/S, six markers with erasers, currency notes, and the rulebook. The digital game should implement the corresponding game systems and all available card effects/data.
+
+B. SETUP
+1. Put the round marker on Round 1.
+2. Shuffle Event Cards and randomly select/place 2 face-down Event Cards in the designated board spaces as instructed by the physical setup. The rules later say to reveal an Event Card after every third round; implement the intended deck/slot flow consistently and flag any mismatch between the setup instruction and later event instructions.
+3. Put Mentor Cards and the Bankruptcy Action Card in their designated spaces/decks.
+4. Set the bank/cash supply and all Action Point Tracker discs to their starting positions.
+5. Round 1 turn order is random: shuffle Founder character/turn-order tokens and place them randomly.
+6. From Round 2 onward, turn order is determined by Action Points: Founder with the fewest Action Points goes first, followed by the next-lowest. Ties are broken in favor of the Founder who went earlier in the previous round.
+7. Put the correct number of Team Tokens in a shared pool based on player count:
+   - 2 players: Team 2 = 4, Team 3 = 2, Team 4 = 1.
+   - 3 players: Team 2 = 4, Team 3 = 3, Team 4 = 1.
+   - 4 players: Team 2 = 6, Team 3 = 3, Team 4 = 2.
+   - 5 players: Team 2 = 6, Team 3 = 4, Team 4 = 2.
+   - 6 players: Team 2 = 8, Team 3 = 4, Team 4 = 3.
+   Note: these numbers as printed do not sum to the stated 24 physical Team Tokens in every case; use the player-count table as printed and flag this as a possible rulebook/component discrepancy rather than silently changing it.
+8. Each Founder receives a Founder Player Mat, Founder Sheet, marker/eraser, four stage cubes of their color, and 500K starting cash from the bank.
+9. Each Investor receives an Investor Player Mat, Investor Sheet, and marker/eraser.
+10. Investor funding for a 4–6-player game:
+    - Before Round 1: 2,000K.
+    - Before Round 4: 5,000K (the rulebook prints “$5,000” in one place and “$5000K” is likely intended elsewhere; flag and confirm the exact unit rather than silently resolving).
+    - Before Round 7: 10,000K.
+11. For 2–3 players, select one Dummy Investor at random and use its three round-range cards:
+    - Rounds 2–3.
+    - Rounds 4–6.
+    - Rounds 7–9.
+    Follow the relevant card instructions for who can receive investment, amounts, and conditions.
+12. Assign character/role mats according to the selected role, or randomly if players cannot decide.
+
+C. ROUND STRUCTURE AND PHASE ORDER
+Standard game has 9 rounds. Each round has three phases:
+PHASE I — FUNDRAISE (not performed in Round 1)
+- Founders may pitch, negotiate, and raise funds from Investors and/or other Founders.
+- Founders may take eligible bank loans in Phase I without spending Action Points.
+- In a 2–3-player game, use the Dummy Investor card for the current round range.
+- In a 4–6-player game, all Founder pitches should be heard before Investors finalize allocations. Investors negotiate terms and then commit funds.
+- Record each finalized deal immediately on the relevant Founder and Investor sheets/state.
+
+PHASE II — ACTION & OBSERVE
+- Begins in Round 1.
+- Each Founder may perform any number of legal actions across their companies, subject to per-action/per-company limits and available money/resources.
+- Each Launch, Stage Up, Team Upgrade, PR Service, and Mentor draw costs 1 Action Point. Bank loans and investments do not cost Action Points.
+- Investor role: observe Founder decisions, optionally provide advice, and record strategy/portfolio information. Investors do not take Founder company actions unless the existing game rules explicitly allow it.
+
+PHASE III — REVENUE ROLL
+- Immediately after a Founder completes Phase II, that Founder rolls one D10 for all companies they own/operate, using the relevant projected revenue and D10 multiplier from the Founder Player Mat.
+- The rules describe one die roll for all companies owned by that Founder, not a separate independent roll per company.
+- Positive revenue is paid from the bank to the Founder; negative revenue/loss is paid by the Founder to the bank.
+- Pay due bank-loan interest and handle repayment according to the loan rules.
+- Investors do not roll the die and do not earn normal company revenue directly. For royalty/revenue-sharing deals, Investors collect the agreed share immediately after the relevant Founder’s Revenue Roll. For investor loans, repayments/interest are collected according to the agreed terms.
+- Record all changes on Founder/Investor sheets and player mats.
+- After each Founder completes Phase II, advance that Founder’s Action Point marker by the number of actions taken.
+- After the round, set the next round’s Founder turn order by ascending Action Points; tie-break using the previous round’s order.
+- After every third round, reveal the relevant Event Card, resolve immediate effects, apply ongoing effects for the next three rounds, and release the scheduled additional Investor funds as applicable. Ensure timing is explicit and consistent.
+
+D. PHASE I — FUNDRAISING AND BANK LOANS
+1. Fundraising does not cost Action Points.
+2. Founders can raise money from Investors and/or other Founders. All deals must be mutually agreed; record investor/funder, recipient, amount, company, deal type, ownership/royalty/interest terms, duration/trigger, and repayment terms.
+3. In 4–6 player games, Investors hear all Founder proposals before making/finalizing allocations. Investors can invest in one or more Founders/companies and negotiate valuation and terms.
+4. The rulebook lists the following deal types:
+   a. Equity Deal: Investor provides money in exchange for a percentage of company ownership. Return is based on that equity percentage multiplied by the company’s end-game stage valuation.
+   b. Royalty/Revenue-Sharing Deal: Investor provides money for an agreed percentage of company revenue each round. No equity is granted. Payments continue for the agreed duration or until an agreed total repayment/return cap is reached.
+   c. Loan Deal: Investor lends money at an agreed interest rate per round. No equity or revenue share is granted. Principal and accumulated interest are repaid according to the agreed terms.
+   d. Hybrid Deal: Combine two permitted deal types, e.g., equity + loan or equity + royalty. Track and settle each component separately.
+   e. Convertible Note/Innovative Deal: A loan can convert into equity under clearly specified conditions (e.g., trigger round/stage and valuation cap). Before conversion, it behaves as a loan; after conversion, it behaves as equity. If conversion does not occur, use the agreed repayment/interest terms.
+5. Equity percentages and deal terms must be validated and recorded consistently. The rulebook allows negotiation but does not define every possible constraint, such as whether aggregate equity can exceed 100%; flag any undefined constraints and prevent impossible state.
+6. Bank loans:
+   - Founder may borrow the amount allowed by their Founder Player Mat for a particular company and stage, without Action Point cost.
+   - Bank loan interest is 10% of unpaid loan per subsequent round, paid during Phase III.
+   - Founder may repay any portion or all of the outstanding loan (principal plus remaining interest) during Phase III of any round.
+   - Multiple loans are allowed across different companies within the mat’s limits.
+   - Each company has a maximum bank-loan amount per stage.
+   - A Founder may borrow up to the allowed amount once during a given stage for a given company.
+   - A second loan in the same stage for the same company is not allowed until the earlier loan is repaid.
+   - If the company advances to the next stage, the Founder may take the new loan amount allowed at that stage even if an earlier-stage loan remains unpaid.
+   - Track each loan separately.
+7. Do not charge Action Points for taking or receiving loans/investments.
+8. Important rulebook ambiguity: it says bank-loan interest is 10% of “unpaid loan” and elsewhere gives a net-value example subtracting both a loan of 1,800K and 180K interest. Confirm the intended compounding/base and due timing from existing player mats/game design; do not invent compounding rules.
+
+E. PHASE II — FOUNDER ACTIONS
+A Founder can take any number of legal actions in Phase II, paying costs and tracking Action Points. Each action applies to the relevant company and counts separately.
+
+1. LAUNCH COMPANY
+- A Founder may launch a maximum of 4 companies throughout the entire game.
+- Pay the company’s Launch Investment cost from the Founder’s cash to the bank.
+- A launched company starts at Team Level 1 (solo founder).
+- Founder may give the company a name.
+- Record Team Level 1 and company ownership on the Founder Player Mat/Sheet.
+- Place the Founder’s stage marker at Launch (L) for that company.
+- Notify/record the company for every Investor’s portfolio tracking.
+- Add 1 Action Point per Launch.
+- Use the correct company-specific cost from the Player Mat/data. Do not guess costs.
+
+2. STAGE UP COMPANY
+- Lifecycle: Launch → Retain → Grow → Scale.
+- Pay the stage-up investment cost shown on the Founder Player Mat.
+- Record the new stage/team information and update the stage marker.
+- Notify/update Investor records.
+- Add 1 Action Point per Stage Up.
+- A company can Stage Up only once per round.
+- Do not skip stages unless a Mentor or Event Card explicitly allows it.
+- A company cannot progress beyond Scale.
+- Do not confuse stage-up with team upgrade; they are separate actions with separate costs and effects.
+
+3. UPGRADE TEAM
+- Pay the next team-upgrade cost shown on the Founder Player Mat.
+- Update the company’s team level.
+- Take the corresponding numbered Team Token from the shared pool.
+- Once a Team Token has been taken, it is not returned to the pool for the remainder of the game. The rulebook also says “Do not return the previous token”; do not invent a token-return system.
+- Add 1 Action Point per Team Upgrade.
+- Do not skip team-upgrade levels; upgrade only to the next legal level and only if the required token is available.
+- Ensure Team Token availability is shared across all players and synchronized in multiplayer.
+- Use costs, team multipliers, and limits from the Player Mat/game data.
+
+4. BUY PR SERVICE
+- Pay the PR fee corresponding to that company’s team level, using the correct board/player-mat data.
+- Add 1 Action Point.
+- PR doubles that company’s Projected Revenue at the next payout.
+- Buy PR separately for each company.
+- Maximum one PR campaign per company per round.
+- PR may double losses as well as positive revenue if the publicity backfires; do not implement it as a guaranteed benefit if the rules/cards indicate negative outcomes.
+- Make the duration/timing clear: the rulebook says “at the next payout.” Consume or expire the PR effect at the correct time and avoid accidental permanent doubling.
+
+5. MENTOR ADVICE / MENTOR CARD
+- Costs 20K and 1 Action Point.
+- Only one Mentor Advice action per Founder per Phase II/round.
+- Draw the top Mentor Card and reveal it to all players.
+- “Play Now” cards must resolve immediately. “Play Anytime” cards may be played once later, as their text specifies.
+- Mentor effects may affect one company, one round, multiple rounds, or the Founder’s portfolio, as specified by the card.
+- Mentor Cards can be positive or negative. Red-highlighted titles indicate negative cards in the physical rulebook.
+- Card effects can override general rules; always apply the exact card text.
+- Track whether a Play Anytime card has been used, its target, duration, and expiration. Do not let it be played repeatedly.
+- A Mentor Card counts as 1 Action Point.
+- If the card deck is exhausted, follow the game’s existing deck policy or flag the missing rule rather than silently inventing reshuffling.
+
+F. PHASE III — REVENUE, D10, TEAM MULTIPLIERS, AND REVENUE SHARING
+1. Roll one D10 for all companies owned by a Founder for that Founder’s revenue phase.
+2. For each company, calculate revenue using the company’s Projected Revenue for its current stage, the team multiplier from the Founder Player Mat, the D10 result multiplier from the Founder Player Mat, and active modifiers such as PR, Events, and Mentor effects.
+3. Do not invent the actual D10 multiplier table or projected-revenue values. Read them from the project’s player-mat/card data. If unavailable, mark the test NEEDS CLARIFICATION.
+4. Positive revenue: pay Founder from the bank. Negative revenue: Founder pays the bank.
+5. Revenue sharing/divide rule:
+   - If two or more Founders are at the same stage of the same company at the time of the relevant roll, divide that stage’s Projected Revenue equally among those Founders.
+   - The rulebook example: if Wallet at Grow has projected revenue 2,000K and Founders A and B are both at Grow, each uses 1,000K projected revenue for their own roll while both remain at Grow.
+   - If Founder B upgrades from Grow to Scale before B’s roll, A still receives half of Grow’s projected revenue for A’s roll, while B uses the full Scale-stage projected revenue for B’s roll.
+   - Implement the share based on current state at each Founder’s roll, not just a once-per-round snapshot, unless card text explicitly says otherwise.
+6. Investors never roll the die and do not receive ordinary Founder revenue directly. If there is a royalty/revenue-sharing deal, pay the Investor’s agreed share immediately after the Founder’s roll. Do not confuse this investor royalty with the separate rule that multiple Founders sharing the same company stage split Projected Revenue.
+7. Record revenue and all transfers in a transaction history/ledger so calculations can be verified.
+8. Apply active effects in a consistent order: determine current stage/team/projected revenue; apply revenue-share division; apply team and die multipliers as specified by Player Mat; apply PR/Event/Mentor modifiers according to their exact text; calculate final positive or negative amount; transfer money; settle royalties and due interest/repayments according to terms. If the physical cards or player mat imply a different order, follow those source instructions and document it.
+
+G. SECOND CHANCE AND BANKRUPTCY
+1. Second Chance:
+- Each Founder has two one-time re-roll lifelines during the game, as shown on the Player Mat.
+- A lifeline rerolls the D10 and the player keeps the better result.
+- Each lifeline may be used only once; mark it used permanently.
+- The rulebook’s bankruptcy text says that if a Founder cannot cover losses, they may use Second Chance if available or the Bankruptcy Action Plan Card. If both Second Chance options have already been used, the Bankruptcy Action Plan is the only path forward.
+- Clarify exactly when a reroll is allowed (before finalizing revenue payment) and whether each of the two lifelines is a separate use. Follow the Player Mat/card text if more specific.
+
+2. Bankruptcy Action Plan Card: when the Founder cannot cover Phase III losses and does not want to/cannot use an available Second Chance, choose one or more of these listed options:
+- Crack a Deal: negotiate a grant, short-term loan, equity, or future benefit with another Founder/Investor. Terms are negotiable; record them before proceeding.
+- Sell a Company: sell one or more companies. Receive the original launch cost and all stage-upgrade costs, excluding team-upgrade costs. If a company has an active loan, subtract the remaining loan amount from proceeds. Update the Founder Mat and main board/state.
+- Take a Survival Bank Loan: borrow from the bank at 30% interest per round. Maximum borrowing is up to twice the shortfall. Example: a 1,000K shortfall permits up to 2,000K borrowed. Record the loan and apply interest each round until repaid.
+- Restart: lose all existing companies and cash but receive 500K to rebuild, continuing in the same round with a clean slate.
+- The card says “choose one or more” options, while another paragraph describes choosing Second Chance OR the Bankruptcy Action Plan. Preserve the distinction and flag any ambiguity about whether multiple Bankruptcy options can be combined.
+3. Do not allow a player to pay money they do not have without invoking the appropriate loss/bankruptcy procedure.
+4. Bankruptcy must not silently erase loans, Investor rights, royalties, or ownership unless the selected option/card text explicitly says so. If Restart’s effect on outstanding loans and investor contracts is unspecified, flag for a decision rather than inventing it.
+
+H. EVENT CARDS
+- Event Cards represent market/world shifts affecting all players.
+- Standard setup places Event Cards face-down on the board. The main rule says reveal an Event Card after every third round; the tips section also says every 3 rounds reveal an Event Card and Investors receive additional funds.
+- On reveal, announce and resolve immediate effects (one-time bonus/penalty).
+- Apply ongoing modifiers (revenue adjustments, action restrictions, etc.) for the next 3 rounds, as specified on the card.
+- Event effects may override general rules if their text says so.
+- Track when each effect starts and expires. Ensure all players receive the same global event effect and that it is not applied twice or to the wrong rounds.
+- The book says to shuffle all Event Cards and select/place 2 face-down cards during setup, but Quick Mode places 1 face-down card and reveals it after Round 3. Flag and verify the exact intended standard-mode event sequence with the existing game data/rule design.
+
+I. INVESTOR RULES AND INVESTOR NET VALUE
+- Investors listen to Founder pitches, negotiate, invest, optionally advise Founders they invested in, observe Founder strategy, and record investments/strategies on Investor Sheets.
+- Investors are free to invest or not. They cannot force Founders to follow promises or behave ethically; they may decline future investment.
+- Investors receive scheduled additional funds before Round 1, Round 4, and Round 7 as listed in setup, with the Round 4 amount/unit discrepancy flagged.
+- Investors do not roll the D10 and do not earn normal company revenue directly each round.
+- Equity returns are calculated from equity percentage × company stage valuation at the end of the game.
+- Royalty/revenue-sharing returns are collected after the relevant Founder revenue roll according to the deal.
+- Loan returns are principal plus agreed accumulated interest/repayment terms.
+- Hybrid deals must track each component separately.
+- The rulebook does not provide a fully explicit Investor Net Value formula in the extracted rule text beyond the general winning-by-Net-Value rule. Audit existing Investor scoring and flag any assumption about cash, equity valuations, receivables, and paid-out returns that is not grounded in the source.
+
+J. TURN ORDER AND ACTION POINTS
+- Round 1 order is random.
+- After each Founder completes Phase II, advance their Action Point Tracker by the number of Phase II actions they took.
+- Phase I fundraising and bank loans do not add Action Points.
+- Launch, Stage Up, Team Upgrade, PR Service, and Mentor Card draw each add 1 Action Point.
+- At the end of a round, sort Founder order by ascending Action Points for the next round.
+- Tie-break: player who went earlier in the previous round goes earlier.
+- Ensure action points are cumulative or reset only if the actual player mat/rules say so. The book describes tracker positions and ordering but does not clearly state a round reset; inspect current implementation/player mat and flag if unclear.
+- In Standard Mode, use Action Point-based order. In Quick Mode, skip Action Point tracking and use clockwise order.
+
+K. QUICK MODE
+- Quick Mode lasts 6 rounds.
+- Shuffle Event Cards and place one face-down on the board. Reveal it after Round 3; its effects last for the next 3 rounds.
+- Skip Action Point tracking; players take turns clockwise.
+- Ignore Revenue Sharing between multiple Founders at the same stage: each Founder earns 100% of their company’s Projected Revenue even if multiple Founders are at the same stage.
+- Winning:
+  - 2–3 players: one winner, the Founder with the highest Net Value.
+  - 4–6 players: two winners, one Founder and one Investor with the highest Net Value in their category.
+- All other rules remain the same unless Quick Mode explicitly overrides them.
+- Quick Mode must be a selectable mode and must not accidentally alter Standard Mode rules.
+
+L. COMPANY TYPES AND THEMATIC DATA IN THE RULEBOOK
+The booklet describes these companies; preserve the project’s company definitions and associated numeric data:
+1. Traceability — transparent, tamper-proof supply chains from farm to fork; blockchain tracking. Lifecycle narrative covers Launch, Retain, Grow, Scale.
+2. Wallet — digital wallets, credit, and agri-payments for farmers.
+3. Quick Commerce — rapid delivery of groceries/medicines, dark stores, delivery network and logistics.
+4. Robo-Packaging — sustainable packaging using recyclable materials and smart processes.
+5. RestroChain — scalable technology-enabled restaurant chain/cloud kitchens.
+6. Contract Farming — agreements between farmers and buyers for predictable crops and guaranteed pricing.
+7. Agri IoT — drones/robotics for seeding, spraying, surveying, and agricultural insights.
+8. Smart Storage — IoT-enabled warehouses, sensors, inventory, and logistics.
+9. Snacks — snack products growing from small production to larger distribution.
+Use the exact company-specific stage valuations, launch costs, stage-up costs, projected revenues, and other numerical attributes from the project’s data/player mats. Do not infer numbers from the narrative descriptions.
+
+M. ROLES / CHARACTER THEMES
+The rulebook contains six character descriptions:
+- Greedy Opportunist — Founder; aggressively pursues profit and flexible pivots.
+- Ruthless Negotiator — Founder; forceful, hard-nosed dealmaker.
+- Robotic Strategist — Founder; analytical, metrics-driven, systematic.
+- Conservative Guardian — Founder; cautious, risk-aware, stability-focused.
+- Market Manipulator — Investor; invests to gain leverage/strategic position.
+- Trend Chaser — Investor; seeks emerging trends and fast opportunities.
+These descriptions are thematic role flavor unless the project’s data/card definitions attach mechanical abilities to them. Do not invent special powers based only on flavor text.
+
+N. RECORD KEEPING / DATA INTEGRITY
+- Founder records should include company, stage, team level, equity ownership, deal history, cash, each bank loan and its interest, revenue, PR use, Mentor/Event effects, and Second Chance uses.
+- Investor records should include cash/funds, each investment, target company/Founder, amount, equity/royalty/loan/hybrid/convertible terms, payment history, and portfolio value.
+- Maintain a clear, auditable transaction log for every cash transfer and ownership/contract change.
+- In multiplayer, the server must validate money availability, legal stage transitions, once-per-round restrictions, token supply, deal consent, action points, dice/revenue calculation, event/mentor effects, interest, bankruptcy, and end-game scoring.
+- Ensure simultaneous/repeated clicks cannot duplicate actions or payments. Use idempotent server-side action handling where appropriate.
+- Reconnecting players should receive authoritative current state; the game must not fork into different states on different clients.
+- Never expose hidden dice outcomes, shuffled deck order, or secret information before the rules permit it.
+- UI should clearly show current round, phase, turn order, action points (Standard Mode), cash, company stage/team, active effects, loans/interest, deals, and what actions are legal.
+
+O. REQUIRED AUDIT SCENARIOS
+At minimum, write/run tests for:
+1. 2-player setup with one Dummy Investor and correct card periods.
+2. 3-player setup with one Dummy Investor.
+3. 4-player and 6-player setup with two real Investors.
+4. Round 1 skips Phase I but allows Phase II and Phase III.
+5. Round 2 fundraising and legal bank loan without Action Point cost.
+6. Investors hear all pitches before final allocations.
+7. Every deal type: equity, royalty, loan, hybrid, convertible note.
+8. Founder launch cap: first four launches succeed; fifth is rejected.
+9. Launch costs money, starts at Team Level 1 and Launch stage, and adds 1 Action Point.
+10. Stage-up sequence Launch→Retain→Grow→Scale; no skip; no more than one stage-up for a company per round; cannot go past Scale.
+11. Team upgrade uses next level only and consumes one available shared Team Token; tokens are not returned.
+12. PR costs the correct fee, doubles projected revenue at the correct payout, expires correctly, and cannot be purchased twice for the same company in the same round.
+13. Mentor action costs 20K and 1 Action Point; only one per Founder per round; Play Now and Play Anytime behavior; negative cards; effect duration and priority.
+14. One D10 roll per Founder revenue phase applied to all that Founder’s companies using the exact mat multiplier table.
+15. Revenue-sharing between Founders at same company stage in Standard Mode, including a Founder who stage-ups before their own roll.
+16. Quick Mode ignores that Founder-to-Founder revenue division.
+17. Royalty payment after Founder revenue roll and investor loan repayment/interest timing.
+18. Bank loan 10% interest, partial/full repayment, stage-specific borrowing restrictions, multiple loans, and unpaid-interest accounting.
+19. Negative revenue/loss payment and insufficient-cash path through Second Chance/bankruptcy.
+20. Each Second Chance reroll can be used only once and keeps the better D10 result.
+21. Bankruptcy: Crack a Deal, Sell Company refund calculation, Survival Loan cap/30% interest, Restart with 500K, and state updates.
+22. Event reveal timing, immediate effect, ongoing 3-round duration, and scheduled Investor funding.
+23. Turn-order sorting by Action Points and previous-round tie-break; Round 1 random order.
+24. End-game Net Value calculation with multiple companies, equity stakes, cash, and outstanding loans/interest.
+25. Winner count/category for 2–3 versus 4–6 players.
+26. Quick Mode 6-round length, clockwise turns, single event after Round 3, and unchanged rules except explicit overrides.
+27. Multiplayer tests: two clients cannot spend the same cash/token, repeated action requests do not duplicate transactions, reconnect state is correct, and all clients receive identical resolved state.
+
+P. RULEBOOK AMBIGUITIES THAT MUST BE REPORTED, NOT SILENTLY “FIXED”
+1. Investor Round 4 funding is printed as “$5,000” in one location and “$5000K” in another. Confirm intended unit.
+2. Team Token setup quantities in the player-count table do not always match the stated total of 24 physical Team Tokens. Preserve table values for audit and flag the mismatch.
+3. Standard setup says select/place 2 Event Cards face-down, while other text says reveal an Event Card every three rounds. Confirm exact event schedule and what happens to the second card.
+4. The rules say events last for the next 3 rounds and also reveal after every third round. Clarify precise activation/expiration timing (e.g., after Rounds 3, 6, 9) and whether a final event has any effect after Round 9.
+5. Bank-loan interest says 10% of unpaid loan each subsequent round; clarify whether interest is simple or compound and how partial repayments allocate between principal and interest.
+6. Revenue roll text says one D10 roll for all companies owned by a Founder; confirm whether every company uses the same D10 outcome while applying its own stage/team multiplier.
+7. Investor Net Value is not fully specified in the extracted scoring formula. Confirm treatment of remaining cash, equity, outstanding loan receivables, royalties, and already-collected payments.
+8. Bankruptcy says “choose one or more” options on the Action Plan but also describes choosing Second Chance OR the Bankruptcy Action Plan. Confirm whether options within the Action Plan may be combined and how Second Chance selection works.
+9. Restart says all companies and cash are lost and 500K is received; treatment of existing debts, investor equity, royalty contracts, and loan obligations is not stated.
+10. Deal negotiation is flexible, but constraints for total company equity, dilution, ownership transfer, deal cancellation, defaults, and contract duration are not fully specified.
+11. The text says “all phases of investors and founders run together” while also requiring all pitches first and Phase II after all Phase I actions. Implement a clear, synchronized phase barrier rather than allowing a player to enter a later phase prematurely.
+12. The rulebook references Player Mats and card text for many numerical values and effects. The PDF text extraction alone does not provide every table/card face. Audit the project’s existing game data and the actual visual PDF/player-mat assets before marking numerical rules compliant.
+
+Q. REQUIRED AUDIT REPORT
+Return the complete read-only audit report requested at the beginning of this document. Include every rule in sections A–P, including the required audit scenarios. Do not propose or apply code changes as part of this task. Do not omit a rule just because it is difficult to test; mark it UNVERIFIED and explain the limitation. Wait for the user to review the report before any separate implementation task.
+
+END OF AUDIT SPECIFICATION
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-17T15:07:43+05:30.
+</ADDITIONAL_METADATA>

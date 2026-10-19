@@ -191,7 +191,8 @@ export default function MiddleBoard({ players = [], onDeckClick = () => {}, curr
                <img 
                  src="/center-mentor-card.png" 
                  alt="Mentor Card 20K" 
-                 className="w-[174px] h-[174px] object-contain -translate-x-[2px] -translate-y-[2px]" 
+                 className="w-[188px] h-[188px] object-contain translate-y-[5px]" 
+                 style={{ transform: 'translateY(5px)' }}
                />
             </div>
 

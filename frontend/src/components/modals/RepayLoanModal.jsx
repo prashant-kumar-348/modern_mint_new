@@ -6,7 +6,8 @@ export default function RepayLoanModal({ onClose, player, sendAction }) {
 
   const standardLoan = player?.loan || 0;
   const survivalLoan = player?.survivalLoan || 0;
-  const totalLoan = standardLoan + survivalLoan;
+  const investorDebt = player?.investorDebt || 0;
+  const totalLoan = standardLoan + survivalLoan + investorDebt;
   const cash = player?.cash || 0;
 
   const maxRepay = Math.min(cash, totalLoan);
@@ -42,6 +43,12 @@ export default function RepayLoanModal({ onClose, player, sendAction }) {
             <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Standard Debt</div>
             <div className="text-xl font-mono text-red-400 font-bold">${standardLoan}K</div>
           </div>
+          {investorDebt > 0 && (
+            <div>
+              <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 text-center">Investor Debt</div>
+              <div className="text-xl font-mono text-yellow-400 font-bold text-center">${investorDebt}K</div>
+            </div>
+          )}
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 text-right">Survival Debt</div>
             <div className="text-xl font-mono text-orange-500 font-bold text-right">${survivalLoan}K</div>
@@ -85,7 +92,7 @@ export default function RepayLoanModal({ onClose, player, sendAction }) {
         </button>
 
         <p className="text-[9px] text-gray-500 mt-4 leading-tight">
-          Note: Repayments automatically prioritize your Survival Loan (30% interest) over Standard Loans (10% interest).
+          Note: Repayments automatically prioritize Survival Loan (30% interest), then Standard Loans (10%), then Investor Debt.
         </p>
       </div>
     </div>

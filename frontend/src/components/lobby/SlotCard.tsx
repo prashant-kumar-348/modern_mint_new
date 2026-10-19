@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import type { SlotDropdown } from "@/lib/lobby/types";
 import { BotIcon } from "./PlayerAvatar";
 import { personInitials } from "./PersonAvatar";
-import { getUser } from "@/lib/auth";
+import { getUser, type StoredUser } from "@/lib/auth";
 import { API_BASE_URL } from "@/lib/api";
 
 const AVATAR_IMAGE_MAP: Record<number, string> = {
@@ -22,52 +22,37 @@ interface SlotCardProps {
   dropdown: SlotDropdown;
   avatarId: number;
   name:     string;
-  onChange: (dropdown: SlotDropdown) => void;
+  onChange?: (dropdown: SlotDropdown) => void;
   isYou?:   boolean;
   allowAI?: boolean;
 }
-
-const ALL_DROPDOWN_OPTIONS: { value: SlotDropdown; label: string; icon: string }[] = [
-  { value: "Open",   label: "Open Slot", icon: "➕" },
-  { value: "Friend", label: "Friend",    icon: "👤" },
-  { value: "AI",     label: "AI Bot",    icon: "🤖" },
-];
 
 export default function SlotCard({
   index,
   dropdown,
   avatarId,
   name,
-  onChange,
   isYou = false,
-  allowAI = false,
 }: SlotCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => 
+    typeof window !== "undefined" ? getUser() : null
+  );
+
+  useEffect(() => {
+    const handleUpdate = () => setCurrentUser(getUser());
+    window.addEventListener("mm_profile_updated", handleUpdate);
+    return () => window.removeEventListener("mm_profile_updated", handleUpdate);
+  }, []);
 
   // Reset imgError when avatarId or name changes
   useEffect(() => {
     setImgError(false);
-  }, [avatarId, name]);
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    if (menuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }
-  }, [menuOpen]);
+  }, [avatarId, name, currentUser?.profile_image_url]);
 
   const isOpen = dropdown === "Open";
   const isAI   = dropdown === "AI";
 
-  const currentUser = typeof window !== "undefined" ? getUser() : null;
   const displayName = isYou
     ? (name && name !== "You" ? name.toUpperCase() : currentUser?.username?.toUpperCase() || "YOU")
     : isAI
@@ -91,17 +76,11 @@ export default function SlotCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
       className="relative flex flex-col items-center gap-2 flex-1 select-none"
-      ref={menuRef}
     >
-      {/* ── Avatar / Open Circle ── */}
+      {/* ── Avatar / Open Circle (Fixed slot, no dropdown, displays profile) ── */}
       <div
-        onClick={() => {
-          if (!isYou) setMenuOpen((prev) => !prev);
-        }}
-        className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 ${
-          !isYou ? "cursor-pointer hover:scale-105" : ""
-        }`}
-        title={!isYou ? "Click to configure slot" : "Your slot"}
+        className="relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200"
+        title={isYou ? "Your slot" : isAI ? displayName : "Open slot"}
       >
         {isOpen ? (
           // Dashed mint circle with "+"
@@ -133,61 +112,54 @@ export default function SlotCard({
             <BotIcon size={70} />
           </div>
         ) : (
-          // Solid mint glowing circle with player avatar or initials
-          <div
-            className="w-full h-full rounded-full overflow-hidden relative flex items-center justify-center font-black text-2xl select-none"
-            style={{
-              border: "2px solid #2bf8b8",
-              boxShadow: "0 0 18px rgba(43, 248, 184, 0.65), inset 0 0 10px rgba(43, 248, 184, 0.3)",
-              background:
-                resolvedAvatar && !imgError
-                  ? "#04190d"
-                  : "radial-gradient(circle at 38% 32%, rgba(40,220,110,0.55), rgba(4,26,13,0.96))",
-              color: "#d6ffe6",
-            }}
-          >
-            {resolvedAvatar && !imgError ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={resolvedAvatar}
-                alt={displayName}
-                className="w-full h-full object-cover object-center pointer-events-none"
-                onError={() => setImgError(true)}
-              />
-            ) : (
-              personInitials(displayName)
-            )}
-
-            {/* Green online dot at bottom-right */}
-            <span
-              className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2 border-[#04190d]"
+          <>
+            {/* Solid mint glowing circle with player avatar or initials */}
+            <div
+              className="w-full h-full rounded-full overflow-hidden relative flex items-center justify-center font-black text-2xl select-none"
               style={{
-                background: "#2bff84",
+                border: "2px solid #2bf8b8",
+                boxShadow: "0 0 18px rgba(43, 248, 184, 0.65), inset 0 0 10px rgba(43, 248, 184, 0.3)",
+                background:
+                  resolvedAvatar && !imgError
+                    ? "#04190d"
+                    : "radial-gradient(circle at 38% 32%, rgba(40,220,110,0.55), rgba(4,26,13,0.96))",
+                color: "#d6ffe6",
+              }}
+            >
+              {resolvedAvatar && !imgError ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={resolvedAvatar}
+                  alt={displayName}
+                  className="w-full h-full object-cover object-center pointer-events-none"
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                personInitials(displayName)
+              )}
+            </div>
+
+            {/* Green online dot using user-provided Ellipse 92.png — placed OUTSIDE overflow-hidden at bottom-left */}
+            <div
+              className="absolute bottom-1 left-1.5 w-4 h-4 rounded-full border-2 border-[#04190d] overflow-hidden flex items-center justify-center pointer-events-none z-20"
+              style={{
                 boxShadow: "0 0 8px #2bff84",
               }}
-            />
-          </div>
-        )}
-
-        {/* Small subtle edit indicator for host on hover */}
-        {!isYou && (
-          <span
-            className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#0a2e1d] border border-[#d6b25a] text-[#d6b25a] text-[10px] flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity shadow-md"
-            title="Configure slot"
-          >
-            ⚙
-          </span>
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/lobby/Ellipse 92.png"
+                alt="Online"
+                className="w-full h-full object-cover pointer-events-none select-none"
+              />
+            </div>
+          </>
         )}
       </div>
 
       {/* ── Name Pill (using Rectangle 582.png from zip) ── */}
       <div
-        onClick={() => {
-          if (!isYou) setMenuOpen((prev) => !prev);
-        }}
-        className={`relative w-[130px] h-8 flex items-center justify-center transition-transform ${
-          !isYou ? "cursor-pointer hover:scale-[1.03]" : ""
-        }`}
+        className="relative w-[130px] h-8 flex items-center justify-center transition-transform"
         style={{
           backgroundImage: "url('/lobby/create/Rectangle 582.png')",
           backgroundSize: "100% 100%",
@@ -199,20 +171,6 @@ export default function SlotCard({
           <img
             src="/lobby/create/OPEN SLOT.png"
             alt="OPEN SLOT"
-            className="h-3.5 max-h-[16px] w-auto object-contain pointer-events-none drop-shadow"
-          />
-        ) : displayName === "BECK" ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src="/lobby/create/BECK.png"
-            alt="BECK"
-            className="h-3.5 max-h-[16px] w-auto object-contain pointer-events-none drop-shadow"
-          />
-        ) : displayName === "ROHAN" ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src="/lobby/create/ROHAN.png"
-            alt="ROHAN"
             className="h-3.5 max-h-[16px] w-auto object-contain pointer-events-none drop-shadow"
           />
         ) : (
@@ -238,43 +196,6 @@ export default function SlotCard({
           />
         </div>
       )}
-
-      {/* ── Host slot configuration popup menu (Functionality Preserved) ── */}
-      <AnimatePresence>
-        {menuOpen && !isYou && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: -4 }}
-            transition={{ duration: 0.15 }}
-            className="absolute top-full z-40 mt-1 w-32 py-1.5 rounded-xl border flex flex-col gap-1 shadow-2xl"
-            style={{
-              background: "rgba(6, 26, 18, 0.96)",
-              borderColor: "rgba(214, 178, 90, 0.65)",
-              backdropFilter: "blur(12px)",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.7), 0 0 15px rgba(43,248,184,0.2)",
-            }}
-          >
-            {ALL_DROPDOWN_OPTIONS.filter((opt) => allowAI || opt.value !== "AI").map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => {
-                  onChange(opt.value);
-                  setMenuOpen(false);
-                }}
-                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-left transition-colors cursor-pointer ${
-                  dropdown === opt.value
-                    ? "text-[#2bf8b8] bg-[rgba(43,248,184,0.15)]"
-                    : "text-white/80 hover:text-white hover:bg-[rgba(214,178,90,0.15)]"
-                }`}
-              >
-                <span>{opt.icon}</span>
-                <span>{opt.label}</span>
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

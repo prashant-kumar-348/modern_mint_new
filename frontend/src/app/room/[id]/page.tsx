@@ -29,6 +29,7 @@ export default function GameRoomPage({
     privacy: string;
     isHost: boolean;
     maxPlayers: number;
+    isVsAi?: boolean;
   } | null>(null);
 
   useEffect(() => {
@@ -47,6 +48,10 @@ export default function GameRoomPage({
 
         const isHost = user.id === rawRoom.host_user_id;
         const maxPlayers = (rawRoom.founders?.length || 4) + (rawRoom.investors?.length || 0);
+        const isVsAi =
+          (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("vsAi") === "true") ||
+          rawRoom.founders?.some((f) => f.kind === "ai") ||
+          rawRoom.investors?.some((i) => i.kind === "ai");
 
         setRoomInfo({
           name: rawRoom.name,
@@ -54,6 +59,7 @@ export default function GameRoomPage({
           privacy: rawRoom.privacy,
           isHost,
           maxPlayers,
+          isVsAi,
         });
 
         // Search for user in founders or investors

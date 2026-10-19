@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function PhaseTransitionOverlay({ phase }) {
+export default function PhaseTransitionOverlay({ phase, round }) {
   const [show, setShow] = useState(false);
   const [currentPhase, setCurrentPhase] = useState(phase);
 
@@ -69,6 +69,11 @@ export default function PhaseTransitionOverlay({ phase }) {
                 animation: 'scaleUpPop 2.5s ease-out forwards'
              }}
           />
+          {phase === 2 && round === 1 && (
+            <div className="absolute bottom-16 px-6 py-2.5 rounded-full bg-black/80 border border-[#55ffb0]/60 text-[#55ffb0] font-mono text-xs md:text-sm uppercase tracking-widest shadow-2xl animate-in fade-in zoom-in duration-500 text-center max-w-xl">
+              Round 1 skips Phase 1 (Fundraising) per official rules — Starting in Phase 2: Operations!
+            </div>
+          )}
        </div>
     </>
   );

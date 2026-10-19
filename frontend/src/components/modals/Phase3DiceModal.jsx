@@ -4,10 +4,11 @@ import { Canvas } from '@react-three/fiber';
 import { Physics, usePlane } from '@react-three/cannon';
 import { Environment, PerspectiveCamera } from '@react-three/drei';
 import D10 from '../3d/D10';
+import MentorInventoryModal from './MentorInventoryModal';
 
 const multiplierTable = {
-  1:  [-2, -3, -4,  0],
-  2:  [-2, -2, -2, -1],
+  1:  [-2, -2, -1,  0],
+  2:  [-2, -1,  0,  1],
   3:  [-1, -1,  0,  1],
   4:  [-1,  0,  1,  2],
   5:  [ 0,  0,  1,  2],
@@ -15,11 +16,11 @@ const multiplierTable = {
   7:  [ 1,  1,  2,  3],
   8:  [ 1,  2,  3,  4],
   9:  [ 2,  2,  3,  4],
-  10: [ 2,  2,  4,  5]
+  10: [ 2,  3,  4,  5]
 };
 
 const companyDataMap = {
-  'CONTRACT FARMING': [[10,100,500,0], [100,200,1000,20], [1000,1000,250,200], [2000,2000,10000,400]],
+  'CONTRACT FARMING': [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]],
   'AGRI IoT': [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]],
   'WALLET': [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]],
   'SNACKS': [[10,20,1000,0], [300,200,1500,200], [1000,1100,7500,1500], [6000,4000,32000,8000]],
@@ -65,14 +66,47 @@ const getCompanyMatIcon = (name) => {
 
 export default function Phase3DiceModal({ onClose, player, sendAction, gameState, roomId }) {
   const [isRolling, setIsRolling] = useState(false);
-  const [rollResult, setRollResult] = useState(null);
+  const [rollResult, setRollResult] = useState(player?.currentPhase3Roll || null);
   const [bestRoll, setBestRoll] = useState(player?.currentPhase3Roll || null);
-  const [serverRoll, setServerRoll] = useState(null);
-  const [showTable, setShowTable] = useState(false);
-  const [hasRolled, setHasRolled] = useState(false);
+  const [serverRoll, setServerRoll] = useState(player?.currentPhase3Roll || null);
+  const [showTable, setShowTable] = useState(!!player?.currentPhase3Roll);
+  const [hasRolled, setHasRolled] = useState(!!player?.currentPhase3Roll);
   const [localLifelines, setLocalLifelines] = useState(player?.lifelines || 2);
+  const [showInventory, setShowInventory] = useState(false);
+  const pendingSecondChanceRef = useRef(null);
   
   const diceRef = useRef();
+  const rollTimeoutRef = useRef(null);
+
+  const prevRollRef = useRef(player?.currentPhase3Roll);
+
+  useEffect(() => {
+    // If server explicitly wiped the roll (e.g. moving to next round / phase reset)
+    if (prevRollRef.current && !player?.currentPhase3Roll) {
+      setBestRoll(null);
+      setRollResult(null);
+      setServerRoll(null);
+      setHasRolled(false);
+      setShowTable(false);
+      setIsRolling(false);
+      pendingSecondChanceRef.current = null;
+    }
+    prevRollRef.current = player?.currentPhase3Roll;
+  }, [player?.currentPhase3Roll]);
+
+  useEffect(() => {
+    if (player?.lifelines !== undefined) {
+      setLocalLifelines(player.lifelines);
+    }
+  }, [player?.lifelines]);
+
+  const preRollCards = (player?.mentorCards || []).filter(c => 
+    c.effectType === 'risk_multiplier' || c.effectType === 'auto_roll_6'
+  );
+
+  const postRollCards = (player?.mentorCards || []).filter(c => 
+    ['force_dice_6', 'add_multiplier', 'add_multiplier_2', 'double_revenue', 'tech_revenue_boost', 'cash_from_total_loans'].includes(c.effectType)
+  );
 
   const getCalculationBreakdown = () => {
     if (bestRoll === null) return { companies: [], grandTotal: 0 };
@@ -101,29 +135,61 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
       const activeProjectedRev = hasPR ? baseRev * 2 : baseRev;
       
       // Divided Rev
-      const dividedRev = sharingPlayers > 1 ? Math.floor(activeProjectedRev / sharingPlayers) : activeProjectedRev;
+      const isQuickMode = gameState?.mode === 'short' || gameState?.mode === 'quick';
+      const dividedRev = (!isQuickMode && sharingPlayers > 1) ? Math.floor(activeProjectedRev / sharingPlayers) : activeProjectedRev;
       
-      // Multiplier Lookup
-      const teamIndex = (c.team === 'RN' || player.color === '#ef4444') ? 0 :
-                        (c.team === 'GT' || player.color === '#55ffb0') ? 1 :
-                        (c.team === 'GD' || player.color === '#d4af37') ? 2 : 3;
-      const multi = multiplierTable[roll]?.[teamIndex] ?? 1;
+      // Multiplier Lookup by company's actual Team Level (1..4)
+      const teamLevel = Math.min(4, Math.max(1, Number(c.teamLevel || c.team) || 1));
+      const teamIndex = teamLevel - 1;
+      let multi = multiplierTable[roll]?.[teamIndex] ?? 1;
+      if (player?.mentorMultiplier) {
+        multi += player.mentorMultiplier;
+      }
       
       // Actual Revenue
-      const actualRevenue = dividedRev * multi;
+      let actualRevenue = dividedRev * multi;
+      const hasDoubleRev = c.doubleRevenueRound === gameState?.round;
+      const hasTechBoost = c.techBoostRound === gameState?.round;
+      let riskMultiEffect = null;
+
+      if (hasDoubleRev) {
+        actualRevenue *= 2;
+      }
+      if (hasTechBoost) {
+        actualRevenue += 50;
+      }
+      if (player?.riskMultiplierActive === gameState?.round) {
+        if (roll >= 5) {
+          actualRevenue *= 2;
+          riskMultiEffect = 'x2';
+        } else if (roll <= 2) {
+          actualRevenue = Math.floor(actualRevenue / 2);
+          riskMultiEffect = '÷2';
+        }
+      }
       let finalRevenue = actualRevenue;
       
       // Royalty Cuts
       let royaltyPercentage = 0;
       let royaltyCut = 0;
-      if (gameState?.royaltyAgreements) {
+      if (actualRevenue > 0 && gameState?.royaltyAgreements) {
          gameState.royaltyAgreements.forEach(agreement => {
-            if (agreement.founderId === player.id && agreement.companyName?.toUpperCase().trim() === c.name?.toUpperCase().trim()) {
-               royaltyPercentage = agreement.percentage;
-               royaltyCut = Math.floor((actualRevenue * agreement.percentage) / 100);
-               finalRevenue -= royaltyCut;
+            const isThisFounder = (agreement.founderId === player?.id) ||
+              (agreement.proposer === player?.name) ||
+              (agreement.partner === player?.name);
+            if (!isThisFounder) return;
+
+            const pct = Number(agreement.percentage || agreement.royalty || 0);
+            if (pct <= 0) return;
+
+            if (agreement.companyName && agreement.companyName?.toUpperCase().trim() !== c.name?.toUpperCase().trim()) {
+              return;
             }
+
+            royaltyPercentage += pct;
+            royaltyCut += Math.floor((actualRevenue * pct) / 100);
          });
+         finalRevenue = actualRevenue - royaltyCut;
       }
       
       grandTotal += finalRevenue;
@@ -134,6 +200,9 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
         stageName: ["Launch", "Retain", "Grow", "Scale"][stageIndex],
         baseRev,
         hasPR,
+        hasDoubleRev,
+        hasTechBoost,
+        riskMultiEffect,
         sharingPlayers,
         dividedRev,
         multi,
@@ -151,17 +220,29 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
 
   useEffect(() => {
     const handleInitialResult = (e) => {
-      const { roll } = e.detail;
+      const { roll, playerId } = e.detail || {};
+      if (playerId && player?.id && playerId !== player.id) return;
       setServerRoll(roll);
+      pendingSecondChanceRef.current = null;
       setIsRolling(true);
+      setShowTable(false);
+      setRollResult(null);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('dice_roll_start'));
       }
     };
     const handleSecondChanceResult = (e) => {
-      const { roll, remainingLifelines } = e.detail;
+      const { roll, remainingLifelines, playerId, wasKept, newRollTested, previousRoll } = e.detail || {};
+      if (playerId && player?.id && playerId !== player.id) return;
       setLocalLifelines(remainingLifelines);
-      setServerRoll(roll);
+      const rerollNumber = newRollTested || roll;
+      setServerRoll(rerollNumber);
+      pendingSecondChanceRef.current = {
+        newRoll: rerollNumber,
+        keptRoll: roll,
+        wasKept: !!wasKept,
+        previousRoll: previousRoll || roll
+      };
       setIsRolling(true);
       setShowTable(false);
       setRollResult(null);
@@ -174,11 +255,24 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
     return () => {
       window.removeEventListener('initial_roll_result', handleInitialResult);
       window.removeEventListener('second_chance_result', handleSecondChanceResult);
+      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('dice_roll_end'));
       }
     };
-  }, []);
+  }, [player?.id]);
+
+  useEffect(() => {
+    if (isRolling && serverRoll !== null) {
+      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
+      rollTimeoutRef.current = setTimeout(() => {
+        handleDiceRest(serverRoll);
+      }, 3500);
+    }
+    return () => {
+      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
+    };
+  }, [isRolling, serverRoll]);
 
   // Block Investors entirely
   if (player?.role === 'Investor') {
@@ -210,18 +304,34 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
   }
 
   const handleInitialRoll = () => {
-    if (hasRolled) return;
+    if (hasRolled || isRolling) return;
     setHasRolled(true);
+    setIsRolling(true);
+    setShowTable(false);
+    setRollResult(null);
+    setBestRoll(null);
+    setServerRoll(null);
+    pendingSecondChanceRef.current = null;
     sendAction('initial_roll');
   };
 
-  const handleDiceRest = () => {
-    if (isRolling && serverRoll !== null) {
-      setRollResult(serverRoll);
-      setBestRoll(serverRoll);
-      
-      // Delay strictly 1000ms as requested
+  const handleDiceRest = (restedNumber) => {
+    if (rollTimeoutRef.current) {
+      clearTimeout(rollTimeoutRef.current);
+      rollTimeoutRef.current = null;
+    }
+    const finalVal = serverRoll || restedNumber || player?.currentPhase3Roll;
+    if (finalVal) {
+      // Delay strictly 1000ms so the dice is completely rolled and resting before showing the result
       setTimeout(() => {
+         setRollResult(finalVal);
+         if (pendingSecondChanceRef.current) {
+           const sc = pendingSecondChanceRef.current;
+           setBestRoll(sc.keptRoll);
+           pendingSecondChanceRef.current = null;
+         } else {
+           setBestRoll(finalVal);
+         }
          setIsRolling(false);
          setShowTable(true);
          if (typeof window !== 'undefined') {
@@ -232,7 +342,11 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
   };
 
   const handleSecondChance = () => {
-    if (localLifelines <= 0) return;
+    if (localLifelines <= 0 || isRolling || (player?.lifelines !== undefined && player.lifelines <= 0)) return;
+    setIsRolling(true);
+    setShowTable(false);
+    setRollResult(null);
+    setServerRoll(null);
     sendAction('second_chance_roll');
   };
 
@@ -257,7 +371,7 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                defaultContactMaterial={{ friction: 0.2, restitution: 0.7, contactEquationStiffness: 1e7, contactEquationRelaxation: 4 }}
             >
                <Borders />
-               {hasRolled && <D10 ref={diceRef} onRest={handleDiceRest} isRolling={isRolling} serverRoll={serverRoll} />}
+               {(hasRolled || isRolling) && <D10 ref={diceRef} onRest={handleDiceRest} isRolling={isRolling} serverRoll={serverRoll} />}
             </Physics>
          </Canvas>
       </div>
@@ -266,28 +380,81 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
       {isRolling && <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-[#FFC240]/5 to-transparent animate-[spin_2s_linear_infinite] opacity-50 z-0"></div>}
       
       {/* Header */}
-      <div className="absolute top-10 left-1/2 transform -translate-x-1/2 flex flex-col items-center z-50">
-        <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] mb-2 text-center">
+      <div className="absolute top-8 left-1/2 transform -translate-x-1/2 flex flex-col items-center z-50">
+        <h1 className="text-4xl md:text-5xl font-black text-white uppercase tracking-widest drop-shadow-[0_0_30px_rgba(255,255,255,0.3)] mb-1 text-center">
           The Revenue Roll
         </h1>
-        <p className="text-[#FFC240] font-bold tracking-widest uppercase text-sm drop-shadow-md">Phase 3</p>
+        <div className="flex items-center gap-3">
+          <p className="text-[#FFC240] font-bold tracking-widest uppercase text-xs drop-shadow-md">Phase 3</p>
+          {(player?.mentorCards || []).length > 0 && (
+            <button
+              onClick={() => setShowInventory(true)}
+              className="pointer-events-auto bg-[#2A0D12] border border-[#FFC240]/60 hover:border-[#FFC240] text-[#FFC240] px-3 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition-all"
+            >
+              🃏 Mentor Cards ({(player?.mentorCards || []).length})
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Close button */}
+      <button 
+        onClick={onClose} 
+        className="pointer-events-auto absolute top-6 right-6 p-2.5 rounded-full bg-black/60 text-white/60 hover:text-white hover:bg-white/10 transition-all border border-white/10 z-50 cursor-pointer drop-shadow-md"
+        title="Close"
+      >
+        <X size={24} />
+      </button>
 
       {/* Center Cinematic Container */}
       <div className="relative w-full max-w-[1350px] h-full flex flex-col items-center justify-center mt-12 z-10 pointer-events-none">
         
-        {!hasRolled ? (
-          <button 
-            onClick={handleInitialRoll}
-            className="pointer-events-auto group relative z-10 w-48 h-48 md:w-64 md:h-64 rounded-full bg-gradient-to-br from-[#FFC240] to-[#F59E0B] shadow-[0_0_80px_rgba(255,194,64,0.4)] flex flex-col items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
-          >
-            <div className="absolute inset-2 rounded-full border-4 border-dashed border-[#2A0D12]/30 group-hover:rotate-180 transition-transform duration-1000 ease-in-out"></div>
-            <Dices size={80} className="text-[#2A0D12] mb-4 drop-shadow-md" />
-            <span className="text-[#2A0D12] font-black uppercase tracking-widest text-xl">Roll Dice</span>
-          </button>
+        {!hasRolled && !isRolling ? (
+          <div className="flex flex-col items-center gap-6 z-10 pointer-events-auto">
+            {/* Bold moves active indicator */}
+            {player?.riskMultiplierActive === gameState?.round && (
+              <div className="bg-[#FFC240]/20 border border-[#FFC240] text-[#FFC240] px-5 py-2 rounded-full text-xs font-black uppercase tracking-wider shadow-[0_0_20px_rgba(255,194,64,0.4)] animate-pulse flex items-center gap-2">
+                <span>⚡ BOLD MOVES ACTIVE: x2 on roll 5+, ÷2 on roll 1–2</span>
+              </div>
+            )}
+            
+            <button 
+              onClick={handleInitialRoll}
+              className="group relative z-10 w-48 h-48 md:w-64 md:h-64 rounded-full bg-gradient-to-br from-[#FFC240] to-[#F59E0B] shadow-[0_0_80px_rgba(255,194,64,0.4)] flex flex-col items-center justify-center hover:scale-110 active:scale-95 transition-all duration-300"
+            >
+              <div className="absolute inset-2 rounded-full border-4 border-dashed border-[#2A0D12]/30 group-hover:rotate-180 transition-transform duration-1000 ease-in-out"></div>
+              <Dices size={80} className="text-[#2A0D12] mb-4 drop-shadow-md" />
+              <span className="text-[#2A0D12] font-black uppercase tracking-widest text-xl">Roll Dice</span>
+            </button>
+
+            {/* Playable Pre-Roll Mentor Cards */}
+            {preRollCards.length > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-2 max-w-lg">
+                {preRollCards.map(card => {
+                  if (card.effectType === 'risk_multiplier' && player?.riskMultiplierActive === gameState?.round) return null;
+                  return (
+                    <button
+                      key={card.id}
+                      onClick={() => {
+                        if (card.effectType === 'auto_roll_6') {
+                          setIsRolling(true);
+                          setHasRolled(true);
+                          setShowTable(false);
+                          setRollResult(null);
+                        }
+                        sendAction('play_mentor_card', { cardId: card.id });
+                      }}
+                      className="bg-[#2A0D12] hover:bg-[#3d141b] text-[#FFC240] border border-[#FFC240]/60 hover:border-[#FFC240] px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+                    >
+                      <span>{card.effectType === 'auto_roll_6' ? '🎯 Play Sure Shot (Lock Roll to 6)' : '⚡ Play Bold Moves (Double or Halve)'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="flex flex-col xl:flex-row items-stretch justify-center gap-8 w-full px-4">
-            
             {/* Left side info panel / best roll indicator */}
             {!isRolling && rollResult !== null && (
                 <div className="text-center animate-in slide-in-from-bottom-4 fade-in z-20 flex flex-col items-center justify-center">
@@ -329,9 +496,20 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
               <>
                 <div className="pointer-events-auto flex-grow w-full max-w-2xl bg-[#0a1914]/90 backdrop-blur-md rounded-3xl border-2 border-[#1c4d3d] p-6 md:p-10 shadow-[0_30px_100px_rgba(0,0,0,0.9)] animate-in slide-in-from-right-12 fade-in duration-700 relative z-20 flex flex-col justify-between">
                   <div>
-                    <h3 className="text-[#55ffb0] font-black uppercase tracking-widest text-xl mb-6 text-center drop-shadow-md">
+                    <h3 className="text-[#55ffb0] font-black uppercase tracking-widest text-xl mb-4 text-center drop-shadow-md">
                       Multiplier Matrix
                     </h3>
+                    
+                    {player?.mentorMultiplier > 0 && (
+                      <div className="bg-[#55ffb0]/20 border border-[#55ffb0] text-[#55ffb0] px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider mb-3 text-center shadow-[0_0_15px_rgba(85,255,176,0.3)]">
+                        ⭐ MENTOR MULTIPLIER ACTIVE: +{player.mentorMultiplier} TO ALL MULTIPLIERS!
+                      </div>
+                    )}
+                    {player?.riskMultiplierActive === gameState?.round && (
+                      <div className="bg-[#FFC240]/20 border border-[#FFC240] text-[#FFC240] px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider mb-3 text-center shadow-[0_0_15px_rgba(255,194,64,0.3)]">
+                        ⚡ BOLD MOVES ACTIVE: Doubled on 5+, Halved on 1–2
+                      </div>
+                    )}
                     
                     {/* Table Header */}
                     <div className="grid grid-cols-[60px_1fr_1fr_1fr_1fr] bg-[#1c4d3d]/50 rounded-t-xl text-[#a4d8c2] text-xs font-bold uppercase tracking-widest py-3 px-2 text-center mb-1 border-b border-[#55ffb0]/20">
@@ -343,26 +521,102 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                     </div>
                     
                     {/* Table Body */}
-                    <div className="flex flex-col gap-1 mb-8">
+                    <div className="flex flex-col gap-1 mb-6">
                       {[1,2,3,4,5,6,7,8,9,10].map((num) => {
                         const rowData = multiplierTable[num];
                         const isMatched = bestRoll === num;
                         return (
                           <div key={num} className={`grid grid-cols-[60px_1fr_1fr_1fr_1fr] text-sm font-mono py-2 px-2 text-center rounded-lg transition-all duration-300 ${isMatched ? 'bg-gradient-to-r from-[#55ffb0]/20 via-[#55ffb0]/40 to-[#55ffb0]/20 border border-[#55ffb0] shadow-[0_0_20px_rgba(85,255,176,0.3)] scale-105 z-10' : 'text-white/70 hover:bg-white/5 border border-transparent'}`}>
                             <div className={`font-black ${isMatched ? 'text-white text-base' : 'text-[#a4d8c2]'}`}>{num}</div>
-                            {rowData.map((val, idx) => (
-                              <div key={idx} className={`font-bold ${isMatched ? (val < 0 ? 'text-[#ff5555]' : 'text-[#55ffb0]') : (val < 0 ? 'text-[#ff5555]/70' : 'text-white/80')}`}>
-                                {val > 0 ? `+${val}` : val}
-                              </div>
-                            ))}
+                            {rowData.map((val, idx) => {
+                              const effectiveVal = isMatched && player?.mentorMultiplier ? val + player.mentorMultiplier : val;
+                              return (
+                                <div key={idx} className={`font-bold ${isMatched ? (effectiveVal < 0 ? 'text-[#ff5555]' : 'text-[#55ffb0]') : (val < 0 ? 'text-[#ff5555]/70' : 'text-white/80')}`}>
+                                  {effectiveVal > 0 ? `+${effectiveVal}` : effectiveVal}
+                                </div>
+                              );
+                            })}
                           </div>
                         );
                       })}
                     </div>
                   </div>
 
+                  {/* Playable Post-Roll Mentor Cards */}
+                  {postRollCards.length > 0 && (
+                    <div className="flex flex-col gap-2 w-full mb-4 bg-black/40 border border-[#1c4d3d] rounded-2xl p-3">
+                      <div className="text-[10px] text-[#a4d8c2] font-black uppercase tracking-widest text-center">
+                        Playable Mentor Cards
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-2">
+                        {postRollCards.map(card => {
+                          if (card.effectType === 'force_dice_6') {
+                            if (bestRoll >= 6) return null;
+                            return (
+                              <button
+                                key={card.id}
+                                onClick={() => sendAction('play_mentor_card', { cardId: card.id })}
+                                className="bg-gradient-to-r from-[#0d9488] to-[#0f766e] text-white border border-[#55ffb0]/50 hover:border-[#55ffb0] px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:scale-105 active:scale-95 transition-all"
+                              >
+                                🎲 Strategic Mentor (Roll {bestRoll} ➜ 6)
+                              </button>
+                            );
+                          }
+                          if (card.effectType === 'add_multiplier' || card.effectType === 'add_multiplier_2') {
+                            const boost = card.effectType === 'add_multiplier_2' ? 2 : 1;
+                            return (
+                              <button
+                                key={card.id}
+                                onClick={() => sendAction('play_mentor_card', { cardId: card.id })}
+                                className="bg-gradient-to-r from-[#b45309] to-[#d97706] text-white border border-[#FFC240]/50 hover:border-[#FFC240] px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:scale-105 active:scale-95 transition-all"
+                              >
+                                ⭐ {card.name} (+{boost} Multi)
+                              </button>
+                            );
+                          }
+                          if (card.effectType === 'double_revenue') {
+                            const firstCompName = player?.ownedCompanies?.[0]?.name;
+                            return (
+                              <button
+                                key={card.id}
+                                onClick={() => sendAction('play_mentor_card', { cardId: card.id, companyName: firstCompName })}
+                                className="bg-gradient-to-r from-[#ca8a04] to-[#eab308] text-black border border-white/50 hover:border-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:scale-105 active:scale-95 transition-all"
+                              >
+                                🪙 Golden Touch (Double {firstCompName || 'Rev'})
+                              </button>
+                            );
+                          }
+                          if (card.effectType === 'tech_revenue_boost') {
+                            const techComp = player?.ownedCompanies?.find((c) => ['WALLET','AGRI IoT','TRACEABILITY','ROBO - PACKAGING','SMART STORAGE','QUICK COMMERCE'].includes(c.name.toUpperCase())) || player?.ownedCompanies?.[0];
+                            return (
+                              <button
+                                key={card.id}
+                                onClick={() => sendAction('play_mentor_card', { cardId: card.id, companyName: techComp?.name })}
+                                className="bg-gradient-to-r from-[#0284c7] to-[#0ea5e9] text-white border border-white/50 hover:border-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:scale-105 active:scale-95 transition-all"
+                              >
+                                🚀 Tech Mentor (+$50K on {techComp?.name || 'Tech'})
+                              </button>
+                            );
+                          }
+                          if (card.effectType === 'cash_from_total_loans') {
+                            return (
+                              <button
+                                key={card.id}
+                                onClick={() => sendAction('play_mentor_card', { cardId: card.id })}
+                                className="bg-gradient-to-r from-[#15803d] to-[#16a34a] text-white border border-white/50 hover:border-white px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md hover:scale-105 active:scale-95 transition-all"
+                              >
+                                🏦 Bank Backed Boost (20% Loans)
+                              </button>
+                            );
+                          }
+                          return null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Action Buttons */}
-                  <div className="flex flex-col md:flex-row items-center justify-center gap-4 w-full mt-4">
+                  <div className="flex flex-col md:flex-row items-center justify-center gap-4 w-full mt-2">
                     
                     <button 
                       onClick={handleSecondChance}
@@ -506,8 +760,11 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                             <div className="text-[9px] text-[#a4d8c2] flex flex-wrap gap-x-2 gap-y-0.5 border-t border-[#1c4d3d]/50 pt-1 mt-0.5">
                               <span>Base: ${item.baseRev}K</span>
                               {item.hasPR && <span className="text-[#FFC240]">PR: x2</span>}
+                              {item.hasDoubleRev && <span className="text-[#FFC240]">Golden Touch: x2</span>}
+                              {item.hasTechBoost && <span className="text-[#00e1ff]">Tech Boost: +$50K</span>}
+                              {item.riskMultiEffect && <span className={item.riskMultiEffect === 'x2' ? "text-[#55ffb0]" : "text-[#ff5555]"}>Bold Moves: {item.riskMultiEffect}</span>}
                               {item.sharingPlayers > 1 && <span className="text-[#ff5555]">Shared: /{item.sharingPlayers} (${item.dividedRev}K)</span>}
-                              <span>Multi: <span className={item.multi < 0 ? "text-[#ff5555]" : "text-[#55ffb0]"}>{item.multi > 0 ? `+${item.multi}` : item.multi}</span></span>
+                              <span>Multi: <span className={item.multi < 0 ? "text-[#ff5555]" : "text-[#55ffb0]"}>{item.multi > 0 ? `+${item.multi}` : item.multi}</span>{player?.mentorMultiplier ? <span className="text-[#55ffb0] text-[8px] font-bold"> (+{player.mentorMultiplier} mentor)</span> : null}</span>
                               {item.royaltyPercentage > 0 && <span className="text-[#d4af37]">Royalty: -${item.royaltyCut}K ({item.royaltyPercentage}%)</span>}
                             </div>
                           </div>
@@ -530,6 +787,19 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
         )}
         
       </div>
+
+      {/* Mentor Inventory Modal Overlay */}
+      {showInventory && (
+        <MentorInventoryModal
+          onClose={() => setShowInventory(false)}
+          player={player}
+          players={gameState?.players || []}
+          onPlayCard={(cardId, targetPlayerId, companyName) => {
+            sendAction('play_mentor_card', { cardId, targetPlayerId, companyName });
+            setShowInventory(false);
+          }}
+        />
+      )}
     </div>
   );
 }

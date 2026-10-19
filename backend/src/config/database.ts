@@ -195,13 +195,24 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
   if (norm.includes("UPDATE USERS SET PROFILE_IMAGE_URL=")) {
     const image = params[0];
     const id = params[1];
-    const user = users.find(u => u.id === id);
-    if (user) {
+    let user = users.find(u => u.id === id);
+    if (!user) {
+      // Upsert: user authenticated via JWT but server restarted in-memory list
+      user = {
+        id,
+        username: "User",
+        email: `${id}@example.com`,
+        password_hash: "",
+        profile_image_url: image,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      users.push(user);
+    } else {
       user.profile_image_url = image;
       user.updated_at = new Date();
-      return { rows: [{ updated_at: user.updated_at }], rowCount: 1 };
     }
-    return { rows: [], rowCount: 0 };
+    return { rows: [{ updated_at: user.updated_at }], rowCount: 1 };
   }
 
   // Get profile image URL

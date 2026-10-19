@@ -2,14 +2,15 @@ import { Server as SocketServer, Socket } from "socket.io";
 import { Server as HttpServer } from "http";
 import { generateMentorDeck, MentorCard } from "./mentorCardsData";
 import { generateEventDeck, EventCard } from "./eventCardsData";
+import { DUMMY_INVESTORS, getActiveDummyPeriod, DummyInvestorProfile } from "./dummyInvestorData";
 
 
 // In-memory game rooms dictionary
 const rooms: Record<string, any> = {};
 
 const MULTIPLIER_TABLE: Record<number, number[]> = {
-  1:  [-2, -3, -4,  0],
-  2:  [-2, -2, -2, -1],
+  1:  [-2, -2, -1,  0],
+  2:  [-2, -1,  0,  1],
   3:  [-1, -1,  0,  1],
   4:  [-1,  0,  1,  2],
   5:  [ 0,  0,  1,  2],
@@ -17,10 +18,10 @@ const MULTIPLIER_TABLE: Record<number, number[]> = {
   7:  [ 1,  1,  2,  3],
   8:  [ 1,  2,  3,  4],
   9:  [ 2,  2,  3,  4],
-  10: [ 2,  2,  4,  5]
+  10: [ 2,  3,  4,  5]
 };
 
-const COMPANY_DATA_MAP: Record<string, number[][]> = {
+export const COMPANY_DATA_MAP: Record<string, number[][]> = {
   'CONTRACT FARMING': [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]],
   'AGRI IoT': [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]],
   'WALLET': [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]],
@@ -32,7 +33,7 @@ const COMPANY_DATA_MAP: Record<string, number[][]> = {
   'ROBO - PACKAGING': [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]]
 };
 
-const getStageIndex = (stage: string | number): number => {
+export const getStageIndex = (stage: string | number): number => {
   if (stage === 'L' || stage === 0) return 0;
   if (stage === 'R' || stage === 1) return 1;
   if (stage === 'G' || stage === 2) return 2;
@@ -40,50 +41,149 @@ const getStageIndex = (stage: string | number): number => {
   return 0;
 };
 
-const computeTotalRevenue = (player: any, room: any, roll: number): number => {
-  let total = 0;
-  player.ownedCompanies.forEach((pCompany: any) => {
-     let sharingPlayers = 0;
-     room.players.forEach((otherP: any) => {
-        const theirComp = otherP.ownedCompanies.find((c: any) => c.name === pCompany.name);
-        if (theirComp && getStageIndex(theirComp.stage) === getStageIndex(pCompany.stage)) {
-          sharingPlayers += 1;
+export interface CompanyRevenueBreakdown {
+  companyName: string;
+  baseRev: number;
+  projectedRev: number;
+  hasPR: boolean;
+  sharingPlayers: number;
+  dividedRev: number;
+  teamLevel: number;
+  multi: number;
+  actualRevenue: number;
+  royaltyCut: number;
+  royaltyInvestorId?: string;
+  royaltyInvestorName?: string;
+  founderNetRevenue: number;
+}
+
+export const calculateCompanyRevenue = (
+  pCompany: any,
+  player: any,
+  room: any,
+  roll: number
+): CompanyRevenueBreakdown => {
+  const dataRow = COMPANY_DATA_MAP[pCompany.name];
+  const stageIndex = getStageIndex(pCompany.stage);
+  const baseRev = dataRow ? dataRow[stageIndex][1] : (pCompany.revenue || 0);
+
+  // 1. PR Services doubles projected revenue for the round
+  const hasPR = !!pCompany.prBoughtRound && pCompany.prBoughtRound === room.round;
+  const projectedRev = hasPR ? baseRev * 2 : baseRev;
+
+  // 2. Count sharing players (other founders who own this company at the exact same stage)
+  // In Quick Mode: Ignore revenue sharing (sharingPlayers = 1), 100% of projected revenue.
+  const isQuickMode = room.mode === 'short' || room.mode === 'quick';
+  let sharingPlayers = 1;
+  if (!isQuickMode) {
+    let count = 0;
+    (room.players || []).forEach((otherP: any) => {
+      if (otherP.role?.toLowerCase() === 'founder') {
+        const theirComp = otherP.ownedCompanies?.find(
+          (c: any) => c.name?.toUpperCase().trim() === pCompany.name?.toUpperCase().trim()
+        );
+        if (theirComp && getStageIndex(theirComp.stage) === stageIndex) {
+          count += 1;
         }
-     });
+      }
+    });
+    if (count > 1) sharingPlayers = count;
+  }
 
-     const dataRow = COMPANY_DATA_MAP[pCompany.name];
-     if (!dataRow) return;
-     const stageIndex = getStageIndex(pCompany.stage);
-     const baseRev = dataRow[stageIndex][1];
+  // 3. Revenue sharing:
+  // In Quick Mode: Ignore revenue sharing, 100% of projected revenue.
+  // In Standard Mode: Divide projected revenue equally among sharing founders.
+  const dividedRev = (!isQuickMode && sharingPlayers > 1)
+    ? Math.floor(projectedRev / sharingPlayers)
+    : projectedRev;
 
-     const teamIndex = (pCompany.team === 'RN' || player.color === '#ef4444') ? 0 :
-                        (pCompany.team === 'GT' || player.color === '#55ffb0') ? 1 :
-                        (pCompany.team === 'GD' || player.color === '#d4af37') ? 2 : 3;
+  // 4. Team Level lookup: Level 1..4 -> columns 0..3
+  const teamLevel = Math.min(4, Math.max(1, Number(pCompany.teamLevel || pCompany.team) || 1));
+  const teamIndex = teamLevel - 1;
 
-     const currentRoll = roll || 2;
-     let finalMulti = MULTIPLIER_TABLE[currentRoll]?.[teamIndex] ?? 1;
+  const currentRoll = Math.min(10, Math.max(1, Number(roll) || 2));
+  let multi = MULTIPLIER_TABLE[currentRoll]?.[teamIndex] ?? 1;
 
-     if (player.mentorMultiplier) {
-       finalMulti += player.mentorMultiplier;
-     }
+  if (player.mentorMultiplier) {
+    multi += player.mentorMultiplier;
+  }
 
-     const dividedRev = sharingPlayers > 1 ? Math.floor(baseRev / 2) : baseRev;
-     let actualRevenue = dividedRev * finalMulti;
+  // 5. Initial Actual Revenue
+  let actualRevenue = dividedRev * multi;
 
-     if (pCompany.doubleRevenueRound === room.round) {
-       actualRevenue *= 2;
-     }
-     if (pCompany.techBoostRound === room.round) {
-       actualRevenue += 50;
-     }
-     if (player.riskMultiplierActive === room.round) {
-       if (roll >= 5) {
-         actualRevenue *= 2;
-       } else if (roll <= 2) {
-         actualRevenue = Math.floor(actualRevenue / 2);
-       }
-     }
-     total += actualRevenue;
+  // Mentor card modifiers
+  if (pCompany.doubleRevenueRound === room.round) {
+    actualRevenue *= 2;
+  }
+  if (pCompany.techBoostRound === room.round) {
+    actualRevenue += 50;
+  }
+  if (player.riskMultiplierActive === room.round) {
+    if (currentRoll >= 5) {
+      actualRevenue *= 2;
+    } else if (currentRoll <= 2) {
+      actualRevenue = Math.floor(actualRevenue / 2);
+    }
+  }
+
+  // 6. Investor Royalty: only applies if actualRevenue > 0
+  let royaltyCut = 0;
+  let royaltyInvestorId: string | undefined;
+  let royaltyInvestorName: string | undefined;
+
+  if (actualRevenue > 0 && Array.isArray(room.royaltyAgreements)) {
+    room.royaltyAgreements.forEach((agr: any) => {
+      const isThisFounder = (agr.founderId === player.id) ||
+        (agr.proposer === player.name) ||
+        (agr.partner === player.name);
+
+      if (!isThisFounder) return;
+
+      const pct = Number(agr.royalty || (agr.percentage && !agr.equity ? agr.percentage : 0));
+      if (pct <= 0) return;
+
+      if (agr.companyName && agr.companyName.toUpperCase().trim() !== pCompany.name?.toUpperCase().trim()) {
+        return;
+      }
+
+      const investor = (room.players || []).find((p: any) =>
+        p.id === agr.investorId ||
+        (p.name !== player.name && (p.name === agr.partner || p.name === agr.proposer))
+      );
+
+      if (investor && investor.role?.toLowerCase() === 'investor') {
+        const cut = Math.floor((actualRevenue * pct) / 100);
+        royaltyCut += cut;
+        royaltyInvestorId = investor.id;
+        royaltyInvestorName = investor.name;
+      }
+    });
+  }
+
+  const founderNetRevenue = actualRevenue - royaltyCut;
+
+  return {
+    companyName: pCompany.name,
+    baseRev,
+    projectedRev,
+    hasPR,
+    sharingPlayers,
+    dividedRev,
+    teamLevel,
+    multi,
+    actualRevenue,
+    royaltyCut,
+    royaltyInvestorId,
+    royaltyInvestorName,
+    founderNetRevenue
+  };
+};
+
+export const computeTotalRevenue = (player: any, room: any, roll: number): number => {
+  let total = 0;
+  (player.ownedCompanies || []).forEach((pCompany: any) => {
+    const res = calculateCompanyRevenue(pCompany, player, room, roll);
+    total += res.founderNetRevenue;
   });
   return total;
 };
@@ -99,15 +199,162 @@ function shuffle<T>(array: T[]): T[] {
   return array;
 }
 
-const createEmptyRoom = (maxPlayers = 4) => {
-  const eventDeck = shuffle(generateEventDeck());
+export function calculateFinalScores(room: any) {
+  const scores: any[] = [];
+  const players = room.players || [];
+  const agreements = room.royaltyAgreements || [];
+
+  // Map of investorId -> accumulated equity valuation from deals
+  const investorEquityMap: Record<string, number> = {};
+  players.forEach((p: any) => {
+    if (p.role?.toLowerCase() === 'investor') {
+      investorEquityMap[p.id] = 0;
+    }
+  });
+
+  // Calculate founder retained valuations and distribute investor equity
+  const founderEquityMap: Record<string, number> = {};
+
+  players.forEach((founder: any) => {
+    if (founder.role?.toLowerCase() === 'founder') {
+      let totalFounderRetainedValuation = 0;
+      const companies = founder.ownedCompanies || [];
+
+      companies.forEach((comp: any) => {
+        const dataRow = COMPANY_DATA_MAP[comp.name];
+        const stageIdx = getStageIndex(comp.stage);
+        let compValuation = dataRow ? dataRow[stageIdx][2] : (comp.valuation || 0);
+        if (comp.endGameValuationBoost) {
+          compValuation = Math.round(compValuation * 1.2);
+        }
+
+        let equitySoldPct = 0;
+
+        agreements.forEach((agr: any) => {
+          const isThisFounder = (agr.founderId === founder.id) ||
+            (agr.proposer === founder.name) ||
+            (agr.partner === founder.name);
+
+          if (!isThisFounder) return;
+
+          const eqPct = Number(agr.equity || (agr.percentage && !agr.royalty ? agr.percentage : 0));
+          if (eqPct <= 0) return;
+
+          if (agr.companyName && agr.companyName.toUpperCase() !== comp.name.toUpperCase()) {
+            return;
+          }
+
+          equitySoldPct += eqPct;
+
+          const investor = players.find((p: any) => 
+            p.id === agr.investorId || 
+            (p.name !== founder.name && (p.name === agr.partner || p.name === agr.proposer))
+          );
+
+          if (investor) {
+            const investorValShare = Math.round(compValuation * (eqPct / 100));
+            investorEquityMap[investor.id] = (investorEquityMap[investor.id] || 0) + investorValShare;
+          }
+        });
+
+        const retainedPct = Math.max(0, 100 - equitySoldPct);
+        const retainedVal = Math.round(compValuation * (retainedPct / 100));
+        totalFounderRetainedValuation += retainedVal;
+      });
+
+      founderEquityMap[founder.id] = totalFounderRetainedValuation;
+    }
+  });
+
+  players.forEach((player: any) => {
+    if (player.isDummy) return;
+    const isInvestor = player.role?.toLowerCase() === 'investor';
+    const equityVal = isInvestor 
+      ? (investorEquityMap[player.id] || 0) 
+      : (founderEquityMap[player.id] || 0);
+
+    const cashVal = Number(player.cash) || 0;
+    const loansVal = (Number(player.loan) || 0) + (Number(player.survivalLoan) || 0) + (Number(player.investorDebt) || 0);
+    const receivables = isInvestor ? (Number(player.investorLoansGiven) || 0) : 0;
+    const netValue = equityVal + cashVal + receivables - loansVal;
+
+    scores.push({
+      id: player.id,
+      name: player.name,
+      role: isInvestor ? 'Investor' : 'Founder',
+      color: player.color,
+      avatarId: player.avatarId || (isInvestor ? 5 : 1),
+      cash: cashVal,
+      equityValuation: equityVal,
+      loans: loansVal,
+      receivables: receivables,
+      netValue: netValue
+    });
+  });
+
+  // Sort: 1) netValue desc, 2) equityValuation desc, 3) cash desc, 4) loans asc
+  scores.sort((a, b) => {
+    if (b.netValue !== a.netValue) return b.netValue - a.netValue;
+    if (b.equityValuation !== a.equityValuation) return b.equityValuation - a.equityValuation;
+    if (b.cash !== a.cash) return b.cash - a.cash;
+    return a.loans - b.loans;
+  });
+
+  scores.forEach((s, idx) => {
+    s.rank = idx + 1;
+  });
+
+  const founders = scores.filter(s => s.role.toLowerCase() === 'founder');
+  const investors = scores.filter(s => s.role.toLowerCase() === 'investor');
+
+  const topFounder = founders.length > 0 ? founders[0] : null;
+  const topInvestor = investors.length > 0 ? investors[0] : null;
+
+  const winners: any[] = [];
+
+  const realPlayers = players.filter((p: any) => !p.isDummy);
+
+  if (realPlayers.length >= 4 && topInvestor && !topInvestor.isDummy) {
+    if (topFounder) {
+      topFounder.isFounderWinner = true;
+      winners.push(topFounder);
+    }
+    topInvestor.isInvestorWinner = true;
+    winners.push(topInvestor);
+  } else {
+    if (topFounder) {
+      topFounder.isFounderWinner = true;
+      winners.push(topFounder);
+    }
+  }
+
+  return { scores, winners };
+}
+
+export const getStartingTeamTokenPool = (playerCount: number = 4) => {
+  const pools: Record<number, { 2: number; 3: number; 4: number }> = {
+    2: { 2: 4, 3: 2, 4: 1 },
+    3: { 2: 4, 3: 3, 4: 1 },
+    4: { 2: 6, 3: 3, 4: 2 },
+    5: { 2: 6, 3: 4, 4: 2 },
+    6: { 2: 8, 3: 4, 4: 3 }
+  };
+  return pools[playerCount] ? { ...pools[playerCount] } : { 2: 12, 3: 8, 4: 4 };
+};
+
+const createEmptyRoom = (maxPlayers = 4, mode = 'standard') => {
+  const isQuick = mode === 'quick' || mode === 'short';
+  const fullEventDeck = shuffle(generateEventDeck());
+  const eventCardsToPlace = isQuick ? 1 : 2;
+  const eventDeck = fullEventDeck.slice(0, eventCardsToPlace);
   return {
     players: [] as any[],
     deals: [] as any[],
     royaltyAgreements: [] as any[],
     mentorDeck: shuffle(generateMentorDeck()),
     eventDeck: eventDeck,
-    activeEvent: eventDeck.shift() as EventCard | undefined,
+    activeEvent: undefined as EventCard | undefined,
+    dummyInvestor: null as any,
     capital: 100,
     globalLoan: 10,
     actionCount: 0,
@@ -117,7 +364,13 @@ const createEmptyRoom = (maxPlayers = 4) => {
     turn: 'All',
     phase2TurnIndex: 0,
     isStarted: false,
-    maxPlayers: maxPlayers
+    maxPlayers: maxPlayers,
+    mode: mode,
+    isFinished: false,
+    finalScores: null as any,
+    winners: null as any,
+    teamTokenPool: { 2: 12, 3: 8, 4: 4 } as Record<number, number>,
+    teamTokenPoolModified: false
   };
 };
 
@@ -170,47 +423,85 @@ const io = new SocketServer(server, {
 
     switch (effect) {
       case 'free_stage_up': {
-        const comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName.toUpperCase());
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp) {
+          comp = player.ownedCompanies.find((c: any) => getStageIndex(c.stage) < 3);
+        }
         if (comp) {
           const currentIndex = getStageIndex(comp.stage);
           if (currentIndex < 3) {
-            comp.stage = ['L', 'R', 'G', 'S'][currentIndex + 1];
-            player.valuation += (comp.valuation / 1000);
-            player.capital += comp.valuation / 1000;
+            const nextStageIndex = currentIndex + 1;
+            const dataRow = COMPANY_DATA_MAP[comp.name];
+            const nextValuation = dataRow ? dataRow[nextStageIndex][2] : comp.valuation;
+            const oldValuation = comp.valuation || 0;
+            comp.stage = ['L', 'R', 'G', 'S'][nextStageIndex];
+            comp.valuation = nextValuation;
+            player.valuation = player.valuation - (oldValuation / 1000) + (nextValuation / 1000);
+            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
             io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name}'s ${comp.name} advanced to Stage ${comp.stage} for free!`);
           } else {
             success = false;
             if (socket) socket.emit('notification', 'Company is already at maximum stage.');
           }
         } else {
-          success = false;
-          if (socket) socket.emit('notification', 'Company not found.');
+          if (!player.mentorCards.some((c: any) => c.id === card.id)) {
+            player.mentorCards.push(card);
+            io.to(room.id).emit('notification', `MENTOR EFFECT: ${card.name} stored in inventory (activate once you own an upgradable company).`);
+          }
         }
         break;
       }
       case 'add_multiplier': {
-        player.mentorMultiplier = 1;
+        player.mentorMultiplier = (player.mentorMultiplier || 0) + 1;
         io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} gets +1 on company multiplier next roll!`);
         break;
       }
       case 'add_multiplier_2': {
-        player.mentorMultiplier = 2;
+        player.mentorMultiplier = (player.mentorMultiplier || 0) + 2;
         io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} gets +2 on company multiplier next roll!`);
         break;
       }
       case 'free_stage_or_cash': {
-        // default to 10k cash
-        player.cash += 10;
-        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000);
-        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} claimed $10K cash option!`);
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp && player.ownedCompanies.length > 0) {
+          comp = player.ownedCompanies.find((c: any) => getStageIndex(c.stage) < 3);
+        }
+        if (comp && getStageIndex(comp.stage) < 3) {
+          const currentIndex = getStageIndex(comp.stage);
+          const nextStageIndex = currentIndex + 1;
+          const dataRow = COMPANY_DATA_MAP[comp.name];
+          const nextValuation = dataRow ? dataRow[nextStageIndex][2] : comp.valuation;
+          const oldValuation = comp.valuation || 0;
+          comp.stage = ['L', 'R', 'G', 'S'][nextStageIndex];
+          comp.valuation = nextValuation;
+          player.valuation = player.valuation - (oldValuation / 1000) + (nextValuation / 1000);
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+          io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name}'s ${comp.name} advanced to Stage ${comp.stage} for free!`);
+        } else {
+          player.cash += 10;
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+          io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} claimed $10K cash option!`);
+        }
         break;
       }
       case 'free_pr': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} gets free PR for ${companyName}!`);
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (comp) {
+          comp.freePRRound = room.round;
+        } else {
+          player.freePRRound = room.round;
+        }
+        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} gets free PR ${comp ? 'for ' + comp.name : ''} this round!`);
         break;
       }
       case 'free_workforce': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} gets free workforce upgrades this round!`);
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (comp) {
+          comp.freeWorkforceRound = room.round;
+        } else {
+          player.freeWorkforceRound = room.round;
+        }
+        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} gets free workforce upgrade ${comp ? 'for ' + comp.name : ''} this round!`);
         break;
       }
       case 'shield_event': {
@@ -219,20 +510,23 @@ const io = new SocketServer(server, {
         break;
       }
       case 'peek_events': {
-        const topTwo = room.eventDeck.slice(0, 2);
+        const topTwo = (room.eventDeck || []).slice(0, 2);
         if (socket) {
-          socket.emit('notification', `PEEK EVENTS: Next is ${topTwo.map((e: any) => e.name).join(' & ')}`);
+          socket.emit('notification', `PEEK EVENTS: Next is ${topTwo.map((e: any) => e.name).join(' & ') || 'None'}`);
         }
         break;
       }
       case 'peek_event_1': {
-        const topOne = room.eventDeck[0];
+        const topOne = (room.eventDeck || [])[0];
         if (socket) {
           socket.emit('notification', `PEEK EVENT: Next is ${topOne ? topOne.name : 'None'}`);
         }
         break;
       }
       case 'draw_two_cards': {
+        if (!room.mentorDeck || room.mentorDeck.length < 2) {
+          room.mentorDeck = [...(room.mentorDeck || []), ...shuffle(generateMentorDeck())];
+        }
         const cardsDrawn = [room.mentorDeck.shift(), room.mentorDeck.shift()].filter(Boolean);
         player.mentorCards.push(...cardsDrawn);
         io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} drew 2 Mentor cards!`);
@@ -244,19 +538,66 @@ const io = new SocketServer(server, {
         break;
       }
       case 'quick_launch_retain': {
-        const compTemplate = { name: "CONTRACT FARMING", icon: "/mat-icons/mat-icon-contract-farming.png", invest: 50, revenue: 80, valuation: 100, loan: 10 };
-        const newComp = { ...compTemplate, stage: 'S', team: player.color === '#ef4444' ? 'RN' : 'GT' };
+        if ((player.ownedCompanies || []).length >= 4) {
+          if (socket) socket.emit('notification', 'ACTION REJECTED: Maximum of 4 company launches allowed per Founder.');
+          success = false;
+          break;
+        }
+        let targetName = companyName;
+        if (!targetName || !COMPANY_DATA_MAP[targetName] || player.ownedCompanies.some((c: any) => c.name.toUpperCase() === targetName.toUpperCase())) {
+          const unowned = Object.keys(COMPANY_DATA_MAP).find(name => !player.ownedCompanies.some((c: any) => c.name.toUpperCase() === name.toUpperCase()));
+          if (unowned) targetName = unowned;
+        }
+        if (!targetName || !COMPANY_DATA_MAP[targetName]) {
+          if (socket) socket.emit('notification', 'ACTION REJECTED: No available company to launch.');
+          success = false;
+          break;
+        }
+        const dataRow = COMPANY_DATA_MAP[targetName];
+        const retainCost = dataRow[1][0];
+        if (player.cash < retainCost) {
+          if (socket) socket.emit('notification', `ACTION REJECTED: Insufficient cash ($${retainCost}K needed) to launch at Retain.`);
+          success = false;
+          break;
+        }
+        const retainValuation = dataRow[1][2];
+        const retainRevenue = dataRow[1][1];
+
+        const icons: Record<string, string> = {
+          'CONTRACT FARMING': '/mat-icons/mat-icon-contract-farming.png',
+          'AGRI IoT': '/mat-icons/mat-icon-agri-iot.png',
+          'WALLET': '/mat-icons/mat-icon-wallet.png',
+          'SNACKS': '/mat-icons/mat-icon-snacks.png',
+          'QUICK COMMERCE': '/mat-icons/mat-icon-quick-commerce.png',
+          'SMART STORAGE': '/mat-icons/mat-icon-smart-storage.png',
+          'RESTRO - CHAIN': '/mat-icons/mat-icon-restro-chain.png',
+          'TRACEABILITY': '/mat-icons/mat-icon-traceability.png',
+          'ROBO - PACKAGING': '/mat-icons/mat-icon-robo-packaging.png'
+        };
+
+        const newComp = {
+          name: targetName,
+          icon: icons[targetName] || '🏢',
+          invest: retainCost,
+          revenue: retainRevenue,
+          valuation: retainValuation,
+          loan: 0,
+          stage: 'R',
+          team: 1,
+          teamLevel: 1,
+          equityGiven: 0
+        };
         player.ownedCompanies.push(newComp);
-        player.cash -= 50;
-        player.valuation += (newComp.valuation / 1000);
-        player.capital += (newComp.valuation - newComp.loan) / 1000;
-        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} quick-launched ${newComp.name} at Scale!`);
+        player.cash -= retainCost;
+        player.valuation += (retainValuation / 1000);
+        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} quick-launched ${newComp.name} directly at Retain (Stage R)!`);
         break;
       }
       case 'extra_loan': {
         player.cash += 50;
-        player.loan += 50;
-        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000);
+        player.loan = (player.loan || 0) + 50;
+        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
         io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} borrowed extra $50K from the bank.`);
         break;
       }
@@ -267,27 +608,31 @@ const io = new SocketServer(server, {
       }
       case 'force_dice_6': {
         player.currentPhase3Roll = 6;
+        io.to(room.id).emit('initial_roll_result', { playerId: player.id, roll: 6 });
         io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} locked roll to 6!`);
         break;
       }
       case 'steal_cash': {
         room.players.forEach((p: any) => {
           if (p.id !== player.id) {
-            p.cash = Math.max(0, p.cash - 5);
-            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000);
-            player.cash += 5;
+            const cut = Math.min(5, p.cash);
+            p.cash -= cut;
+            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
+            player.cash += cut;
           }
         });
-        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000);
-        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} collected $5K from every player!`);
+        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} collected cash from players!`);
         break;
       }
       case 'half_cost_stage_up': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} got half cost stage up!`);
+        player.hasHalfCostStageUp = true;
+        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} will pay half cost on next stage up!`);
         break;
       }
       case 'double_revenue': {
-        const comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName.toUpperCase());
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp && player.ownedCompanies.length > 0) comp = player.ownedCompanies[0];
         if (comp) {
           comp.doubleRevenueRound = room.round;
           io.to(room.id).emit('notification', `MENTOR EFFECT: Double revenue set on ${comp.name}!`);
@@ -297,11 +642,22 @@ const io = new SocketServer(server, {
         break;
       }
       case 'half_cost_all_stages': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: Half upgrades cost set for ${companyName}!`);
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (comp) {
+          comp.halfCostAllStagesRound = room.round;
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Half stage upgrade cost set for ${comp.name}!`);
+        } else {
+          player.halfCostAllStagesCompany = companyName || (player.ownedCompanies[0]?.name);
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Half stage upgrade cost set for ${player.name}!`);
+        }
         break;
       }
       case 'tech_revenue_boost': {
-        const comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName.toUpperCase());
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp && player.ownedCompanies.length > 0) {
+          const techNames = ['WALLET', 'AGRI IoT', 'TRACEABILITY', 'ROBO - PACKAGING', 'SMART STORAGE', 'QUICK COMMERCE'];
+          comp = player.ownedCompanies.find((c: any) => techNames.includes(c.name.toUpperCase())) || player.ownedCompanies[0];
+        }
         if (comp) {
           comp.techBoostRound = room.round;
           io.to(room.id).emit('notification', `MENTOR EFFECT: Tech boost +$50K set on ${comp.name}!`);
@@ -318,26 +674,93 @@ const io = new SocketServer(server, {
         break;
       }
       case 'skip_rival_turn': {
-        const target = room.players.find((p: any) => p.id === targetPlayerId);
+        let target = room.players.find((p: any) => p.id === targetPlayerId && p.id !== player.id);
+        if (!target) {
+          const rivals = room.players.filter((p: any) => p.id !== player.id && !p.isDummy);
+          if (rivals.length > 0) {
+            rivals.sort((a: any, b: any) => (b.cash + b.valuation * 1000) - (a.cash + a.valuation * 1000));
+            target = rivals[0];
+          }
+        }
         if (target) {
           target.isLocked = true;
-          io.to(room.id).emit('notification', `MENTOR EFFECT: ${target.name}'s turn was skipped!`);
+          io.to(room.id).emit('notification', `MENTOR EFFECT: ${target.name}'s turn was skipped by Boardroom Shark!`);
         } else {
           success = false;
         }
         break;
       }
       case 'reduce_tax': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: Tax reduced by 50% for ${companyName}!`);
+        player.taxDiscountRound = room.round;
+        io.to(room.id).emit('notification', `MENTOR EFFECT: Tax and fees reduced by 50% for ${player.name} this round!`);
         break;
       }
       case 'free_tech_invest': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: Free tech investment unlocked!`);
+        const techCompanies = ['WALLET', 'AGRI IoT', 'TRACEABILITY', 'ROBO - PACKAGING', 'SMART STORAGE', 'QUICK COMMERCE'];
+        let techComp = (player.ownedCompanies || []).find((c: any) => techCompanies.includes(c.name.toUpperCase()) && getStageIndex(c.stage) < 3);
+        if (techComp) {
+          const currentIndex = getStageIndex(techComp.stage);
+          const nextStageIndex = currentIndex + 1;
+          const dataRow = COMPANY_DATA_MAP[techComp.name];
+          const nextValuation = dataRow ? dataRow[nextStageIndex][2] : techComp.valuation;
+          const oldValuation = techComp.valuation || 0;
+          techComp.stage = ['L', 'R', 'G', 'S'][nextStageIndex];
+          techComp.valuation = nextValuation;
+          player.valuation = player.valuation - (oldValuation / 1000) + (nextValuation / 1000);
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Tech Unicorn advanced ${techComp.name} to Stage ${techComp.stage} for free!`);
+        } else if ((player.ownedCompanies || []).length < 4) {
+          const unownedTech = techCompanies.find(name => !player.ownedCompanies.some((c: any) => c.name.toUpperCase() === name.toUpperCase()));
+          if (unownedTech && COMPANY_DATA_MAP[unownedTech]) {
+            const dataRow = COMPANY_DATA_MAP[unownedTech];
+            const icons: Record<string, string> = {
+              'CONTRACT FARMING': '/mat-icons/mat-icon-contract-farming.png',
+              'AGRI IoT': '/mat-icons/mat-icon-agri-iot.png',
+              'WALLET': '/mat-icons/mat-icon-wallet.png',
+              'SNACKS': '/mat-icons/mat-icon-snacks.png',
+              'QUICK COMMERCE': '/mat-icons/mat-icon-quick-commerce.png',
+              'SMART STORAGE': '/mat-icons/mat-icon-smart-storage.png',
+              'RESTRO - CHAIN': '/mat-icons/mat-icon-restro-chain.png',
+              'TRACEABILITY': '/mat-icons/mat-icon-traceability.png',
+              'ROBO - PACKAGING': '/mat-icons/mat-icon-robo-packaging.png'
+            };
+            const newTechComp = {
+              name: unownedTech,
+              icon: icons[unownedTech] || '🏢',
+              invest: 0,
+              revenue: dataRow[0][1],
+              valuation: dataRow[0][2],
+              loan: 0,
+              stage: 'L',
+              team: 1,
+              teamLevel: 1,
+              equityGiven: 0
+            };
+            player.ownedCompanies.push(newTechComp);
+            player.valuation += (newTechComp.valuation / 1000);
+            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+            io.to(room.id).emit('notification', `MENTOR EFFECT: Tech Unicorn launched ${newTechComp.name} for free!`);
+          } else {
+            player.cash += 50;
+            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+            io.to(room.id).emit('notification', `MENTOR EFFECT: Tech Unicorn granted $50K dividend!`);
+          }
+        } else {
+          player.cash += 50;
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Tech Unicorn granted $50K dividend!`);
+        }
         break;
       }
       case 'mutual_draw': {
-        const target = room.players.find((p: any) => p.id === targetPlayerId);
+        let target = room.players.find((p: any) => p.id === targetPlayerId && p.id !== player.id);
+        if (!target) {
+          target = room.players.find((p: any) => p.id !== player.id && !p.isDummy);
+        }
         if (target) {
+          if (!room.mentorDeck || room.mentorDeck.length < 2) {
+            room.mentorDeck = [...(room.mentorDeck || []), ...shuffle(generateMentorDeck())];
+          }
           const card1 = room.mentorDeck.shift();
           const card2 = room.mentorDeck.shift();
           if (card1) player.mentorCards.push(card1);
@@ -349,11 +772,19 @@ const io = new SocketServer(server, {
         break;
       }
       case 'halve_rival_cash': {
-        const target = room.players.find((p: any) => p.id === targetPlayerId);
+        let target = room.players.find((p: any) => p.id === targetPlayerId && p.id !== player.id);
+        if (!target) {
+          const rivals = room.players.filter((p: any) => p.id !== player.id && !p.isDummy);
+          if (rivals.length > 0) {
+            rivals.sort((a: any, b: any) => b.cash - a.cash);
+            target = rivals[0];
+          }
+        }
         if (target) {
-          target.cash = Math.floor(target.cash / 2);
-          target.capital = (target.cash / 1000) + target.valuation - (target.loan / 1000);
-          io.to(room.id).emit('notification', `MENTOR EFFECT: ${target.name}'s cash was halved!`);
+          const lost = Math.ceil(target.cash / 2);
+          target.cash -= lost;
+          target.capital = (target.cash / 1000) + target.valuation - (target.loan / 1000) - ((target.survivalLoan || 0) / 1000) - ((target.investorDebt || 0) / 1000);
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Disruptor halved ${target.name}'s cash (-${lost}K)!`);
         } else {
           success = false;
         }
@@ -361,33 +792,44 @@ const io = new SocketServer(server, {
       }
       case 'auto_roll_6': {
         player.currentPhase3Roll = 6;
+        io.to(room.id).emit('initial_roll_result', { playerId: player.id, roll: 6 });
         io.to(room.id).emit('notification', `MENTOR EFFECT: Roll auto-set to 6!`);
         break;
       }
       case 'cash_from_total_loans': {
         let totalLoans = 0;
         room.players.forEach((p: any) => {
-          totalLoans += p.loan;
+          totalLoans += (p.loan || 0);
         });
         const bonus = Math.round(totalLoans * 0.20);
         player.cash += bonus;
-        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000);
+        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
         io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} received $${bonus}K from total loan volume!`);
         break;
       }
       case 'end_game_valuation_boost': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: Valuation boost set for ${companyName} at game end!`);
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp && player.ownedCompanies.length > 0) {
+          comp = player.ownedCompanies[0];
+        }
+        if (comp) {
+          comp.endGameValuationBoost = true;
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Valuation boost (+20%) locked in for ${comp.name} at game end!`);
+        } else {
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Valuation boost set for ${companyName || 'company'} at game end!`);
+        }
         break;
       }
       case 'sell_company_half_price': {
-        const comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName.toUpperCase());
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp && player.ownedCompanies.length > 0) comp = player.ownedCompanies[0];
         if (comp) {
           player.ownedCompanies = player.ownedCompanies.filter((c: any) => c.name !== comp.name);
-          const refund = Math.floor(comp.valuation / 2);
+          const refund = Math.floor((comp.valuation || 0) / 2);
           player.cash += refund;
-          player.valuation -= (comp.valuation / 1000);
-          player.loan -= comp.loan;
-          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000);
+          player.valuation -= ((comp.valuation || 0) / 1000);
+          player.loan = Math.max(0, (player.loan || 0) - (comp.loan || 0));
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
           io.to(room.id).emit('notification', `MENTOR EFFECT: Sold ${comp.name} for $${refund}K.`);
         } else {
           success = false;
@@ -396,28 +838,42 @@ const io = new SocketServer(server, {
       }
       case 'block_loans': {
         player.loansBlocked = true;
-        io.to(room.id).emit('notification', `MENTOR EFFECT: Loans blocked for ${player.name}!`);
+        player.loansBlockedRound = room.round;
+        io.to(room.id).emit('notification', `MENTOR EFFECT: Loans blocked for ${player.name} this round!`);
         break;
       }
       case 'lose_cash_20k': {
-        player.cash = Math.max(0, player.cash - 20);
-        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000);
+        player.cash -= 20;
+        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
         io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} lost $20K cash.`);
+        if (player.cash < 0) {
+          const shortfall = Math.abs(player.cash);
+          if (socket) socket.emit('trigger_bankruptcy', { shortfall });
+          io.to(room.id).emit('notification', `BANKRUPTCY ALERT: ${player.name} went bankrupt by -$${shortfall}K!`);
+        }
         break;
       }
       case 'block_stage_up': {
-        io.to(room.id).emit('notification', `MENTOR EFFECT: Upgrades blocked for ${companyName}!`);
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp && player.ownedCompanies.length > 0) comp = player.ownedCompanies[0];
+        if (comp) {
+          comp.stageUpBlockedRound = room.round;
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Stage upgrades blocked for ${comp.name} this round!`);
+        } else {
+          io.to(room.id).emit('notification', `MENTOR EFFECT: Upgrades blocked for ${companyName || 'company'}!`);
+        }
         break;
       }
       case 'forced_sale': {
-        const comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName.toUpperCase());
+        let comp = player.ownedCompanies.find((c: any) => c.name.toUpperCase() === companyName?.toUpperCase());
+        if (!comp && player.ownedCompanies.length > 0) comp = player.ownedCompanies[0];
         if (comp) {
           player.ownedCompanies = player.ownedCompanies.filter((c: any) => c.name !== comp.name);
-          const refund = Math.floor(comp.valuation / 2);
+          const refund = Math.floor((comp.valuation || 0) / 2);
           player.cash += refund;
-          player.valuation -= (comp.valuation / 1000);
-          player.loan -= comp.loan;
-          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000);
+          player.valuation -= ((comp.valuation || 0) / 1000);
+          player.loan = Math.max(0, (player.loan || 0) - (comp.loan || 0));
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
           io.to(room.id).emit('notification', `MENTOR EFFECT: Forced sale of ${comp.name} completed.`);
         } else {
           success = false;
@@ -425,8 +881,8 @@ const io = new SocketServer(server, {
         break;
       }
       case 'lose_action': {
-        player.actionCount = Math.max(0, player.actionCount - 1);
-        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} has 1 less action!`);
+        player.actionCount = (player.actionCount || 0) + 1;
+        io.to(room.id).emit('notification', `MENTOR EFFECT: ${player.name} lost 1 action point!`);
         break;
       }
       case 'miss_turn': {
@@ -447,27 +903,32 @@ const io = new SocketServer(server, {
     if (player.is_ai && player.cash < 0) {
       console.log(`[AI Bankruptcy] Resolving for ${player.name}`);
       while (player.cash < 0) {
-        if (player.ownedCompanies.length > 0) {
+        if (player.ownedCompanies && player.ownedCompanies.length > 0) {
           const comp = player.ownedCompanies.shift();
           let totalInvested = 0;
           const compStageIndex = getStageIndex(comp.stage);
-          if (INVESTMENT_COST_DATA[comp.name]) {
+          const dataRow = COMPANY_DATA_MAP[comp.name];
+          if (dataRow) {
              for (let stg = 0; stg <= compStageIndex; stg++) {
-                totalInvested += INVESTMENT_COST_DATA[comp.name][stg];
+                totalInvested += dataRow[stg][0];
              }
           } else {
-             totalInvested = comp.invest || 50;
+             totalInvested = comp.invest || 0;
           }
-          player.cash += totalInvested;
-          player.valuation -= (comp.valuation / 1000);
-          player.loan = Math.max(0, player.loan - comp.loan);
-          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
-          io.to(roomId).emit('notification', `ASSET LIQUIDATION: ${player.name} sold ${comp.name} for $${totalInvested}K.`);
+          const activeLoan = comp.loan || 0;
+          const netProceeds = Math.max(0, totalInvested - activeLoan);
+
+          player.cash += netProceeds;
+          player.valuation = Math.max(0, player.valuation - (comp.valuation / 1000));
+          player.loan = Math.max(0, player.loan - activeLoan);
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+          io.to(roomId).emit('notification', `ASSET LIQUIDATION: ${player.name} sold ${comp.name} for $${netProceeds}K net proceeds.`);
         } else {
-          player.cash += 50;
-          player.survivalLoan = (player.survivalLoan || 0) + 50;
-          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - (player.survivalLoan / 1000);
-          io.to(roomId).emit('notification', `SURVIVAL LOAN: ${player.name} accepted a $50K survival loan.`);
+          const shortfall = Math.abs(player.cash);
+          player.cash += shortfall;
+          player.survivalLoan = (player.survivalLoan || 0) + shortfall;
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+          io.to(roomId).emit('notification', `SURVIVAL LOAN: ${player.name} accepted a $${shortfall}K survival loan.`);
         }
       }
       io.to(roomId).emit('notification', `BANKRUPTCY SOLVED: ${player.name} has resolved their shortfall.`);
@@ -477,6 +938,9 @@ const io = new SocketServer(server, {
   const addAIPlayers = (room: any) => {
     const humanPlayer = room.players[0];
     if (!humanPlayer) return;
+
+    // Guard: never add duplicates if AI players already exist in the room
+    if (room.players.some((p: any) => p.is_ai)) return;
 
     const names = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
     const colors = ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff'];
@@ -497,7 +961,7 @@ const io = new SocketServer(server, {
       const role = aiRoles[i];
       const color = availableColors[i % availableColors.length];
       const name = `${availableNames[i]} (${role})`;
-      const startCash = role === 'Investor' ? 2000 : 500;
+      const startCash = role === 'Investor' ? 5000 : 1000;
       const startCapital = startCash / 1000;
       
       room.players.push({
@@ -552,6 +1016,26 @@ const io = new SocketServer(server, {
        player.loan += actualLoanGranted;
        player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
        io.to(roomId).emit('notification', `LOAN SUCCESS: ${player.name} borrowed $${actualLoanGranted}K against ${companiesString}.`);
+    }
+
+    if (player.isDummy) {
+      player.isLocked = true;
+      room.phase1TurnIndex = (room.phase1TurnIndex || 0) + 1;
+      if (room.phase1TurnIndex >= room.players.length) {
+         room.phase = 2;
+         room.phase2TurnIndex = 0;
+         room.players.forEach((p: any) => { p.isLocked = false; });
+         const firstP = room.players[0];
+         io.to(roomId).emit('notification', `PHASE 2 BEGINS: It is ${firstP ? firstP.name : 'Unknown'}'s turn.`);
+      } else {
+         const nextP = room.players[room.phase1TurnIndex];
+         if (nextP) {
+            io.to(roomId).emit('notification', `IT IS NOW ${nextP.name.toUpperCase()}'S TURN.`);
+         }
+      }
+      io.to(roomId).emit('game_state_update', room);
+      triggerAIIfNeeded(room, io, roomId);
+      return;
     }
 
     player.isLocked = true;
@@ -616,19 +1100,22 @@ const io = new SocketServer(server, {
               invest,
               revenue,
               valuation,
-              loan,
+              loan: 0,
               stage,
-              team
+              team: 1,
+              teamLevel: 1,
+              equityGiven: 0
             };
             
             player.ownedCompanies.push(newCompany);
             player.valuation += (newCompany.valuation / 1000);
-            player.loan += newCompany.loan;
             player.cash -= newCompany.invest;
-            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
             
-            room.actionCount += 1;
-            player.actionCount = (player.actionCount || 0) + 1;
+            if (room.mode !== 'quick' && room.mode !== 'short') {
+              room.actionCount += 1;
+              player.actionCount = (player.actionCount || 0) + 1;
+            }
             
             io.to(roomId).emit('notification', `${player.name.toUpperCase()} LAUNCHED ${newCompany.name.toUpperCase()} (STAGE ${stage})`);
             io.to(roomId).emit('game_state_update', room);
@@ -643,7 +1130,6 @@ const io = new SocketServer(server, {
             const nextStageIndex = currentIndex + 1;
             const stageUpCost = dataRow[nextStageIndex][0];
             const nextValuation = dataRow[nextStageIndex][2];
-            const nextLoan = dataRow[nextStageIndex][3];
 
             player.cash -= stageUpCost;
             compToUpgrade.stage = ['L', 'R', 'G', 'S'][nextStageIndex];
@@ -651,14 +1137,14 @@ const io = new SocketServer(server, {
             
             const oldValuation = compToUpgrade.valuation || 0;
             compToUpgrade.valuation = nextValuation;
-            compToUpgrade.loan = nextLoan;
 
             player.valuation = player.valuation - (oldValuation / 1000) + (nextValuation / 1000);
-            player.loan = player.loan - compToUpgrade.loan + nextLoan;
-            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
 
-            room.actionCount += 1;
-            player.actionCount = (player.actionCount || 0) + 1;
+            if (room.mode !== 'quick' && room.mode !== 'short') {
+              room.actionCount += 1;
+              player.actionCount = (player.actionCount || 0) + 1;
+            }
 
             io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED ${compToUpgrade.name.toUpperCase()} TO STAGE ${compToUpgrade.stage}`);
             io.to(roomId).emit('game_state_update', room);
@@ -666,10 +1152,15 @@ const io = new SocketServer(server, {
         }
       }
     } else {
-      if (player.boughtMentorRound !== room.round) {
+      if (player.isDummy) {
+        // Dummy investor takes no actions in Phase 2
+      } else if (player.boughtMentorRound !== room.round) {
          player.cash -= 20;
          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
          player.boughtMentorRound = room.round;
+         if (!room.mentorDeck || room.mentorDeck.length === 0) {
+            room.mentorDeck = shuffle(generateMentorDeck());
+         }
          const card = room.mentorDeck.shift();
          if (card) {
             if (card.type === 'PLAY NOW') {
@@ -692,24 +1183,54 @@ const io = new SocketServer(server, {
        room.phase3TurnIndex = 0;
        room.players.forEach((p: any) => {
          p.isLocked = false;
+         p.hasClaimedRevenue = false;
+         p.currentPhase3Roll = null;
          if (p.loan > 0) {
             const interestRate = room.activeEvent?.effect === 'loan_interest_15' ? 0.15 : 0.10;
             const interest = Math.round(p.loan * interestRate);
             p.cash -= interest;
-            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000);
+            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
             if (p.is_ai) {
                resolveAIBankruptcyIfNeeded(p, room, io, roomId);
             }
-            io.to(p.id).emit('notification', `PHASE 3 START: Paid $${interest}K (10%) interest on your $${p.loan}K loan.`);
+            io.to(p.id).emit('notification', `PHASE 3 START: Paid $${interest}K (${Math.round(interestRate * 100)}%) interest on your $${p.loan}K loan.`);
          }
          if (p.survivalLoan > 0) {
             const sInterest = Math.round(p.survivalLoan * 0.30);
             p.cash -= sInterest;
-            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000);
+            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
             if (p.is_ai) {
                resolveAIBankruptcyIfNeeded(p, room, io, roomId);
             }
             io.to(p.id).emit('notification', `PHASE 3 START: Paid $${sInterest}K (30%) interest on your $${p.survivalLoan}K Survival Loan.`);
+         }
+         if (p.investorDebt > 0) {
+            const agreements = (room.royaltyAgreements || []).filter((a: any) => 
+              (a.founderId === p.id || a.founderName === p.name) && a.loan > 0 && !a.converted
+            );
+            agreements.forEach((agr: any) => {
+              const invInterestRate = agr.interestRate || 0.10;
+              const invInterest = Math.round(agr.loan * invInterestRate);
+              if (invInterest > 0) {
+                p.cash -= invInterest;
+                const creditor = room.players.find((cp: any) => cp.id === agr.investorId || cp.name === agr.investorName);
+                if (creditor) {
+                  creditor.cash += invInterest;
+                  creditor.capital = (creditor.cash / 1000) + creditor.valuation - (creditor.loan / 1000) - ((creditor.survivalLoan || 0) / 1000);
+                  io.to(creditor.id).emit('notification', `LOAN INTEREST: Received $${invInterest}K interest from ${p.name}.`);
+                }
+                io.to(p.id).emit('notification', `PAID INVESTOR INTEREST: Paid $${invInterest}K to ${creditor ? creditor.name : 'Investor'}.`);
+              }
+            });
+            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
+            if (p.is_ai) {
+               resolveAIBankruptcyIfNeeded(p, room, io, roomId);
+            }
+         }
+         if (!p.is_ai && p.cash < 0) {
+            const shortfall = Math.abs(p.cash);
+            io.to(p.id).emit('trigger_bankruptcy', { shortfall });
+            io.to(roomId).emit('notification', `BANKRUPTCY ALERT: ${p.name} went bankrupt by -$${shortfall}K due to interest payments!`);
          }
        });
        io.to(roomId).emit('notification', 'PHASE 3: REVENUE GENERATION PHASE. IT IS TIME TO ROLL THE DICE!');
@@ -740,39 +1261,19 @@ const io = new SocketServer(server, {
 
        let totalActualRevenue = 0;
        if (currentPlayer.role?.toLowerCase() === 'founder') {
-         currentPlayer.ownedCompanies.forEach((pCompany: any) => {
-            let sharingPlayers = 0;
-            currentRoom.players.forEach((otherP: any) => {
-               const theirComp = otherP.ownedCompanies.find((c: any) => c.name === pCompany.name);
-               if (theirComp && getStageIndex(theirComp.stage) === getStageIndex(pCompany.stage)) {
-                 sharingPlayers += 1;
-               }
-            });
+         (currentPlayer.ownedCompanies || []).forEach((pCompany: any) => {
+           const res = calculateCompanyRevenue(pCompany, currentPlayer, currentRoom, roll);
+           totalActualRevenue += res.founderNetRevenue;
 
-            const dataRow = COMPANY_DATA_MAP[pCompany.name];
-            if (dataRow) {
-              const stageIndex = getStageIndex(pCompany.stage);
-              const baseRev = dataRow[stageIndex][1];
-              const teamIndex = currentPlayer.color === '#ef4444' ? 0 :
-                                 currentPlayer.color === '#55ffb0' ? 1 :
-                                 currentPlayer.color === '#d4af37' ? 2 : 3;
-
-              let finalMulti = MULTIPLIER_TABLE[roll]?.[teamIndex] ?? 1;
-              if (currentPlayer.mentorMultiplier) {
-                finalMulti += currentPlayer.mentorMultiplier;
-              }
-
-              const dividedRev = sharingPlayers > 1 ? Math.floor(baseRev / 2) : baseRev;
-              let actualRevenue = dividedRev * finalMulti;
-
-              if (pCompany.doubleRevenueRound === currentRoom.round) {
-                actualRevenue *= 2;
-              }
-              if (pCompany.techBoostRound === currentRoom.round) {
-                actualRevenue += 50;
-              }
-              totalActualRevenue += actualRevenue;
-            }
+           // Settle investor royalty
+           if (res.royaltyCut > 0 && res.royaltyInvestorId) {
+             const investor = currentRoom.players.find((p: any) => p.id === res.royaltyInvestorId);
+             if (investor) {
+               investor.cash += res.royaltyCut;
+               investor.capital = (investor.cash / 1000) + investor.valuation - (investor.loan / 1000) - ((investor.survivalLoan || 0) / 1000);
+               io.to(roomId).emit('notification', `ROYALTY PAYMENT: ${investor.name} received $${res.royaltyCut}K royalty on ${currentPlayer.name}'s ${pCompany.name}.`);
+             }
+           }
          });
        }
 
@@ -789,35 +1290,15 @@ const io = new SocketServer(server, {
 
        const phase3Founders = currentRoom.players.filter((p: any) => p.role?.toLowerCase() === 'founder');
        const allClaimed = phase3Founders.every((p: any) => p.hasClaimedRevenue);
+       const hasBankrupt = currentRoom.players.some((p: any) => p.cash < 0);
        
-       if (allClaimed) {
+       if (allClaimed && !hasBankrupt) {
           setTimeout(() => {
-            currentRoom.round += 1;
-            currentRoom.phase = 1;
-            currentRoom.actionCount = 0;
-            currentRoom.dealCount = 0;
-            currentRoom.phase1TurnIndex = 0;
-            currentRoom.phase2TurnIndex = 0;
-            currentRoom.phase3TurnIndex = 0;
-
-            currentRoom.players.forEach((p: any) => {
-              p.isLocked = false;
-              p.hasClaimedRevenue = false;
-              p.currentPhase3Roll = null;
-              p.mentorMultiplier = 0;
-              p.riskMultiplierActive = 0;
-              p.extraActions = 0;
-              p.actionCount = 0;
-              p.roundActions = [];
-            });
-
-            const firstPlayer = currentRoom.players[0];
-            io.to(roomId).emit('notification', `PHASE 1 BEGINS: It is ${firstPlayer ? firstPlayer.name : 'Unknown'}'s turn.`);
-            io.to(roomId).emit('game_state_update', currentRoom);
-            
-            triggerAIIfNeeded(currentRoom, io, roomId);
+            if (!currentRoom.players.some((p: any) => p.cash < 0)) {
+              advanceRoundOrEndGame(currentRoom, io, roomId);
+            }
           }, 5000);
-       } else {
+       } else if (!allClaimed) {
           io.to(roomId).emit('game_state_update', currentRoom);
           triggerAIIfNeeded(currentRoom, io, roomId);
        }
@@ -837,7 +1318,12 @@ const io = new SocketServer(server, {
       activePlayer = phase3Founders[room.phase3TurnIndex || 0];
     }
 
-    if (activePlayer && activePlayer.is_ai) {
+    if (activePlayer && (activePlayer.is_ai || activePlayer.isDummy)) {
+      if (activePlayer.isDummy) {
+        if (room.phase === 1) playAIPhase1(room, activePlayer, io, roomId);
+        else if (room.phase === 2) playAIPhase2(room, activePlayer, io, roomId);
+        return;
+      }
       setTimeout(() => {
         const currentRoom = rooms[roomId];
         if (!currentRoom) return;
@@ -864,13 +1350,133 @@ const io = new SocketServer(server, {
     }
   };
 
+  const advanceRoundOrEndGame = (room: any, io: any, roomId: string) => {
+    const maxRounds = (room.mode === 'short' || room.mode === 'quick') ? 6 : 9;
+    if (room.round >= maxRounds) {
+      const { scores, winners } = calculateFinalScores(room);
+      room.isFinished = true;
+      room.finalScores = scores;
+      room.winners = winners;
+      io.to(roomId).emit('notification', `GAME OVER: Round ${maxRounds} Completed! Final Net Values Calculated.`);
+      io.to(roomId).emit('game_state_update', room);
+      io.to(roomId).emit('game_over', { scores, winners });
+      return;
+    }
+
+    room.round += 1;
+    room.phase = 1;
+    room.actionCount = 0;
+    room.dealCount = 0;
+    room.phase1TurnIndex = 0;
+    room.phase2TurnIndex = 0;
+    room.phase3TurnIndex = 0;
+
+    // Section J: In Standard Mode, sort Founder order by ascending Action Points for next round.
+    // Tie-break: player who went earlier in previous round goes earlier.
+    if (room.mode !== 'quick' && room.mode !== 'short') {
+      const founders = (room.players || []).filter((p: any) => p.role?.toLowerCase() === 'founder');
+      const realInvestors = (room.players || []).filter((p: any) => p.role?.toLowerCase() !== 'founder' && !p.isDummy);
+      const dummyInvestors = (room.players || []).filter((p: any) => p.isDummy);
+      
+      founders.forEach((f: any, idx: number) => { f._prevOrder = idx; });
+      founders.sort((a: any, b: any) => {
+        const diff = (a.actionCount || 0) - (b.actionCount || 0);
+        if (diff !== 0) return diff;
+        return (a._prevOrder || 0) - (b._prevOrder || 0);
+      });
+      founders.forEach((f: any) => { delete f._prevOrder; });
+      room.players = [...realInvestors, ...founders, ...dummyInvestors];
+    }
+
+    room.players.forEach((p: any) => {
+      p.isLocked = false;
+      p.hasClaimedRevenue = false;
+      p.currentPhase3Roll = null;
+      p.mentorMultiplier = 0;
+      p.riskMultiplierActive = 0;
+      p.extraActions = 0;
+      p.actionCount = 0;
+      p.roundActions = [];
+      p.loansBlocked = false;
+      p.loansBlockedRound = undefined;
+      p.hasHalfCostStageUp = false;
+      p.taxDiscountRound = undefined;
+      p.freePRRound = undefined;
+      p.freeWorkforceRound = undefined;
+      p.halfCostAllStagesCompany = undefined;
+      (p.ownedCompanies || []).forEach((c: any) => {
+        c.freePRRound = undefined;
+        c.freeWorkforceRound = undefined;
+        c.stageUpBlockedRound = undefined;
+        c.halfCostAllStagesRound = undefined;
+        c.doubleRevenueRound = undefined;
+        c.techBoostRound = undefined;
+      });
+    });
+
+    const firstPlayer = room.players[0];
+    io.to(roomId).emit('notification', `PHASE 1 BEGINS: It is ${firstPlayer ? firstPlayer.name : 'Unknown'}'s turn.`);
+
+    if (room.round === 4 || (room.round === 7 && room.mode !== 'quick' && room.mode !== 'short')) {
+      room.activeEvent = room.eventDeck.shift();
+      if (room.activeEvent) {
+        io.to(roomId).emit('notification', `MARKET SHOCK (ROUND ${room.round} EVENT): ${room.activeEvent.name} — ${room.activeEvent.description}`);
+        
+        if (room.activeEvent.effect === 'immediate_stimulus_100') {
+          room.players.forEach((p: any) => {
+            const compCount = (p.ownedCompanies || []).length;
+            if (compCount > 0) {
+              const bonus = compCount * 100;
+              p.cash += bonus;
+              p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
+              io.to(p.id).emit('notification', `ECONOMIC STIMULUS: Received ${bonus}K ($100K x ${compCount} companies)!`);
+            }
+          });
+        } else if (room.activeEvent.effect === 'immediate_tax_50') {
+          room.players.forEach((p: any) => {
+            if (p.role?.toLowerCase() === 'founder' && !p.isDummy) {
+              if (p.eventShieldActive) {
+                p.eventShieldActive = false;
+                io.to(p.id).emit('notification', `GUARDIAN SHIELD: Blocked Regulatory Audit $50K fee!`);
+              } else {
+                let tax = 50;
+                if (p.taxDiscountRound === room.round) {
+                  tax = 25;
+                }
+                p.cash -= tax;
+                p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
+                io.to(p.id).emit('notification', `REGULATORY AUDIT: Paid ${tax}K compliance audit fee.`);
+                if (!p.is_ai && p.cash < 0) {
+                  io.to(p.id).emit('trigger_bankruptcy', { shortfall: Math.abs(p.cash) });
+                }
+              }
+            }
+          });
+        }
+      }
+      
+      const fundAmount = room.round === 4 ? 5000 : 10000;
+      room.players.forEach((p: any) => {
+         if (p.role?.toLowerCase() === 'investor' && !p.isDummy) {
+            p.cash += fundAmount;
+            p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000);
+            io.to(roomId).emit('notification', `INVESTOR FUNDING: ${p.name} received ${fundAmount}K!`);
+         }
+      });
+    }
+    io.to(roomId).emit('game_state_update', room);
+    triggerAIIfNeeded(room, io, roomId);
+  };
+
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join_room', ({ roomId, username, role, avatarId, maxPlayers, isVsAi }) => {
+    socket.on('join_room', ({ roomId, username, role, avatarId, maxPlayers, isVsAi, mode }) => {
       console.log(`Socket ${socket.id} is attempting to join room ${roomId} as username: "${username}" with role: "${role}" and avatarId: ${avatarId}`);
       if (!rooms[roomId]) {
-        rooms[roomId] = createEmptyRoom(maxPlayers || 4);
+        rooms[roomId] = createEmptyRoom(maxPlayers || 4, mode || 'standard');
+      } else if (mode && !rooms[roomId].mode) {
+        rooms[roomId].mode = mode;
       }
       
       socket.join(roomId);
@@ -910,7 +1516,7 @@ const io = new SocketServer(server, {
       } else {
         console.log(`Creating new player entry for "${username}" with socket ID ${socket.id} and avatarId ${avatarId}`);
 
-        const startCash = finalRole === 'Investor' ? 2000 : 500;
+        const startCash = finalRole === 'Investor' ? 5000 : 1000;
         const startCapital = startCash / 1000;
         const playerColors = ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff', '#b06aff', '#ff7a2a'];
         roomState.players.push({
@@ -937,14 +1543,23 @@ const io = new SocketServer(server, {
         });
         
         // Singleplayer / VS AI mode only
-        if (isVsAi && roomState.players.filter((p: any) => !p.is_ai).length === 1) {
-          addAIPlayers(roomState);
+        if (isVsAi) {
+          roomState.isVsAi = true;
+          if (roomState.players.filter((p: any) => p.is_ai).length === 0) {
+            addAIPlayers(roomState);
+          }
           roomState.isStarted = true;
+          if (!roomState.teamTokenPoolModified) {
+            roomState.teamTokenPool = getStartingTeamTokenPool(roomState.players.length);
+          }
         }
 
         // Multiplayer: Start game automatically ONLY when all player slots are full
         if (!roomState.isStarted && roomState.players.length >= (roomState.maxPlayers || 4)) {
           roomState.isStarted = true;
+          if (!roomState.teamTokenPoolModified) {
+            roomState.teamTokenPool = getStartingTeamTokenPool(roomState.players.length);
+          }
           io.to(roomId).emit('notification', 'All player slots are filled! The game is starting now!');
         }
       }
@@ -966,7 +1581,43 @@ const io = new SocketServer(server, {
       const room = rooms[roomId];
       if (room && !room.isStarted && room.players.length >= 2) {
         room.isStarted = true;
-        shuffle(room.players);
+        const realPlayers = room.players.filter((p: any) => !p.isDummy);
+        if (!room.teamTokenPoolModified) {
+          room.teamTokenPool = getStartingTeamTokenPool(realPlayers.length);
+        }
+        
+        // Dummy Investor setup for 2-3 player games without human investors
+        const realInvestors = realPlayers.filter((p: any) => p.role?.toLowerCase() === 'investor');
+        if (realPlayers.length <= 3 && realInvestors.length === 0) {
+          const selected = DUMMY_INVESTORS[Math.floor(Math.random() * DUMMY_INVESTORS.length)];
+          room.dummyInvestor = { ...selected };
+          
+          const dummyPlayer = {
+            id: 'dummy_investor',
+            name: `${selected.name} (Dummy)`,
+            role: 'Investor',
+            isDummy: true,
+            cash: 10000,
+            capital: 10,
+            loan: 0,
+            survivalLoan: 0,
+            valuation: 0,
+            ownedCompanies: [],
+            color: '#00e1ff',
+            avatarId: 5,
+            isLocked: true
+          };
+          
+          if (!room.players.some((p: any) => p.id === 'dummy_investor')) {
+            room.players.push(dummyPlayer);
+          }
+          io.to(roomId).emit('notification', `DUMMY INVESTOR SETUP: ${selected.name} active for 2–3 player game.`);
+        }
+
+        // Section J.1 & K.3: Round 1 order is random in Standard Mode. In Quick Mode, players keep clockwise seating order.
+        if (room.mode !== 'quick' && room.mode !== 'short') {
+          shuffle(room.players);
+        }
         io.to(roomId).emit('game_state_update', room);
         io.to(roomId).emit('notification', 'Game started by host!');
         if (room.round === 1) {
@@ -983,6 +1634,10 @@ const io = new SocketServer(server, {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
         if (player && loanBreakdown && Array.isArray(loanBreakdown)) {
+          if (player.loansBlocked || player.loansBlockedRound === room.round) {
+             socket.emit('notification', 'ACTION REJECTED: You are blocked from taking loans this round.');
+             return;
+          }
           const activePlayer = room.players[room.phase1TurnIndex || 0];
           if (room.phase === 1 && (!activePlayer || activePlayer.id !== socket.id)) {
              socket.emit('notification', 'ACTION REJECTED: It is not your turn!');
@@ -994,25 +1649,34 @@ const io = new SocketServer(server, {
           loanBreakdown.forEach((req: any) => {
              const companyName = req.companyName;
              const comp = player.ownedCompanies.find((c: any) => c.name === companyName);
-             if (comp && comp.loanTakenStage !== comp.stage) {
-               actualLoanGranted += req.amount;
-               comp.loanTakenStage = comp.stage;
-               comp.loan = (comp.loan || 0) + req.amount; // Track specific company loan
+             if (comp) {
+               const dataRow = COMPANY_DATA_MAP[comp.name];
+               const stageIdx = getStageIndex(comp.stage);
+               const maxStageLoan = dataRow ? dataRow[stageIdx][3] : 0;
+               const canBorrow = comp.loanTakenStage !== comp.stage || (comp.loan || 0) === 0;
+               if (canBorrow) {
+                 const reqAmount = Number(req.amount) || 0;
+                 const grantAmount = Math.min(reqAmount, maxStageLoan);
+                 if (grantAmount > 0) {
+                   actualLoanGranted += grantAmount;
+                   comp.loanTakenStage = comp.stage;
+                   comp.loan = (comp.loan || 0) + grantAmount;
+                 }
+               }
              }
           });
 
           if (actualLoanGranted > 0) {
              player.cash += actualLoanGranted;
-             player.loan += actualLoanGranted;
-             player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+             player.loan = (player.loan || 0) + actualLoanGranted;
+             player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
              
-             room.actionCount += 1;
-             player.actionCount = (player.actionCount || 0) + 1;
+             // Rule D.1 & D.7: Bank loans do NOT consume Action Points!
              
              io.to(roomId).emit('game_state_update', room);
              io.to(roomId).emit('notification', `LOAN SUCCESS: ${player.name} borrowed $${actualLoanGranted}K against ${companiesString}.`);
           } else {
-             socket.emit('notification', 'LOAN REJECTED: You have already taken loans for the current stages of these companies.');
+             socket.emit('notification', 'LOAN REJECTED: You have already taken loans for the current stages of these companies or invalid amount.');
           }
         }
       }
@@ -1022,27 +1686,58 @@ const io = new SocketServer(server, {
       if (rooms[roomId]) {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
-        if (player && amount > 0 && player.cash >= amount) {
-          let remainingRepayment = amount;
+        const repayAmt = Number(amount) || 0;
+        if (player && repayAmt > 0 && player.cash >= repayAmt) {
+          let remainingRepayment = repayAmt;
           
-          // Repay Survival Loan first (highest interest)
+          // 1. Repay Survival Loan first (highest interest: 30%)
           if (player.survivalLoan > 0) {
             const payToSurvival = Math.min(player.survivalLoan, remainingRepayment);
             player.survivalLoan -= payToSurvival;
             remainingRepayment -= payToSurvival;
           }
           
-          // Repay standard loan with remainder
+          // 2. Repay standard bank loan with remainder
           if (remainingRepayment > 0 && player.loan > 0) {
             const payToStandard = Math.min(player.loan, remainingRepayment);
-          player.loan -= payToStandard;
-          remainingRepayment -= payToStandard;
+            player.loan -= payToStandard;
+            remainingRepayment -= payToStandard;
+
+            // Reduce comp.loan proportionally across companies with active loans
+            let compRepayRemaining = payToStandard;
+            for (const comp of (player.ownedCompanies || [])) {
+              if (comp.loan > 0 && compRepayRemaining > 0) {
+                const compPay = Math.min(comp.loan, compRepayRemaining);
+                comp.loan -= compPay;
+                compRepayRemaining -= compPay;
+              }
+            }
+          }
+
+          // 3. Repay investor loan with remainder (if any)
+          if (remainingRepayment > 0 && player.investorDebt > 0) {
+            const payToInvestorDebt = Math.min(player.investorDebt, remainingRepayment);
+            player.investorDebt -= payToInvestorDebt;
+            remainingRepayment -= payToInvestorDebt;
+
+            const loanAgr = (room.royaltyAgreements || []).find((a: any) => 
+              (a.founderId === player.id || a.founderName === player.name) && a.loan > 0
+            );
+            if (loanAgr) {
+              const creditor = room.players.find((p: any) => p.id === loanAgr.investorId || p.name === loanAgr.investorName);
+              if (creditor) {
+                creditor.cash += payToInvestorDebt;
+                creditor.investorLoansGiven = Math.max(0, (creditor.investorLoansGiven || 0) - payToInvestorDebt);
+                creditor.capital = (creditor.cash / 1000) + creditor.valuation - (creditor.loan / 1000) - ((creditor.survivalLoan || 0) / 1000);
+              }
+              loanAgr.loan = Math.max(0, loanAgr.loan - payToInvestorDebt);
+            }
           }
           
-          const totalRepaid = amount - remainingRepayment;
+          const totalRepaid = repayAmt - remainingRepayment;
           if (totalRepaid > 0) {
             player.cash -= totalRepaid;
-            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
             io.to(roomId).emit('notification', `${player.name} repaid $${totalRepaid}K in loans.`);
             io.to(roomId).emit('game_state_update', room);
           }
@@ -1057,14 +1752,19 @@ const io = new SocketServer(server, {
         const room = rooms[roomId];
         const sender = room.players.find((p: any) => p.id === socket.id);
         const receiver = room.players.find((p: any) => p.id === targetPlayerId);
-        if (sender && receiver && amount > 0) {
-           sender.cash -= amount;
-           receiver.cash += amount;
+        const transferAmt = Number(amount) || 0;
+        if (sender && receiver && transferAmt > 0) {
+           if (sender.cash < transferAmt) {
+             socket.emit('notification', 'INSUFFICIENT FUNDS: Cannot transfer more cash than you have!');
+             return;
+           }
+           sender.cash -= transferAmt;
+           receiver.cash += transferAmt;
            
-           sender.capital = (sender.cash / 1000) + sender.valuation - (sender.loan / 1000) - ((sender.survivalLoan || 0) / 1000);
-           receiver.capital = (receiver.cash / 1000) + receiver.valuation - (receiver.loan / 1000) - ((receiver.survivalLoan || 0) / 1000);
+           sender.capital = (sender.cash / 1000) + sender.valuation - (sender.loan / 1000) - ((sender.survivalLoan || 0) / 1000) - ((sender.investorDebt || 0) / 1000);
+           receiver.capital = (receiver.cash / 1000) + receiver.valuation - (receiver.loan / 1000) - ((receiver.survivalLoan || 0) / 1000) - ((receiver.investorDebt || 0) / 1000);
            
-           io.to(roomId).emit('notification', `${sender.name} transferred $${amount}K to ${receiver.name}.`);
+           io.to(roomId).emit('notification', `${sender.name} transferred $${transferAmt}K to ${receiver.name}.`);
            io.to(roomId).emit('game_state_update', room);
         }
       }
@@ -1086,6 +1786,164 @@ const io = new SocketServer(server, {
         }
       }
     });
+
+    const processAcceptedDeal = (room: any, proposalData: any, socket: any, io: any, roomId: string) => {
+      if (!room || !proposalData) return;
+
+      const proposer = room.players.find((p: any) => 
+        (proposalData.proposerId && p.id === proposalData.proposerId) || 
+        (proposalData.proposer && p.name?.toLowerCase() === proposalData.proposer.toLowerCase()) || 
+        (proposalData.proposerName && p.name?.toLowerCase() === proposalData.proposerName.toLowerCase())
+      );
+      const partner = room.players.find((p: any) => 
+        (proposalData.partnerId && p.id === proposalData.partnerId) || 
+        (proposalData.targetPlayerId && p.id === proposalData.targetPlayerId) || 
+        (proposalData.partner && p.name?.toLowerCase() === proposalData.partner.toLowerCase()) || 
+        (proposalData.partnerName && p.name?.toLowerCase() === proposalData.partnerName.toLowerCase())
+      );
+
+      let founder: any;
+      let investor: any;
+
+      if (proposalData.founderId && proposalData.investorId) {
+        founder = room.players.find((p: any) => p.id === proposalData.founderId);
+        investor = room.players.find((p: any) => p.id === proposalData.investorId);
+      } else if (proposer && partner) {
+        if (proposer.role?.toLowerCase() === 'investor') {
+          investor = proposer;
+          founder = partner;
+        } else if (partner.role?.toLowerCase() === 'investor') {
+          investor = partner;
+          founder = proposer;
+        } else {
+          founder = proposer;
+          investor = partner;
+        }
+      }
+
+      if (!founder || !investor) {
+        socket.emit('notification', 'DEAL REJECTED: Parties to the deal could not be resolved.');
+        return;
+      }
+
+      const rawCash = Number(proposalData.cash) || 0;
+      const cashAmount = (rawCash > 0 && rawCash < 10) ? Math.round(rawCash * 1000) : Math.round(rawCash);
+
+      const rawLoan = Number(proposalData.loan) || 0;
+      const loanAmount = (rawLoan > 0 && rawLoan < 10) ? Math.round(rawLoan * 1000) : Math.round(rawLoan);
+
+      const equityPct = Number(proposalData.equity) || 0;
+      const royaltyPct = Number(proposalData.royalty || proposalData.percentage) || 0;
+      const terms = String(proposalData.terms || '');
+      let companyName = proposalData.companyName || '';
+
+      let targetComp = (founder.ownedCompanies || []).find((c: any) => 
+        companyName && c.name?.toUpperCase().trim() === companyName.toUpperCase().trim()
+      );
+      if (!targetComp && terms && founder.ownedCompanies?.length) {
+        targetComp = founder.ownedCompanies.find((c: any) => 
+          terms.toUpperCase().includes(c.name?.toUpperCase().trim())
+        );
+      }
+      if (!targetComp && founder.ownedCompanies?.length === 1) {
+        targetComp = founder.ownedCompanies[0];
+      }
+      if (targetComp) {
+        companyName = targetComp.name;
+      }
+
+      // Equity limit check (Rule D.5)
+      if (equityPct > 0) {
+        if (!targetComp) {
+          socket.emit('notification', 'DEAL REJECTED: Founder must have launched a company to sell equity.');
+          return;
+        }
+        const currentEquityGiven = targetComp.equityGiven || 0;
+        if (currentEquityGiven + equityPct > 100) {
+          socket.emit('notification', `DEAL REJECTED: Equity limit exceeded! Only ${100 - currentEquityGiven}% remaining in ${targetComp.name}.`);
+          return;
+        }
+      }
+
+      // Cash check (Rule D.2)
+      if (cashAmount > 0) {
+        if (investor.cash < cashAmount) {
+          socket.emit('notification', `INSUFFICIENT FUNDS: ${investor.name} does not have $${cashAmount}K to complete this deal!`);
+          return;
+        }
+        investor.cash -= cashAmount;
+        founder.cash += cashAmount;
+      }
+
+      // Apply equity transfer
+      if (equityPct > 0 && targetComp) {
+        targetComp.equityGiven = (targetComp.equityGiven || 0) + equityPct;
+      }
+
+      // Apply investor loan (Rule D.4.c, I.7)
+      if (loanAmount > 0) {
+        founder.investorDebt = (founder.investorDebt || 0) + loanAmount;
+        investor.investorLoansGiven = (investor.investorLoansGiven || 0) + loanAmount;
+      }
+
+      // Convertible note check (Rule D.4.e)
+      const isConvertible = terms.toLowerCase().includes('convert') || Boolean(proposalData.convertible);
+
+      const agreementRecord = {
+        id: `agreement_${Date.now()}`,
+        dealId: proposalData.id || `deal_${Date.now()}`,
+        founderId: founder.id,
+        founderName: founder.name,
+        investorId: investor.id,
+        investorName: investor.name,
+        companyName: companyName,
+        equity: equityPct,
+        royalty: royaltyPct,
+        loan: loanAmount,
+        interestRate: Number(proposalData.interestRate) || 0.10,
+        terms: terms,
+        convertible: isConvertible,
+        converted: false,
+        partnerSigned: true,
+        roundAgreed: room.round
+      };
+
+      if (!room.royaltyAgreements) room.royaltyAgreements = [];
+      room.royaltyAgreements.push(agreementRecord);
+
+      if (room.deals) {
+        const existingDeal = room.deals.find((d: any) => d.id === proposalData.id);
+        if (existingDeal) {
+          existingDeal.status = 'accepted';
+        }
+      }
+
+      founder.capital = (founder.cash / 1000) + founder.valuation - (founder.loan / 1000) - ((founder.survivalLoan || 0) / 1000) - ((founder.investorDebt || 0) / 1000);
+      investor.capital = (investor.cash / 1000) + investor.valuation - (investor.loan / 1000) - ((investor.survivalLoan || 0) / 1000);
+
+      room.dealCount = (room.dealCount || 0) + 1;
+      io.to(roomId).emit('game_state_update', room);
+      io.to(roomId).emit('notification', `DEAL FORMALIZED: ${investor.name} & ${founder.name} closed deal on ${companyName || 'Portfolio'}!`);
+    };
+
+    const processRejectedDeal = (room: any, proposalData: any, socket: any, io: any, roomId: string) => {
+      if (!room || !proposalData) return;
+      const proposer = room.players.find((p: any) => 
+        (proposalData.proposerId && p.id === proposalData.proposerId) || 
+        (proposalData.proposer && p.name?.toLowerCase() === proposalData.proposer.toLowerCase()) || 
+        (proposalData.proposerName && p.name?.toLowerCase() === proposalData.proposerName.toLowerCase())
+      );
+      if (room.deals) {
+        const existingDeal = room.deals.find((d: any) => d.id === proposalData.id);
+        if (existingDeal) {
+          existingDeal.status = 'rejected';
+        }
+      }
+      if (proposer) {
+        io.to(proposer.id).emit('notification', `Proposal was rejected.`);
+      }
+      io.to(roomId).emit('game_state_update', room);
+    };
 
     socket.on('offer_deal', ({ roomId, targetPlayer, cash, loan }) => {
       if (rooms[roomId]) {
@@ -1109,23 +1967,83 @@ const io = new SocketServer(server, {
       }
     });
 
-    socket.on('propose_royalty_deal', ({ roomId, proposerName, partnerName, cash, equity, loan, royalty, terms }) => {
+    socket.on('propose_royalty_deal', ({ roomId, proposerName, partnerName, cash, equity, loan, royalty, terms, companyName }) => {
       if (rooms[roomId]) {
         const room = rooms[roomId];
         const proposer = room.players.find((p: any) => p.name === proposerName);
         const partner = room.players.find((p: any) => p.name === partnerName);
 
+        // Dummy Investor automated evaluation
+        if (proposer && partner && partner.isDummy) {
+           const activePeriod = getActiveDummyPeriod(room.round, room.dummyInvestor);
+           if (!activePeriod) {
+              socket.emit('notification', `DUMMY INVESTOR: No investment available in Round ${room.round}.`);
+              return;
+           }
+
+           const requestedCash = Number(cash) || 0;
+           const offeredEquity = Number(equity) || 0;
+
+           if (requestedCash > activePeriod.maxFunding) {
+              socket.emit('notification', `DUMMY INVESTOR REJECTED: Maximum funding for ${activePeriod.rounds} is ${activePeriod.maxFunding}K.`);
+              return;
+           }
+
+           if (offeredEquity < activePeriod.equityRequired) {
+              socket.emit('notification', `DUMMY INVESTOR REJECTED: ${partner.name} requires at least ${activePeriod.equityRequired}% equity for ${activePeriod.rounds}.`);
+              return;
+           }
+
+           const targetComp = (proposer.ownedCompanies || []).find((c: any) => c.name?.toUpperCase().trim() === (companyName || '').toUpperCase().trim());
+           if (targetComp && (targetComp.equityGiven || 0) + offeredEquity > 100) {
+              socket.emit('notification', `ACTION REJECTED: Aggregate equity for ${targetComp.name} cannot exceed 100%.`);
+              return;
+           }
+
+           const proposalId = `proposal_${Date.now()}`;
+           const dummyProposal = {
+              id: proposalId,
+              proposerId: proposer.id,
+              proposer: proposerName,
+              proposerName: proposerName,
+              partnerId: partner.id,
+              partner: partnerName,
+              partnerName: partnerName,
+              founderId: proposer.id,
+              investorId: partner.id,
+              cash: requestedCash,
+              equity: offeredEquity,
+              loan: Number(loan) || 0,
+              royalty: Number(royalty) || 0,
+              terms: terms || '',
+              companyName: companyName || '',
+              proposerSigned: true,
+              partnerSigned: true
+           };
+           processAcceptedDeal(room, dummyProposal, socket, io, roomId);
+           io.to(roomId).emit('notification', `DUMMY INVESTOR ACCEPTED: ${partner.name} funded ${requestedCash}K in ${proposer.name}'s ${companyName} for ${offeredEquity}% equity!`);
+           io.to(roomId).emit('game_state_update', room);
+           return;
+        }
+
         if (proposer && partner) {
           const proposalId = `proposal_${Date.now()}`;
           const royaltyProposal = {
             id: proposalId,
+            proposerId: proposer.id,
             proposer: proposerName,
+            proposerName: proposerName,
+            partnerId: partner.id,
             partner: partnerName,
+            partnerName: partnerName,
+            founderId: proposer.role?.toLowerCase() === 'founder' ? proposer.id : partner.id,
+            investorId: proposer.role?.toLowerCase() === 'investor' ? proposer.id : partner.id,
             cash: Number(cash) || 0,
             equity: Number(equity) || 0,
             loan: Number(loan) || 0,
             royalty: Number(royalty) || 0,
             terms: terms || '',
+            companyName: companyName || '',
             proposerSigned: true,
             partnerSigned: false
           };
@@ -1139,6 +2057,7 @@ const io = new SocketServer(server, {
             loan: Number(loan) || 0,
             royalty: Number(royalty) || 0,
             terms: terms || '',
+            companyName: companyName || '',
             status: 'pending'
           };
           room.deals.push(newDeal);
@@ -1146,66 +2065,42 @@ const io = new SocketServer(server, {
           io.to(partner.id).emit('royalty_proposal_received', royaltyProposal);
           io.to(roomId).emit('game_state_update', room);
           io.to(roomId).emit('notification', `NEW DEAL SHEET: ${proposer.name} offered a deal to ${partner.name}.`);
+
+          if (partner.is_ai) {
+            setTimeout(() => {
+              const currentRoom = rooms[roomId];
+              if (!currentRoom) return;
+              const curProposer = currentRoom.players.find((p: any) => p.name === proposer.name);
+              const curPartner = currentRoom.players.find((p: any) => p.name === partner.name);
+              if (!curPartner) return;
+
+              const cashReq = Number(royaltyProposal.cash) || 0;
+              const eqOffered = Number(royaltyProposal.equity) || 0;
+              const royOffered = Number(royaltyProposal.royalty) || 0;
+
+              // AI accepts if they have enough cash and either get >= 5% equity or >= 5% royalty or loan with interest
+              if (cashReq <= curPartner.cash && (eqOffered >= 5 || royOffered >= 5 || Number(royaltyProposal.loan) > 0)) {
+                processAcceptedDeal(currentRoom, royaltyProposal, null, io, roomId);
+                io.to(roomId).emit('notification', `DEAL ACCEPTED: ${curPartner.name} accepted the deal proposal from ${curProposer ? curProposer.name : 'Founder'}!`);
+              } else {
+                processRejectedDeal(currentRoom, royaltyProposal, null, io, roomId);
+                io.to(roomId).emit('notification', `DEAL DECLINED: ${curPartner.name} declined the deal proposal from ${curProposer ? curProposer.name : 'Founder'}.`);
+              }
+            }, 1500);
+          }
         }
       }
     });
 
     socket.on('accept_royalty_deal', ({ roomId, proposal }) => {
       if (rooms[roomId]) {
-        const room = rooms[roomId];
-        const proposer = room.players.find((p: any) => p.name === proposal.proposer);
-        const partner = room.players.find((p: any) => p.name === proposal.partner);
-
-        if (proposer && partner) {
-          const dealCost = Number(proposal.cash) || 0;
-          const loanAssumed = Number(proposal.loan) || 0;
-
-          if (partner.cash < dealCost) {
-            socket.emit('notification', 'INSUFFICIENT FUNDS: You do not have enough cash to accept this deal!');
-            return;
-          }
-
-          partner.cash -= dealCost;
-          proposer.cash += dealCost;
-
-          proposer.loan = Math.max(0, proposer.loan - loanAssumed);
-          partner.loan += loanAssumed;
-
-          proposer.capital = (proposer.cash / 1000) + proposer.valuation - (proposer.loan / 1000) - ((proposer.survivalLoan || 0) / 1000);
-          partner.capital = (partner.cash / 1000) + partner.valuation - (partner.loan / 1000) - ((partner.survivalLoan || 0) / 1000);
-
-          room.royaltyAgreements.push({
-            id: `agreement_${Date.now()}`,
-            ...proposal,
-            partnerSigned: true
-          });
-
-          const existingDeal = room.deals.find((d: any) => d.id === proposal.id);
-          if (existingDeal) {
-            existingDeal.status = 'accepted';
-          }
-
-          room.dealCount += 1;
-          io.to(roomId).emit('game_state_update', room);
-          io.to(roomId).emit('notification', `ROYALTY DEAL FORMALIZED: ${proposer.name} and ${partner.name} signed!`);
-        }
+        processAcceptedDeal(rooms[roomId], proposal, socket, io, roomId);
       }
     });
 
     socket.on('reject_royalty_deal', ({ roomId, proposal }) => {
       if (rooms[roomId]) {
-        const room = rooms[roomId];
-        const proposer = room.players.find((p: any) => p.name === proposal.proposer);
-        
-        const existingDeal = room.deals.find((d: any) => d.id === proposal.id);
-        if (existingDeal) {
-          existingDeal.status = 'rejected';
-        }
-
-        if (proposer) {
-          io.to(proposer.id).emit('notification', `${proposal.partner} rejected your Royalty Deal proposal.`);
-        }
-        io.to(roomId).emit('game_state_update', room);
+        processRejectedDeal(rooms[roomId], proposal, socket, io, roomId);
       }
     });
 
@@ -1214,8 +2109,60 @@ const io = new SocketServer(server, {
         const room = rooms[roomId];
         const proposer = room.players.find((p: any) => p.id === socket.id);
         const targetPlayer = room.players.find((p: any) => p.id === targetPlayerId);
+
+        // Handle Dummy Investor automated deal evaluation
+        if (targetPlayer && targetPlayer.isDummy) {
+           const activePeriod = getActiveDummyPeriod(room.round, room.dummyInvestor);
+           if (!activePeriod) {
+              socket.emit('notification', `DUMMY INVESTOR: No investment available in Round ${room.round}.`);
+              return;
+           }
+
+           const pct = Number(percentage) || 0;
+           if (pct < activePeriod.equityRequired) {
+              socket.emit('notification', `DUMMY INVESTOR REJECTED: ${targetPlayer.name} requires at least ${activePeriod.equityRequired}% for ${activePeriod.rounds}.`);
+              return;
+           }
+
+           const founder = room.players.find((p: any) => p.id === founderId);
+           const targetComp = (founder?.ownedCompanies || []).find((c: any) => c.name?.toUpperCase().trim() === companyName.toUpperCase().trim());
+           if (targetComp && (targetComp.equityGiven || 0) + pct > 100) {
+              socket.emit('notification', 'ACTION REJECTED: Aggregate equity cannot exceed 100%.');
+              return;
+           }
+
+           const grantCash = activePeriod.maxFunding;
+           if (!room.royaltyAgreements) room.royaltyAgreements = [];
+           room.royaltyAgreements.push({
+              id: `agr_${Date.now()}`,
+              founderId: founderId,
+              founderName: founder?.name || 'Founder',
+              investorId: targetPlayer.id,
+              investorName: targetPlayer.name,
+              companyName: companyName,
+              percentage: pct,
+              equity: pct,
+              cash: grantCash,
+              loan: 0,
+              royalty: 0,
+              converted: false
+           });
+           if (targetComp) {
+              targetComp.equityGiven = (targetComp.equityGiven || 0) + pct;
+           }
+           if (founder) {
+              founder.cash += grantCash;
+              founder.capital = (founder.cash / 1000) + founder.valuation - (founder.loan / 1000) - ((founder.survivalLoan || 0) / 1000) - ((founder.investorDebt || 0) / 1000);
+           }
+           io.to(roomId).emit('notification', `DUMMY INVESTOR DEAL COMPLETED: ${targetPlayer.name} granted ${grantCash}K to ${founder?.name} for ${pct}% equity in ${companyName}!`);
+           io.to(roomId).emit('game_state_update', room);
+           return;
+        }
+
         if (proposer && targetPlayer) {
+           const proposalId = `proposal_${Date.now()}`;
            io.to(targetPlayerId).emit('royalty_proposal_received', {
+             id: proposalId,
              proposerId: proposer.id,
              proposerName: proposer.name,
              founderId,
@@ -1228,41 +2175,17 @@ const io = new SocketServer(server, {
       }
     });
 
-    socket.on('accept_royalty_agreement', ({ roomId, proposerId, founderId, investorId, companyName, percentage }) => {
-      if (rooms[roomId]) {
-        const room = rooms[roomId];
-        const accepter = room.players.find((p: any) => p.id === socket.id);
-        const proposer = room.players.find((p: any) => p.id === proposerId);
-        if (accepter && proposer) {
-           const exists = room.royaltyAgreements.find((a: any) => 
-             a.founderId === founderId && a.investorId === investorId && a.companyName === companyName
-           );
-           
-           if (!exists) {
-              room.royaltyAgreements.push({
-                founderId,
-                investorId,
-                companyName,
-                percentage
-              });
-              const founder = room.players.find((p: any) => p.id === founderId);
-              const investor = room.players.find((p: any) => p.id === investorId);
-              if (founder && investor) {
-                 io.to(roomId).emit('notification', `DEAL FINALIZED: ${investor.name} now has a ${percentage}% royalty on ${founder.name}'s ${companyName}`);
-              }
-              io.to(roomId).emit('game_state_update', room);
-           }
-        }
+    socket.on('accept_royalty_agreement', (req: any) => {
+      const roomId = req?.roomId;
+      if (roomId && rooms[roomId]) {
+        processAcceptedDeal(rooms[roomId], req, socket, io, roomId);
       }
     });
 
-    socket.on('reject_royalty_agreement', ({ roomId, proposerId }) => {
-      if (rooms[roomId]) {
-        const room = rooms[roomId];
-        const rejecter = room.players.find((p: any) => p.id === socket.id);
-        if (rejecter && proposerId) {
-           io.to(proposerId).emit('notification', `${rejecter.name} rejected your Royalty Deal proposal.`);
-        }
+    socket.on('reject_royalty_agreement', (req: any) => {
+      const roomId = req?.roomId;
+      if (roomId && rooms[roomId]) {
+        processRejectedDeal(rooms[roomId], req, socket, io, roomId);
       }
     });
 
@@ -1271,50 +2194,23 @@ const io = new SocketServer(server, {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
         
-        if (player) {
+        if (player && !player.hasClaimedRevenue) {
            const currentRoll = player.currentPhase3Roll || 2;
            let totalActualRevenue = 0;
 
-           player.ownedCompanies.forEach((pCompany: any) => {
-              let sharingPlayers = 0;
-              room.players.forEach((otherP: any) => {
-                 const theirComp = otherP.ownedCompanies.find((c: any) => c.name === pCompany.name);
-                 if (theirComp && getStageIndex(theirComp.stage) === getStageIndex(pCompany.stage)) {
-                   sharingPlayers += 1;
+           (player.ownedCompanies || []).forEach((pCompany: any) => {
+              const res = calculateCompanyRevenue(pCompany, player, room, currentRoll);
+              totalActualRevenue += res.founderNetRevenue;
+
+              // Settle investor royalty
+              if (res.royaltyCut > 0 && res.royaltyInvestorId) {
+                 const investor = room.players.find((p: any) => p.id === res.royaltyInvestorId);
+                 if (investor) {
+                    investor.cash += res.royaltyCut;
+                    investor.capital = (investor.cash / 1000) + investor.valuation - (investor.loan / 1000) - ((investor.survivalLoan || 0) / 1000);
+                    io.to(roomId).emit('notification', `ROYALTY: ${investor.name} received $${res.royaltyCut}K royalty on ${player.name}'s ${pCompany.name}.`);
                  }
-              });
-
-              const dataRow = COMPANY_DATA_MAP[pCompany.name];
-              if (!dataRow) return;
-              const stageIndex = getStageIndex(pCompany.stage);
-              const baseRev = dataRow[stageIndex][1];
-
-              const teamIndex = (pCompany.team === 'RN' || player.color === '#ef4444') ? 0 :
-                                 (pCompany.team === 'GT' || player.color === '#55ffb0') ? 1 :
-                                 (pCompany.team === 'GD' || player.color === '#d4af37') ? 2 : 3;
-
-              let finalMulti = MULTIPLIER_TABLE[currentRoll]?.[teamIndex] ?? 1;
-              if (player.mentorMultiplier) {
-                finalMulti += player.mentorMultiplier;
               }
-
-              const dividedRev = sharingPlayers > 1 ? Math.floor(baseRev / 2) : baseRev;
-              let actualRevenue = dividedRev * finalMulti;
-
-              if (pCompany.doubleRevenueRound === room.round) {
-                actualRevenue *= 2;
-              }
-              if (pCompany.techBoostRound === room.round) {
-                actualRevenue += 50;
-              }
-              if (player.riskMultiplierActive === room.round) {
-                if (currentRoll >= 5) {
-                  actualRevenue *= 2;
-                } else if (currentRoll <= 2) {
-                  actualRevenue = Math.floor(actualRevenue / 2);
-                }
-              }
-              totalActualRevenue += actualRevenue;
            });
 
            player.lastRevenueClaimed = totalActualRevenue;
@@ -1335,52 +2231,15 @@ const io = new SocketServer(server, {
 
            const phase3Founders = room.players.filter((p: any) => p.role?.toLowerCase() === 'founder');
            const allClaimed = phase3Founders.every((p: any) => p.hasClaimedRevenue);
+           const hasBankrupt = room.players.some((p: any) => p.cash < 0);
            
-           if (allClaimed) {
+           if (allClaimed && !hasBankrupt) {
               setTimeout(() => {
-                room.round += 1;
-                room.phase = 1;
-                room.actionCount = 0;
-                room.dealCount = 0;
-                room.phase1TurnIndex = 0;
-                room.phase2TurnIndex = 0;
-                room.phase3TurnIndex = 0;
-
-                room.players.forEach((p: any) => {
-                  p.isLocked = false;
-                  p.hasClaimedRevenue = false;
-                  p.currentPhase3Roll = null;
-                  
-                  // round resets for mentor modifiers
-                  p.mentorMultiplier = 0;
-                  p.riskMultiplierActive = 0;
-                  p.extraActions = 0;
-                  p.actionCount = 0;
-                  p.roundActions = [];
-                });
-
-                const firstPlayer = room.players[0];
-                io.to(roomId).emit('notification', `PHASE 1 BEGINS: It is ${firstPlayer ? firstPlayer.name : 'Unknown'}'s turn.`);
-
-                if (room.round === 4 || room.round === 7) {
-                  room.activeEvent = room.eventDeck.shift();
-                  if (room.activeEvent) {
-                    io.to(roomId).emit('notification', `NEW EVENT CARD: ${room.activeEvent.name}`);
-                  }
-                  
-                  const fundAmount = room.round === 4 ? 5000 : 10000;
-                  room.players.forEach((p: any) => {
-                     if (p.role === 'Investor') {
-                        p.cash += fundAmount;
-                        p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000);
-                        io.to(roomId).emit('notification', `INVESTOR FUNDING: ${p.name} received $${fundAmount}K!`);
-                     }
-                  });
+                if (!room.players.some((p: any) => p.cash < 0)) {
+                  advanceRoundOrEndGame(room, io, roomId);
                 }
-                io.to(roomId).emit('game_state_update', room);
-                triggerAIIfNeeded(room, io, roomId);
               }, 5000);
-           } else {
+           } else if (!allClaimed) {
               triggerAIIfNeeded(room, io, roomId);
            }
         }
@@ -1402,15 +2261,23 @@ const io = new SocketServer(server, {
            if (actionType === 'launch') {
                const dataRow = COMPANY_DATA_MAP[companyName];
                if (dataRow) {
+                  if ((player.ownedCompanies || []).length >= 4) {
+                     socket.emit('notification', 'ACTION REJECTED: Maximum of 4 company launches allowed per Founder.');
+                     return;
+                  }
+                  if (player.ownedCompanies.some((c: any) => c.name.toUpperCase() === companyName.toUpperCase())) {
+                     socket.emit('notification', 'ACTION REJECTED: You already own this company.');
+                     return;
+                  }
                   const stage = 'L';
-                  const team = player.color === '#ef4444' ? 'RN' :
-                               player.color === '#55ffb0' ? 'GT' :
-                               player.color === '#d4af37' ? 'GD' : 'BL';
-                  
                   const invest = dataRow[0][0];
+                  if (player.cash < invest) {
+                     socket.emit('notification', 'ACTION REJECTED: Insufficient cash to launch company.');
+                     return;
+                  }
                   const revenue = dataRow[0][1];
                   const valuation = dataRow[0][2];
-                  const loan = dataRow[0][3];
+                  const loan = 0;
 
                   const icons: Record<string, string> = {
                     'CONTRACT FARMING': '/mat-icons/mat-icon-contract-farming.png',
@@ -1430,16 +2297,17 @@ const io = new SocketServer(server, {
                     invest,
                     revenue,
                     valuation,
-                    loan,
+                    loan: 0,
                     stage,
-                    team
+                    team: 1,
+                    teamLevel: 1,
+                    equityGiven: 0
                   };
                   
                   player.ownedCompanies.push(newCompany);
                   player.valuation += (newCompany.valuation / 1000);
-                  player.loan += newCompany.loan;
                   player.cash -= newCompany.invest;
-                  player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+                  player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
                   
                   if (!player.roundActions) player.roundActions = [];
                   player.roundActions.push({
@@ -1461,6 +2329,10 @@ const io = new SocketServer(server, {
            } else if (actionType === 'stage_up') {
               const comp = player.ownedCompanies.find((c: any) => c.name === companyName);
               if (comp) {
+                 if (comp.stageUpBlockedRound === room.round) {
+                    socket.emit('notification', `ACTION REJECTED: ${comp.name} is blocked from staging up this round due to Toxic Mentor.`);
+                    return;
+                 }
                  if (comp.upgradedRound === room.round) {
                     socket.emit('notification', 'ACTION REJECTED: Company already staged up this round.');
                     return;
@@ -1470,9 +2342,16 @@ const io = new SocketServer(server, {
                     const dataRow = COMPANY_DATA_MAP[comp.name];
                     if (dataRow) {
                        const nextStageIndex = currentIndex + 1;
-                       const stageUpCost = dataRow[nextStageIndex][0];
+                       let stageUpCost = dataRow[nextStageIndex][0];
+                       if (player.hasHalfCostStageUp || comp.halfCostAllStagesRound === room.round || player.halfCostAllStagesCompany === comp.name) {
+                          stageUpCost = Math.round(stageUpCost / 2);
+                          if (player.hasHalfCostStageUp) player.hasHalfCostStageUp = false;
+                       }
+                       if (player.cash < stageUpCost) {
+                          socket.emit('notification', 'ACTION REJECTED: Insufficient cash to stage up company.');
+                          return;
+                       }
                        const nextValuation = dataRow[nextStageIndex][2];
-                       const nextLoan = dataRow[nextStageIndex][3];
 
                        player.cash -= stageUpCost;
                        
@@ -1481,11 +2360,28 @@ const io = new SocketServer(server, {
                        
                        const oldValuation = comp.valuation || 0;
                        comp.valuation = nextValuation;
-                       comp.loan = nextLoan;
 
                        player.valuation = player.valuation - (oldValuation / 1000) + (nextValuation / 1000);
-                       player.loan = player.loan - comp.loan + nextLoan;
-                       player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+                       player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+
+                       // Rule D.4.e: Check and trigger Convertible Note conversion on stage up
+                       const unconvertedNotes = (room.royaltyAgreements || []).filter((a: any) => 
+                         (a.founderId === player.id || a.founderName === player.name) &&
+                         (!a.companyName || a.companyName.toUpperCase().trim() === comp.name.toUpperCase().trim()) &&
+                         a.convertible && !a.converted
+                       );
+                       unconvertedNotes.forEach((note: any) => {
+                         const equityGain = note.equity || 10;
+                         note.converted = true;
+                         player.investorDebt = Math.max(0, (player.investorDebt || 0) - (note.loan || 0));
+                         const investor = room.players.find((p: any) => p.id === note.investorId || p.name === note.investorName);
+                         if (investor) {
+                           investor.investorLoansGiven = Math.max(0, (investor.investorLoansGiven || 0) - (note.loan || 0));
+                           investor.capital = (investor.cash / 1000) + investor.valuation - (investor.loan / 1000);
+                         }
+                         comp.equityGiven = Math.min(100, (comp.equityGiven || 0) + equityGain);
+                         io.to(roomId).emit('notification', `CONVERTIBLE NOTE: ${investor ? investor.name : 'Investor'}'s $${note.loan || 0}K loan converted into ${equityGain}% equity in ${comp.name}!`);
+                       });
 
                        const stageName = ['Launch', 'Retain', 'Grow', 'Scale'][nextStageIndex] || 'Retain';
                        if (!player.roundActions) player.roundActions = [];
@@ -1517,10 +2413,22 @@ const io = new SocketServer(server, {
                      socket.emit('notification', 'ACTION REJECTED: Max 1 PR Service per company per round.');
                      return;
                   }
+                  const currentLvl = Math.min(4, Math.max(1, Number(comp.teamLevel || comp.team) || 1));
                   const prCosts = [100, 300, 500, 700];
-                  let actualCost = prCosts[(comp.team || 1) - 1] || 100;
-                  if (room.activeEvent?.effect === 'pr_discount_100') {
-                     actualCost = Math.max(0, actualCost - 100);
+                  let actualCost = prCosts[currentLvl - 1] || 100;
+                  if (comp.freePRRound === room.round || player.freePRRound === room.round) {
+                     actualCost = 0;
+                  } else {
+                     if (player.taxDiscountRound === room.round) {
+                        actualCost = Math.round(actualCost / 2);
+                     }
+                     if (room.activeEvent?.effect === 'pr_discount_100') {
+                        actualCost = Math.max(0, actualCost - 100);
+                     }
+                  }
+                  if (player.cash < actualCost) {
+                     socket.emit('notification', 'ACTION REJECTED: Insufficient cash to buy PR services.');
+                     return;
                   }
                   
                   player.cash -= actualCost;
@@ -1551,25 +2459,58 @@ const io = new SocketServer(server, {
                      socket.emit('notification', 'ACTION REJECTED: Max 1 Workforce Upgrade per company per round.');
                      return;
                   }
-                  const currentIndex = getStageIndex(comp.stage);
-                  const workforceCosts = [5, 10, 15, 20];
-                  let actualCost = workforceCosts[currentIndex] || 5;
-                  if (room.activeEvent?.effect === 'workforce_discount_half') {
+                  const currentLvl = Math.min(4, Math.max(1, Number(comp.teamLevel || comp.team) || 1));
+                  if (currentLvl >= 4) {
+                     socket.emit('notification', 'ACTION REJECTED: Workforce is already at maximum level 4.');
+                     return;
+                  }
+                  const nextLvl = currentLvl + 1;
+
+                  // Rule E.3: Check shared Team Token pool availability
+                  if (!room.teamTokenPool) {
+                     room.teamTokenPool = { 2: 12, 3: 8, 4: 4 };
+                  }
+                  if ((room.teamTokenPool[nextLvl] || 0) <= 0) {
+                     socket.emit('notification', `ACTION REJECTED: No Level ${nextLvl} Team Tokens remaining in the shared pool!`);
+                     return;
+                  }
+
+                  // Authoritative upgrade costs from Founder Player Mat
+                  const TEAM_UPGRADE_COSTS: Record<number, number> = {
+                     2: 50,
+                     3: 100,
+                     4: 200
+                  };
+                  let actualCost = TEAM_UPGRADE_COSTS[nextLvl] || 50;
+                  if (comp.freeWorkforceRound === room.round || player.freeWorkforceRound === room.round) {
+                     actualCost = 0;
+                  } else if (room.activeEvent?.effect === 'workforce_discount_half') {
                      actualCost = Math.round(actualCost / 2);
+                  }
+
+                  if (player.cash < actualCost) {
+                     socket.emit('notification', 'ACTION REJECTED: Insufficient cash to upgrade workforce.');
+                     return;
                   }
                   
                   player.cash -= actualCost;
-                  comp.team = (comp.team || 1) + 1;
+                  // Deduct token from shared pool (Rule E.3: permanently consumed from pool)
+                  room.teamTokenPool[nextLvl] -= 1;
+                  room.teamTokenPoolModified = true;
+
+                  comp.teamLevel = nextLvl;
+                  comp.team = nextLvl;
                   comp.workforceUpgradedRound = room.round;
-                  player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+                  player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
                   
                   if (!player.roundActions) player.roundActions = [];
                   player.roundActions.push({
                     id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                     type: 'upgrade_workforce',
                     companyName: comp.name,
-                    text: `Upgraded Workforce for ${comp.customName || comp.name}`,
+                    text: `Upgraded Workforce for ${comp.customName || comp.name} to Level ${nextLvl}`,
                     cost: actualCost,
+                    targetLevel: nextLvl,
                     round: room.round,
                     timestamp: Date.now()
                   });
@@ -1578,7 +2519,7 @@ const io = new SocketServer(server, {
                   player.actionCount = (player.actionCount || 0) + 1;
                   
                   io.to(roomId).emit('game_state_update', room);
-                  io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED WORKFORCE FOR ${comp.name.toUpperCase()}`);
+                  io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED WORKFORCE FOR ${comp.name.toUpperCase()} TO LEVEL ${nextLvl}`);
                }
             }
         }
@@ -1641,12 +2582,14 @@ const io = new SocketServer(server, {
                  
                  room.players.forEach((p: any) => {
                    p.isLocked = false;
+                   p.hasClaimedRevenue = false;
+                   p.currentPhase3Roll = null;
                    
                    if (p.loan > 0) {
                       const interestRate = room.activeEvent?.effect === 'loan_interest_15' ? 0.15 : 0.10;
                        const interest = Math.round(p.loan * interestRate);
                       p.cash -= interest;
-                      p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000);
+                      p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
                       if (p.is_ai) {
                          resolveAIBankruptcyIfNeeded(p, room, io, roomId);
                       }
@@ -1655,11 +2598,39 @@ const io = new SocketServer(server, {
                    if (p.survivalLoan > 0) {
                       const sInterest = Math.round(p.survivalLoan * 0.30);
                       p.cash -= sInterest;
-                      p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000);
+                      p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
                       if (p.is_ai) {
                          resolveAIBankruptcyIfNeeded(p, room, io, roomId);
                       }
                       io.to(p.id).emit('notification', `PHASE 3 START: Paid $${sInterest}K (30%) interest on your $${p.survivalLoan}K Survival Loan.`);
+                   }
+                   if (p.investorDebt > 0) {
+                      const agreements = (room.royaltyAgreements || []).filter((a: any) => 
+                        (a.founderId === p.id || a.founderName === p.name) && a.loan > 0 && !a.converted
+                      );
+                      agreements.forEach((agr: any) => {
+                        const invInterestRate = agr.interestRate || 0.10;
+                        const invInterest = Math.round(agr.loan * invInterestRate);
+                        if (invInterest > 0) {
+                          p.cash -= invInterest;
+                          const creditor = room.players.find((cp: any) => cp.id === agr.investorId || cp.name === agr.investorName);
+                          if (creditor) {
+                            creditor.cash += invInterest;
+                            creditor.capital = (creditor.cash / 1000) + creditor.valuation - (creditor.loan / 1000) - ((creditor.survivalLoan || 0) / 1000);
+                            io.to(creditor.id).emit('notification', `LOAN INTEREST: Received $${invInterest}K interest from ${p.name}.`);
+                          }
+                          io.to(p.id).emit('notification', `PAID INVESTOR INTEREST: Paid $${invInterest}K to ${creditor ? creditor.name : 'Investor'}.`);
+                        }
+                      });
+                      p.capital = (p.cash / 1000) + p.valuation - (p.loan / 1000) - ((p.survivalLoan || 0) / 1000) - ((p.investorDebt || 0) / 1000);
+                      if (p.is_ai) {
+                         resolveAIBankruptcyIfNeeded(p, room, io, roomId);
+                      }
+                   }
+                   if (!p.is_ai && p.cash < 0) {
+                      const shortfall = Math.abs(p.cash);
+                      io.to(p.id).emit('trigger_bankruptcy', { shortfall });
+                      io.to(roomId).emit('notification', `BANKRUPTCY ALERT: ${p.name} went bankrupt by -${shortfall}K due to interest payments!`);
                    }
                  });
                  
@@ -1718,28 +2689,49 @@ const io = new SocketServer(server, {
       if (rooms[roomId]) {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
-        if (player && player.lifelines > 0) {
-           player.lifelines -= 1;
-           const oldRoll = player.currentPhase3Roll || 1;
-           const newRoll = Math.floor(Math.random() * 10) + 1;
-           
-           const oldTotal = computeTotalRevenue(player, room, oldRoll);
-           const newTotal = computeTotalRevenue(player, room, newRoll);
-           
-           if (newTotal > oldTotal) {
-              player.currentPhase3Roll = newRoll;
-           }
-           
-           io.to(roomId).emit('game_state_update', room);
-           io.to(roomId).emit('second_chance_result', { 
-              playerId: player.id,
-              roll: player.currentPhase3Roll, 
-              remainingLifelines: player.lifelines,
-              wasKept: newTotal > oldTotal,
-              newRollTested: newRoll
-           });
-           io.to(roomId).emit('notification', `${player.name.toUpperCase()} USED SECOND CHANCE! NEW ROLL: ${newRoll} (${newTotal > oldTotal ? 'KEPT' : 'DISCARDED'}).`);
+        if (!player) return;
+
+        if (player.role?.toLowerCase() !== 'founder') {
+           socket.emit('notification', 'ACTION REJECTED: Second Chance is only available to Founders.');
+           return;
         }
+
+        if (player.hasClaimedRevenue) {
+           socket.emit('notification', 'ACTION REJECTED: Revenue has already been claimed for this round.');
+           return;
+        }
+
+        if (player.currentPhase3Roll === null || player.currentPhase3Roll === undefined) {
+           socket.emit('notification', 'ACTION REJECTED: Must roll initial dice before using Second Chance.');
+           return;
+        }
+
+        if (player.lifelines <= 0) {
+           return;
+        }
+
+        player.lifelines -= 1;
+        const oldRoll = player.currentPhase3Roll;
+        const newRoll = Math.floor(Math.random() * 10) + 1;
+        
+        const oldTotal = computeTotalRevenue(player, room, oldRoll);
+        const newTotal = computeTotalRevenue(player, room, newRoll);
+        
+        const wasKept = newTotal > oldTotal || (newTotal === oldTotal && newRoll > oldRoll);
+        if (wasKept) {
+           player.currentPhase3Roll = newRoll;
+        }
+        
+        io.to(roomId).emit('game_state_update', room);
+        io.to(roomId).emit('second_chance_result', { 
+           playerId: player.id,
+           roll: player.currentPhase3Roll, 
+           remainingLifelines: player.lifelines,
+           wasKept: wasKept,
+           newRollTested: newRoll,
+           previousRoll: oldRoll
+        });
+        io.to(roomId).emit('notification', `${player.name.toUpperCase()} USED SECOND CHANCE! NEW ROLL: ${newRoll} (${wasKept ? 'KEPT' : 'DISCARDED'}).`);
       }
     });
 
@@ -1748,7 +2740,7 @@ const io = new SocketServer(server, {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
         if (player) {
-           const finalRoll = playerRoll || Math.floor(Math.random() * 10) + 1;
+           const finalRoll = player.currentPhase3Roll || playerRoll || Math.floor(Math.random() * 10) + 1;
            player.currentPhase3Roll = finalRoll;
            
            io.to(roomId).emit('game_state_update', room);
@@ -1797,8 +2789,10 @@ const io = new SocketServer(server, {
              timestamp: Date.now(),
              cardId: card?.id
            });
-           room.actionCount = (room.actionCount || 0) + 1;
-           player.actionCount = (player.actionCount || 0) + 1;
+           if (room.mode !== 'quick' && room.mode !== 'short') {
+             room.actionCount = (room.actionCount || 0) + 1;
+             player.actionCount = (player.actionCount || 0) + 1;
+           }
            
            io.to(roomId).emit('game_state_update', room);
         }
@@ -1877,7 +2871,15 @@ const io = new SocketServer(server, {
         } else if (action.type === 'upgrade_workforce') {
           const comp = player.ownedCompanies.find((c: any) => c.name === action.companyName);
           if (comp) {
-            comp.team = Math.max(1, (comp.team || 1) - 1);
+            const currentLvl = Number(comp.teamLevel || comp.team) || 2;
+            const prevLvl = Math.max(1, currentLvl - 1);
+            if (room.teamTokenPool && action.targetLevel) {
+               room.teamTokenPool[action.targetLevel] = (room.teamTokenPool[action.targetLevel] || 0) + 1;
+            } else if (room.teamTokenPool && currentLvl > 1) {
+               room.teamTokenPool[currentLvl] = (room.teamTokenPool[currentLvl] || 0) + 1;
+            }
+            comp.teamLevel = prevLvl;
+            comp.team = prevLvl;
             comp.workforceUpgradedRound = 0;
             player.cash += action.cost;
           }
@@ -1893,8 +2895,10 @@ const io = new SocketServer(server, {
         }
 
         player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
-        player.actionCount = Math.max(0, (player.actionCount || 1) - 1);
-        room.actionCount = Math.max(0, (room.actionCount || 1) - 1);
+        if (room.mode !== 'quick' && room.mode !== 'short') {
+          player.actionCount = Math.max(0, (player.actionCount || 1) - 1);
+          room.actionCount = Math.max(0, (room.actionCount || 1) - 1);
+        }
 
         player.roundActions.splice(actIndex, 1);
 
@@ -1907,47 +2911,113 @@ const io = new SocketServer(server, {
       if (rooms[roomId]) {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
-        
-        if (player && player.cash < 0) {
-           if (option === 'loan') {
-              // Survival Loan: $50K cash for 10% lifetime fee
-              player.cash += 50;
-              player.survivalLoan = (player.survivalLoan || 0) + 50;
-              player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - (player.survivalLoan / 1000);
-              
-              io.to(roomId).emit('notification', `SURVIVAL LOAN: ${player.name} accepted a $50K survival loan.`);
-           } else if (option === 'sell' && companyName) {
-              const compIndex = player.ownedCompanies.findIndex((c: any) => c.name === companyName);
-              if (compIndex !== -1) {
-                 const comp = player.ownedCompanies[compIndex];
-                 
-                 // Refund calculation: Launch Cost + Upgrade Costs
-                 let totalInvested = 0;
-                 const compStageIndex = getStageIndex(comp.stage);
-                 
-                 if (INVESTMENT_COST_DATA[comp.name]) {
-                    for (let stg = 0; stg <= compStageIndex; stg++) {
-                       totalInvested += INVESTMENT_COST_DATA[comp.name][stg];
-                    }
-                 } else {
-                    totalInvested = comp.invest;
-                 }
+        if (!player) return;
 
-                 player.ownedCompanies.splice(compIndex, 1);
-                 player.cash += totalInvested;
-                 player.valuation -= (comp.valuation / 1000);
-                 player.loan = Math.max(0, player.loan - comp.loan);
-                 player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+        const opt = (option || '').toLowerCase().trim();
 
-                 io.to(roomId).emit('notification', `ASSET LIQUIDATION: ${player.name} sold ${comp.name} for $${totalInvested}K.`);
-              }
-           }
+        const checkAdvanceIfAllResolved = () => {
+          if (room.phase === 3) {
+            const phase3Founders = room.players.filter((p: any) => p.role?.toLowerCase() === 'founder');
+            const allClaimed = phase3Founders.every((p: any) => p.hasClaimedRevenue);
+            const anyBankrupt = room.players.some((p: any) => p.cash < 0);
+            if (allClaimed && !anyBankrupt) {
+              setTimeout(() => {
+                if (!room.players.some((p: any) => p.cash < 0)) {
+                  advanceRoundOrEndGame(room, io, roomId);
+                }
+              }, 2000);
+            }
+          }
+        };
 
+        // Option 1: Crack a Deal (Check Balance)
+        if (opt === 'crack_deal') {
            if (player.cash >= 0) {
               socket.emit('bankruptcy_cleared');
-              io.to(roomId).emit('notification', `BANKRUPTCY SOLVED: ${player.name} has resolved their shortfall.`);
+              io.to(roomId).emit('notification', `BANKRUPTCY SOLVED: ${player.name} resolved their shortfall through a deal.`);
+              checkAdvanceIfAllResolved();
+           } else {
+              socket.emit('notification', `CRACK A DEAL: Cash is still negative (${player.cash}K). Negotiate or transfer more funds first.`);
            }
            io.to(roomId).emit('game_state_update', room);
+           return;
+        }
+
+        // Option 3: Survival Bank Loan
+        if (opt === 'survival_loan' || opt === 'loan') {
+           if (player.cash < 0) {
+              const shortfall = Math.abs(player.cash);
+              player.cash += shortfall;
+              player.survivalLoan = (player.survivalLoan || 0) + shortfall;
+              player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+
+              io.to(roomId).emit('notification', `SURVIVAL LOAN: ${player.name} took a ${shortfall}K survival bank loan at 30% interest.`);
+              socket.emit('bankruptcy_cleared');
+              io.to(roomId).emit('notification', `BANKRUPTCY SOLVED: ${player.name} has resolved their shortfall.`);
+              checkAdvanceIfAllResolved();
+           } else {
+              socket.emit('bankruptcy_cleared');
+           }
+           io.to(roomId).emit('game_state_update', room);
+           return;
+        }
+
+        // Option 4: Restart (wipe portfolio and reset cash to $500K)
+        if (opt === 'restart') {
+           player.ownedCompanies = [];
+           player.valuation = 0;
+           player.cash = 500;
+           player.loan = 0;
+           player.survivalLoan = 0;
+           player.investorDebt = 0;
+           player.capital = (player.cash / 1000) + player.valuation;
+
+           socket.emit('bankruptcy_cleared');
+           io.to(roomId).emit('notification', `RESTART: ${player.name} wiped their portfolio and restarted with $500K.`);
+           io.to(roomId).emit('notification', `BANKRUPTCY SOLVED: ${player.name} has resolved their shortfall.`);
+           checkAdvanceIfAllResolved();
+           io.to(roomId).emit('game_state_update', room);
+           return;
+        }
+
+        // Option 2: Sell a Company
+        if ((opt === 'sell_company' || opt === 'sell') && companyName) {
+           const compIndex = (player.ownedCompanies || []).findIndex((c: any) => c.name?.toUpperCase().trim() === companyName.toUpperCase().trim());
+           if (compIndex !== -1) {
+              const comp = player.ownedCompanies[compIndex];
+              const compStageIndex = getStageIndex(comp.stage);
+              
+              let totalInvested = 0;
+              const dataRow = COMPANY_DATA_MAP[comp.name];
+              if (dataRow) {
+                 for (let stg = 0; stg <= compStageIndex; stg++) {
+                    totalInvested += dataRow[stg][0];
+                 }
+              } else {
+                 totalInvested = comp.invest || 0;
+              }
+
+              const activeLoan = comp.loan || 0;
+              const netProceeds = Math.max(0, totalInvested - activeLoan);
+
+              player.ownedCompanies.splice(compIndex, 1);
+              player.cash += netProceeds;
+              player.valuation = Math.max(0, player.valuation - (comp.valuation / 1000));
+              player.loan = Math.max(0, player.loan - activeLoan);
+              player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+
+              io.to(roomId).emit('notification', `ASSET LIQUIDATION: ${player.name} sold ${comp.name} for ${netProceeds}K net proceeds (Refund: ${totalInvested}K - Loan: ${activeLoan}K).`);
+
+              if (player.cash >= 0) {
+                 socket.emit('bankruptcy_cleared');
+                 io.to(roomId).emit('notification', `BANKRUPTCY SOLVED: ${player.name} has resolved their shortfall.`);
+                 checkAdvanceIfAllResolved();
+              } else {
+                 socket.emit('notification', `STILL IN DEBT: After selling ${comp.name}, you still owe ${Math.abs(player.cash)}K.`);
+              }
+           }
+           io.to(roomId).emit('game_state_update', room);
+           return;
         }
       }
     });
@@ -1957,47 +3027,53 @@ const io = new SocketServer(server, {
         const player = rooms[roomId].players.find((p: any) => p.id === targetPlayerId);
         if (player) {
           const COMPANY_TEMPLATES = [
-            { name: "CONTRACT FARMING", icon: "/mat-icons/mat-icon-contract-farming.png", invest: 50, revenue: 80, valuation: 100, loan: 10 },
-            { name: "AGRI IoT", icon: "/mat-icons/mat-icon-agri-iot.png", invest: 60, revenue: 100, valuation: 120, loan: 15 },
-            { name: "WALLET", icon: "/mat-icons/mat-icon-wallet.png", invest: 75, revenue: 120, valuation: 150, loan: 20 },
-            { name: "SNACKS", icon: "/mat-icons/mat-icon-snacks.png", invest: 40, revenue: 60, valuation: 80, loan: 5 },
-            { name: "QUICK COMMERCE", icon: "/mat-icons/mat-icon-quick-commerce.png", invest: 90, revenue: 150, valuation: 200, loan: 30 },
-            { name: "SMART STORAGE", icon: "/mat-icons/mat-icon-smart-storage.png", invest: 55, revenue: 90, valuation: 110, loan: 12 },
-            { name: "RESTRO - CHAIN", icon: "/mat-icons/mat-icon-restro-chain.png", invest: 70, revenue: 110, valuation: 140, loan: 18 },
-            { name: "TRACEABILITY", icon: "/mat-icons/mat-icon-traceability.png", invest: 45, revenue: 70, valuation: 90, loan: 8 },
-            { name: "ROBO - PACKAGING", icon: "/mat-icons/mat-icon-robo-packaging.png", invest: 80, revenue: 130, valuation: 160, loan: 25 }
+            { name: "CONTRACT FARMING", icon: "/mat-icons/mat-icon-contract-farming.png", invest: 10, revenue: 100, valuation: 500, loan: 0 },
+            { name: "AGRI IoT", icon: "/mat-icons/mat-icon-agri-iot.png", invest: 100, revenue: 10, valuation: 1000, loan: 0 },
+            { name: "WALLET", icon: "/mat-icons/mat-icon-wallet.png", invest: 50, revenue: 10, valuation: 1000, loan: 0 },
+            { name: "SNACKS", icon: "/mat-icons/mat-icon-snacks.png", invest: 10, revenue: 20, valuation: 1000, loan: 0 },
+            { name: "QUICK COMMERCE", icon: "/mat-icons/mat-icon-quick-commerce.png", invest: 10, revenue: 30, valuation: 100, loan: 0 },
+            { name: "SMART STORAGE", icon: "/mat-icons/mat-icon-smart-storage.png", invest: 200, revenue: 200, valuation: 2000, loan: 200 },
+            { name: "RESTRO - CHAIN", icon: "/mat-icons/mat-icon-restro-chain.png", invest: 150, revenue: 300, valuation: 1000, loan: 200 },
+            { name: "TRACEABILITY", icon: "/mat-icons/mat-icon-traceability.png", invest: 30, revenue: 30, valuation: 300, loan: 0 },
+            { name: "ROBO - PACKAGING", icon: "/mat-icons/mat-icon-robo-packaging.png", invest: 100, revenue: 150, valuation: 1500, loan: 200 }
           ];
 
-          const companyIndex = player.ownedCompanies.length;
-          if (companyIndex >= 4) {
-             socket.emit('notification', 'Maximum of 4 companies allowed.');
+          if ((player.ownedCompanies || []).length >= 4) {
+             socket.emit('notification', 'ACTION REJECTED: Maximum of 4 company launches allowed per Founder.');
              return;
           }
-          if (companyIndex < COMPANY_TEMPLATES.length) {
-            const template = COMPANY_TEMPLATES[companyIndex];
-            const stage = ['L', 'G', 'S'][companyIndex % 3];
-            const team = player.color === '#ef4444' ? 'RN' :
-                         player.color === '#55ffb0' ? 'GT' :
-                         player.color === '#d4af37' ? 'GD' : 'BL';
-            
-            const newCompany = {
-              ...template,
-              stage,
-              team
-            };
-            
-            player.ownedCompanies.push(newCompany);
-            player.valuation += (newCompany.valuation / 1000);
-            player.loan += newCompany.loan;
-            player.capital += (newCompany.valuation - newCompany.loan) / 1000;
-            player.cash -= newCompany.invest;
-            
+          const unownedTemplates = COMPANY_TEMPLATES.filter((t: any) => !player.ownedCompanies.some((c: any) => c.name === t.name));
+          if (unownedTemplates.length === 0) {
+             socket.emit('notification', 'ACTION REJECTED: No more companies available to launch.');
+             return;
+          }
+          const template = unownedTemplates[0];
+          if (player.cash < template.invest) {
+             socket.emit('notification', 'ACTION REJECTED: Insufficient cash to launch company.');
+             return;
+          }
+
+          const newCompany = {
+            ...template,
+            loan: 0,
+            stage: 'L',
+            team: 1,
+            teamLevel: 1,
+            equityGiven: 0
+          };
+          
+          player.ownedCompanies.push(newCompany);
+          player.valuation += (newCompany.valuation / 1000);
+          player.cash -= newCompany.invest;
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+          
+          if (rooms[roomId].mode !== 'quick' && rooms[roomId].mode !== 'short') {
             rooms[roomId].actionCount += 1;
             player.actionCount = (player.actionCount || 0) + 1;
-            
-            io.to(roomId).emit('game_state_update', rooms[roomId]);
-            io.to(roomId).emit('notification', `${player.name.toUpperCase()} LAUNCHED ${newCompany.name.toUpperCase()} (STAGE ${stage})`);
           }
+          
+          io.to(roomId).emit('game_state_update', rooms[roomId]);
+          io.to(roomId).emit('notification', `${player.name.toUpperCase()} LAUNCHED ${newCompany.name.toUpperCase()} (STAGE L)`);
         }
       }
     });

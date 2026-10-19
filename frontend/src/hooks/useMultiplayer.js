@@ -5,7 +5,7 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:5001";
 
-export function useMultiplayer(roomId, username, role, avatarId, maxPlayers) {
+export function useMultiplayer(roomId, username, role, avatarId, maxPlayers, isVsAi = false, mode = 'standard') {
   const [gameState, setGameState] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '' });
   const [drawnCard, setDrawnCard] = useState(null);
@@ -24,7 +24,15 @@ export function useMultiplayer(roomId, username, role, avatarId, maxPlayers) {
     socketRef.current.on('connect', () => {
       console.log('Connected to multiplayer server', socketRef.current.id);
       setSocketId(socketRef.current.id);
-      socketRef.current.emit('join_room', { roomId, username, role: role || 'Founder', avatarId, maxPlayers });
+      socketRef.current.emit('join_room', {
+        roomId,
+        username,
+        role: role || 'Founder',
+        avatarId,
+        maxPlayers,
+        isVsAi: !!isVsAi,
+        mode: mode || 'standard'
+      });
     });
 
     socketRef.current.on('game_state_update', (newState) => {

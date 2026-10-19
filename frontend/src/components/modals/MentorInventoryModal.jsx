@@ -73,10 +73,10 @@ const getCardRequirements = (card) => {
   return {
     needsPlayer: ['skip_rival_turn', 'mutual_draw', 'halve_rival_cash'].includes(effect),
     needsCompany: [
-      'free_stage_up', 'free_pr', 'free_workforce', 'half_cost_stage_up', 
+      'free_stage_up', 'free_stage_or_cash', 'free_pr', 'free_workforce', 'half_cost_stage_up', 
       'double_revenue', 'half_cost_all_stages', 'tech_revenue_boost', 
       'reduce_tax', 'end_game_valuation_boost', 'sell_company_half_price', 
-      'block_stage_up'
+      'block_stage_up', 'forced_sale'
     ].includes(effect),
     needsTemplates: effect === 'quick_launch_retain'
   };
@@ -120,7 +120,7 @@ const MentorInventoryModal = ({ onClose, player, players, onPlayCard }) => {
 
   if (!mentorCards || mentorCards.length === 0) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-300">
+      <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-300">
         <div className="relative bg-[#1a080b] border-2 border-[#FFC240]/40 rounded-3xl p-10 max-w-md w-full flex flex-col items-center text-center shadow-[0_0_60px_rgba(0,0,0,0.9)] animate-in zoom-in-95 duration-200">
           <button 
             onClick={onClose} 
@@ -194,7 +194,7 @@ const MentorInventoryModal = ({ onClose, player, players, onPlayCard }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col items-center justify-between bg-black/85 backdrop-blur-md p-4 sm:p-6 select-none animate-in fade-in duration-300 overflow-hidden">
+    <div className="fixed inset-0 z-[110] flex flex-col items-center justify-between bg-black/85 backdrop-blur-md p-4 sm:p-6 select-none animate-in fade-in duration-300 overflow-hidden">
       
       {/* Top Bar with subtle card counter & Close button */}
       <div className="w-full flex items-center justify-between px-4 sm:px-8 pt-2 z-30">

@@ -9,11 +9,11 @@ import pool from "../config/database";
  * browser-cached) from GET /api/users/:id/avatar.
  */
 
-// Accept only reasonable raster image data URLs.
-const DATA_URL_RE = /^data:image\/(png|jpe?g|webp);base64,([A-Za-z0-9+/]+={0,2})$/;
+// Accept any reasonable raster image data URL, ignoring inner whitespace/newlines.
+const DATA_URL_RE = /^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/i;
 
-// ~300 KB image after base64 inflation — keeps the column and serve response small.
-const MAX_LEN = 420_000;
+// Up to 2 MB base64 data URL
+const MAX_LEN = 2_000_000;
 
 export interface DecodedImage {
   mime:   string;
@@ -25,13 +25,14 @@ export async function updateProfileImage(
   userId: string,
   image: unknown
 ): Promise<{ profileImageUrl: string }> {
-  if (typeof image !== "string" || image.length === 0) {
+  const imgStr = typeof image === "string" ? image.trim() : "";
+  if (!imgStr) {
     throw { status: 400, message: "image (a base64 data URL) is required." };
   }
-  if (image.length > MAX_LEN) {
+  if (imgStr.length > MAX_LEN) {
     throw { status: 413, message: "Image is too large — please choose a smaller photo." };
   }
-  if (!DATA_URL_RE.test(image)) {
+  if (!DATA_URL_RE.test(imgStr)) {
     throw { status: 400, message: "Image must be a base64 PNG, JPEG, or WebP data URL." };
   }
 
@@ -39,7 +40,7 @@ export async function updateProfileImage(
     `UPDATE users SET profile_image_url = $1, updated_at = NOW()
      WHERE id = $2
      RETURNING updated_at`,
-    [image, userId]
+    [imgStr, userId]
   );
   if (result.rowCount === 0) {
     throw { status: 404, message: "User not found." };

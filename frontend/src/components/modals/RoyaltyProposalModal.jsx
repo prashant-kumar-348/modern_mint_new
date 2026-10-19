@@ -10,9 +10,20 @@ const RoyaltyProposalModal = ({ proposal, onClose, sendAction }) => {
   };
 
   const handleReject = () => {
-    sendAction('reject_royalty_agreement', { proposerId: proposal.proposerId });
+    sendAction('reject_royalty_agreement', { proposerId: proposal.proposerId, proposal });
     onClose();
   };
+
+  const cashVal = Number(proposal.cash) || 0;
+  const equityVal = Number(proposal.equity) || 0;
+  const royaltyVal = Number(proposal.royalty || proposal.percentage) || 0;
+  const loanVal = Number(proposal.loan) || 0;
+
+  const modalTitle = 
+    equityVal > 0 && royaltyVal === 0 && loanVal === 0 ? 'Equity Proposal' :
+    loanVal > 0 && equityVal === 0 && royaltyVal === 0 ? 'Loan Proposal' :
+    royaltyVal > 0 && equityVal === 0 && loanVal === 0 ? 'Royalty Proposal' :
+    'Deal Proposal';
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[400] flex items-center justify-center p-4 font-sans select-none">
@@ -21,22 +32,50 @@ const RoyaltyProposalModal = ({ proposal, onClose, sendAction }) => {
         <div className="text-center">
           <Handshake className="w-12 h-12 text-[#ffb055] mx-auto mb-2" />
           <h2 className="text-xl font-black text-white uppercase tracking-wider mb-2">
-            Royalty Proposal
+            {modalTitle}
           </h2>
           <p className="text-sm text-white/80">
-            <strong className="text-[#ffb055]">{proposal.proposerName}</strong> wants to lock in a deal:
+            <strong className="text-[#ffb055]">{proposal.proposerName || proposal.proposer}</strong> wants to lock in a deal:
           </p>
         </div>
 
         <div className="bg-[#112a22] rounded-lg p-4 flex flex-col gap-3">
-          <div className="flex justify-between items-center border-b border-white/10 pb-2">
-            <span className="text-xs text-white/50 uppercase tracking-widest">Company</span>
-            <span className="text-[#55ffb0] font-bold">{proposal.companyName}</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-white/50 uppercase tracking-widest">Royalty Cut</span>
-            <span className="text-[#ffb055] font-black text-lg">{proposal.percentage}%</span>
-          </div>
+          {proposal.companyName && (
+            <div className="flex justify-between items-center border-b border-white/10 pb-2">
+              <span className="text-xs text-white/50 uppercase tracking-widest">Company</span>
+              <span className="text-[#55ffb0] font-bold">{proposal.companyName}</span>
+            </div>
+          )}
+          {cashVal > 0 && (
+            <div className="flex justify-between items-center border-b border-white/10 pb-2">
+              <span className="text-xs text-white/50 uppercase tracking-widest">Investment</span>
+              <span className="text-[#55ffb0] font-black text-base">${cashVal >= 10 ? `${cashVal}K` : `${cashVal}M`}</span>
+            </div>
+          )}
+          {equityVal > 0 && (
+            <div className="flex justify-between items-center border-b border-white/10 pb-2">
+              <span className="text-xs text-white/50 uppercase tracking-widest">Equity Share</span>
+              <span className="text-[#55ffb0] font-black text-base">{equityVal}%</span>
+            </div>
+          )}
+          {royaltyVal > 0 && (
+            <div className="flex justify-between items-center border-b border-white/10 pb-2">
+              <span className="text-xs text-white/50 uppercase tracking-widest">Royalty Cut</span>
+              <span className="text-[#ffb055] font-black text-base">{royaltyVal}%</span>
+            </div>
+          )}
+          {loanVal > 0 && (
+            <div className="flex justify-between items-center border-b border-white/10 pb-2">
+              <span className="text-xs text-white/50 uppercase tracking-widest">Loan Amount</span>
+              <span className="text-yellow-400 font-black text-base">${loanVal >= 10 ? `${loanVal}K` : `${loanVal}M`}</span>
+            </div>
+          )}
+          {proposal.terms && (
+            <div className="flex flex-col gap-1 text-left pt-1">
+              <span className="text-[10px] text-white/50 uppercase tracking-widest">Terms</span>
+              <span className="text-white/80 text-xs italic">{proposal.terms}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-4">

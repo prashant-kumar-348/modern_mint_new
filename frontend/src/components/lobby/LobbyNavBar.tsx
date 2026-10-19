@@ -92,9 +92,10 @@ function ProfileAvatar() {
       setStoredProfileImage(profileImageUrl);
       setImage(`${API_BASE_URL}${profileImageUrl}`); // update navbar immediately
       setPending(null);                              // lobby refreshes on its poll
-    } catch {
+    } catch (err: any) {
+      console.error("Profile image upload failed:", err);
       setPending(null);                              // restore the previous image
-      setError("Upload failed. Please try again.");
+      setError(err?.message || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -126,31 +127,37 @@ function ProfileAvatar() {
           type="button"
           title="Change profile photo"
           onClick={() => fileRef.current?.click()}
-          className="absolute -top-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer"
+          className="absolute -top-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center cursor-pointer hover:scale-105 transition-transform"
           style={{
             background: "#23d3c4",
             border: "2.5px solid #04190d",
             boxShadow: "0 0 8px rgba(35,211,196,0.55)",
           }}
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-              stroke="#04190d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/lobby/Frame.png"
+            alt="Edit"
+            className="w-3.5 h-3.5 object-contain pointer-events-none select-none brightness-0"
+          />
         </button>
       )}
 
-      {/* Online status dot — bottom-left, matching Figma */}
-      <span
-        className="absolute bottom-1 left-1.5 w-3.5 h-3.5 rounded-full border-2"
+      {/* Online status dot — bottom-left, using user-provided Ellipse 92.png */}
+      <div
+        className="absolute bottom-1 left-1.5 w-3.5 h-3.5 rounded-full border-2 overflow-hidden flex items-center justify-center pointer-events-none"
         style={{
-          background: "#2bff84",
           borderColor: "#04190d",
           boxShadow: "0 0 8px #2bff84",
         }}
-      />
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/lobby/Ellipse 92.png"
+          alt="Online"
+          className="w-full h-full object-cover pointer-events-none select-none"
+        />
+      </div>
 
       {/* Save / Cancel — shown only while a preview is staged */}
       {pending && (

@@ -22,7 +22,15 @@ import type {
 
 // ── Initial slots ─────────────────────────────────────────────────────────
 
-function makeFounderSlots(username: string): CreateSlot[] {
+function makeFounderSlots(username: string, vsAi: boolean = false): CreateSlot[] {
+  if (vsAi) {
+    return [
+      { dropdown: "You",  avatarId: 2, name: username },  // host only
+      { dropdown: "AI",   avatarId: 1, name: "Alpha Bot" },
+      { dropdown: "AI",   avatarId: 3, name: "Delta Bot" },
+      { dropdown: "AI",   avatarId: 4, name: "Omega Bot" },
+    ];
+  }
   return [
     { dropdown: "You",  avatarId: 2, name: username },  // host only
     { dropdown: "Open", avatarId: 5, name: "" },
@@ -31,7 +39,13 @@ function makeFounderSlots(username: string): CreateSlot[] {
   ];
 }
 
-function makeInvestorSlots(): CreateSlot[] {
+function makeInvestorSlots(vsAi: boolean = false): CreateSlot[] {
+  if (vsAi) {
+    return [
+      { dropdown: "AI",   avatarId: 5, name: "Sigma Bot" },
+      { dropdown: "AI",   avatarId: 6, name: "Apex Bot" },
+    ];
+  }
   return [
     { dropdown: "Open",   avatarId: 5, name: "" },
     { dropdown: "Open",   avatarId: 5, name: "" },
@@ -166,6 +180,7 @@ export default function CreateGamePage() {
   const ready   = useAuthGuard();
   const router  = useRouter();
 
+  const [isVsAi,       setIsVsAi]       = useState(false);
   const [username,     setUsername]     = useState("You");
   const [roomName,     setRoomName]     = useState("");
   const [founderSlots, setFounderSlots] = useState<CreateSlot[]>(() => makeFounderSlots("You"));
@@ -178,27 +193,35 @@ export default function CreateGamePage() {
   const [error,         setError]         = useState<string | null>(null);
 
   useEffect(() => {
+    const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+    const vsAiMode = searchParams?.get("vsAi") === "true";
+    setIsVsAi(vsAiMode);
+
     const user = getUser();
-    if (user?.username) {
-      startTransition(() => {
-        setUsername(user.username);
-        setFounderSlots(makeFounderSlots(user.username));
-        setRoomName(`${user.username}'s Arena`);
-      });
-    } else {
-      setRoomName("Modern Mint Arena");
-    }
+    const activeUsername = user?.username || "You";
+    startTransition(() => {
+      setUsername(activeUsername);
+      setFounderSlots(makeFounderSlots(activeUsername, vsAiMode));
+      setInvestorSlots(makeInvestorSlots(vsAiMode));
+      if (vsAiMode) {
+        setPrivacy("closed");
+        setRoomName(`${activeUsername}'s Arena (VS AI)`);
+      } else {
+        setRoomName(user?.username ? `${user.username}'s Arena` : "Modern Mint Arena");
+      }
+    });
   }, []);
 
   // Update founder slot dropdown
   function updateFounder(i: number, dropdown: SlotDropdown) {
+    const defaultAiNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
     setFounderSlots((prev) =>
       prev.map((s, idx) =>
         idx === i
           ? {
               ...s,
               dropdown,
-              name: dropdown === "Open" ? "" : s.name || "FRIEND",
+              name: dropdown === "Open" ? "" : dropdown === "AI" ? (s.name && s.name !== "FRIEND" && s.name !== "" ? s.name : defaultAiNames[idx - 1] || "AI BOT") : s.name || "FRIEND",
             }
           : s
       )
@@ -207,13 +230,14 @@ export default function CreateGamePage() {
 
   // Update investor slot dropdown
   function updateInvestor(i: number, dropdown: SlotDropdown) {
+    const defaultAiNames = ["Sigma Bot", "Apex Bot"];
     setInvestorSlots((prev) =>
       prev.map((s, idx) =>
         idx === i
           ? {
               ...s,
               dropdown,
-              name: dropdown === "Open" ? "" : s.name || `INVESTOR ${idx + 1}`,
+              name: dropdown === "Open" ? "" : dropdown === "AI" ? (s.name && s.name !== `INVESTOR ${idx + 1}` && s.name !== "" ? s.name : defaultAiNames[idx] || "AI BOT") : s.name || `INVESTOR ${idx + 1}`,
             }
           : s
       )
@@ -234,22 +258,26 @@ export default function CreateGamePage() {
     setError(null);
     setStarting(true);
 
+    const aiFounders = isVsAi ? 3 : 0;
+    const aiInvestors = isVsAi ? 2 : 0;
+    const isAiGame = isVsAi;
+
     try {
       const room = await createRoom({
         name:          finalName,
         mode,
-        privacy,
+        privacy:       isAiGame ? "closed" : privacy,
         password:      privacy === "password" ? password : undefined,
         ai_difficulty: difficulty,
         max_founders:  4,
         max_investors: 2,
-        ai_founders:   0,
-        ai_investors:  0,
+        ai_founders:   aiFounders,
+        ai_investors:  aiInvestors,
         avatar_id:     founderSlots[0].avatarId,
         display_name:  username,
       });
 
-      router.push(`/room/${room.id}`);
+      router.push(`/room/${room.id}${isAiGame ? "?vsAi=true" : ""}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create room.");
       setStarting(false);
@@ -301,6 +329,7 @@ export default function CreateGamePage() {
                         name={slot.name}
                         onChange={(d) => updateFounder(i, d)}
                         isYou={i === 0}
+                        allowAI={true}
                       />
                     ))}
                   </div>
@@ -328,6 +357,7 @@ export default function CreateGamePage() {
                         avatarId={slot.avatarId}
                         name={slot.name}
                         onChange={(d) => updateInvestor(i, d)}
+                        allowAI={true}
                       />
                     ))}
                   </div>

@@ -1,0 +1,39 @@
+<USER_REQUEST>
+MODERN MINT — RULEBOOK-BASED GAMEPLAY SPECIFICATION & COMPLIANCE AUDIT
+Source: Modern Mint Rulebook, dated 16 September 2025 (24-page PDF supplied by the user)
+
+ANTIGRAVITY AUDIT PROMPT — AUDIT ONLY, DO NOT CHANGE THE PROJECT
+I have already completed Modern Mint. Use the rulebook-based specification in this document to check whether the existing game implements every rule correctly. Inspect the entire existing project: frontend, backend, game-state logic, player mats/data, event and mentor cards, deal systems, revenue calculations, and multiplayer/Socket.IO behavior.
+
+For every individual rule, mark exactly one status:
+- PASS — implementation is present and evidence supports correct behavior.
+- FAIL — rule is missing or implemented incorrectly.
+- PARTIAL — only some of the rule is implemented.
+- UNVERIFIED — the available code/data/tests do not let you confirm it.
+- NEEDS CLARIFICATION — the source rule itself is ambiguous or inconsistent.
+
+Do not count a button, label, comment, or placeholder as implementation. Trace each important rule through actual server logic and state updates. Use existing project data/player mats/card data for numbers; never invent values. If a rule refers to a value not available in the code/data or legible source, mark it UNVERIFIED. Report source-rule contradictions separately as NEEDS CLARIFICATION.
+
+STRICT RESTRICTIONS: This is a read-only audit. DO NOT edit, create, delete, format, or rename files. DO NOT fix bugs, implement missing rules, redesign the UI, change dependencies/configuration, or deploy. You may run existing tests or safe read-only checks if available, but do not alter project files. If a test cannot safely be run without changing files, report it as not run.
+
+FINAL REPORT REQUIRED:
+1. Total rules checked and counts of PASS, FAIL, PARTIAL, UNVERIFIED, and NEEDS CLARIFICATION.
+2. A complete rule-by-rule checklist covering every rule in sections A–P below, not just a sample or summary.
+3. For each result, include the rul
+<truncated 32097 bytes>
+under; confirm whether every company uses the same D10 outcome while applying its own stage/team multiplier.
+7. Investor Net Value is not fully specified in the extracted scoring formula. Confirm treatment of remaining cash, equity, outstanding loan receivables, royalties, and already-collected payments.
+8. Bankruptcy says “choose one or more” options on the Action Plan but also describes choosing Second Chance OR the Bankruptcy Action Plan. Confirm whether options within the Action Plan may be combined and how Second Chance selection works.
+9. Restart says all companies and cash are lost and 500K is received; treatment of existing debts, investor equity, royalty contracts, and loan obligations is not stated.
+10. Deal negotiation is flexible, but constraints for total company equity, dilution, ownership transfer, deal cancellation, defaults, and contract duration are not fully specified.
+11. The text says “all phases of investors and founders run together” while also requiring all pitches first and Phase II after all Phase I actions. Implement a clear, synchronized phase barrier rather than allowing a player to enter a later phase prematurely.
+12. The rulebook references Player Mats and card text for many numerical values and effects. The PDF text extraction alone does not provide every table/card face. Audit the project’s existing game data and the actual visual PDF/player-mat assets before marking numerical rules compliant.
+
+Q. REQUIRED AUDIT REPORT
+Return the complete read-only audit report requested at the beginning of this document. Include every rule in sections A–P, including the required audit scenarios. Do not propose or apply code changes as part of this task. Do not omit a rule just because it is difficult to test; mark it UNVERIFIED and explain the limitation. Wait for the user to review the report before any separate implementation task.
+
+END OF AUDIT SPECIFICATION
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-17T15:07:43+05:30.
+</ADDITIONAL_METADATA>

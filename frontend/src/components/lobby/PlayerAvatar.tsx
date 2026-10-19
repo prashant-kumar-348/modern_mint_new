@@ -178,16 +178,22 @@ export default function PlayerAvatar({
         </div>
       )}
 
-      {/* Online status dot */}
+      {/* Online status dot — using user-provided Ellipse 92.png */}
       {showStatus && (
-        <span
+        <div
           className={clsx(
-            "absolute bottom-0 right-0 rounded-full",
-            s.dot,
-            "border border-[#03090c]"
+            "absolute bottom-0 right-0 rounded-full overflow-hidden flex items-center justify-center border border-[#03090c]",
+            s.dot
           )}
-          style={{ background: "#2aff7a", boxShadow: "0 0 4px #2aff7a" }}
-        />
+          style={{ boxShadow: "0 0 4px #2aff7a" }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/lobby/Ellipse 92.png"
+            alt="Online"
+            className="w-full h-full object-cover pointer-events-none select-none"
+          />
+        </div>
       )}
     </div>
   );

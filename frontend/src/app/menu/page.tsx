@@ -8,9 +8,9 @@ import { isAuthenticated } from "@/lib/auth";
 
 /* ── Menu item definitions ─────────────────────────────────────────────── */
 const primaryActions = [
-  { label: "Multiplayer",  icon: "⚔",  action: "auth",     sub: "Global ranked matches"           },
-  { label: "VS AI",        icon: "◈",  action: "auth",     sub: "Adaptive AI opponents"            },
-  { label: "Join Game",    icon: "⬡",  action: "auth",     sub: "Enter session code"               },
+  { label: "Multiplayer",  icon: "⚔",  action: "multiplayer", sub: "Global ranked matches"           },
+  { label: "VS AI",        icon: "◈",  action: "vs_ai",       sub: "Adaptive AI opponents"            },
+  { label: "Join Game",    icon: "⬡",  action: "join",        sub: "Enter session code"               },
 ];
 
 const secondaryActions = [
@@ -135,8 +135,13 @@ export default function MainMenu() {
   };
 
   function handle(action: string) {
-    if (action === "auth") {
-      // Skip login page if the user already has a valid session
+    if (action === "multiplayer") {
+      router.push(isAuthenticated() ? "/lobby" : "/login");
+    }
+    if (action === "vs_ai") {
+      router.push(isAuthenticated() ? "/lobby/create?vsAi=true" : "/login?redirectTo=/lobby/create?vsAi=true");
+    }
+    if (action === "join") {
       router.push(isAuthenticated() ? "/lobby" : "/login");
     }
     if (action === "tutorial") router.push("/tutorial");

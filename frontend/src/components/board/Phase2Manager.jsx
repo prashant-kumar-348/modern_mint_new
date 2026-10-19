@@ -1,7 +1,7 @@
 import React from 'react';
 import Phase2PlayerMatModal from '../modals/Phase2PlayerMatModal';
 
-const Phase2Manager = ({ activeModal, setActiveModal, sendAction, localPlayer, currentRound, drawnCard, clearDrawnCard, activeEvent }) => {
+const Phase2Manager = ({ activeModal, setActiveModal, sendAction, localPlayer, currentRound, drawnCard, clearDrawnCard, activeEvent, teamTokenPool }) => {
   const handleClose = () => {
     setActiveModal(null);
   };
@@ -38,6 +38,8 @@ const Phase2Manager = ({ activeModal, setActiveModal, sendAction, localPlayer, c
           actionType={activeModal}
           currentRound={currentRound}
           activeEvent={activeEvent}
+          teamTokenPool={teamTokenPool}
+          localPlayer={localPlayer}
         />
       )}
     </>

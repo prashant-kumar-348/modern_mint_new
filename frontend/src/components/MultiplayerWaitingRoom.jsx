@@ -44,6 +44,8 @@ export default function MultiplayerWaitingRoom({
   const roomName = roomInfo?.name || "Modern Mint Arena";
   const gameMode = roomInfo?.mode === "60mins" ? "60 Mins Mode" : roomInfo?.mode === "short" ? "Short Game" : "Full Game";
 
+  const isVsAiRoom = Boolean(roomInfo?.isVsAi || gameState?.isVsAi || gameState?.players?.some(p => p.is_ai));
+
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#030806] flex items-center justify-center font-sans select-none">
       {/* Dynamic Background */}
@@ -83,24 +85,28 @@ export default function MultiplayerWaitingRoom({
                 </span>
               </div>
               <p className="text-xs text-white/50 tracking-wide mt-0.5">
-                Multiplayer Waiting Room &bull; No AI Bots Allowed
+                {isVsAiRoom
+                  ? "VS AI Match • Adaptive AI Opponents"
+                  : "Multiplayer Waiting Room • No AI Bots Allowed"}
               </p>
             </div>
           </div>
 
-          {/* Share / Copy Room Link */}
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all cursor-pointer text-xs font-bold uppercase tracking-wider shadow-md"
-            style={{
-              background: copied ? "rgba(43,248,184,0.25)" : "rgba(214,178,90,0.12)",
-              borderColor: copied ? "#2bf8b8" : "rgba(214,178,90,0.5)",
-              color: copied ? "#2bf8b8" : "#ffe885",
-            }}
-          >
-            {copied ? <Check size={15} /> : <Copy size={15} />}
-            <span>{copied ? "Link Copied!" : "Invite Friends"}</span>
-          </button>
+          {/* Share / Copy Room Link - only in multiplayer with human slots, NEVER in VS AI */}
+          {!isVsAiRoom && (
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl border transition-all cursor-pointer text-xs font-bold uppercase tracking-wider shadow-md"
+              style={{
+                background: copied ? "rgba(43,248,184,0.25)" : "rgba(214,178,90,0.12)",
+                borderColor: copied ? "#2bf8b8" : "rgba(214,178,90,0.5)",
+                color: copied ? "#2bf8b8" : "#ffe885",
+              }}
+            >
+              {copied ? <Check size={15} /> : <Copy size={15} />}
+              <span>{copied ? "Link Copied!" : "Invite Friends"}</span>
+            </button>
+          )}
         </div>
 
         {/* Players Counter Banner */}

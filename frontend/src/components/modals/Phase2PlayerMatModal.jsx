@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Lock } from 'lucide-react';
 
-export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, ownedCompanies, actionType, currentRound, activeEvent }) {
+export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, ownedCompanies, actionType, currentRound, activeEvent, teamTokenPool, localPlayer }) {
   const companies = [
     { id: 'c1', name: 'CONTRACT FARMING', icon: '/mat-icons/mat-icon-contract-farming.png', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
     { id: 'c2', name: 'AGRI IoT', icon: '/mat-icons/mat-icon-agri-iot.png', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
@@ -14,16 +14,10 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
     { id: 'c9', name: 'ROBO - PACKAGING', icon: '/mat-icons/mat-icon-robo-packaging.png', data: [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]] },
   ];
 
-  const teamUpgradeCosts = {
-    'CONTRACT FARMING': [5, 10, 15, 20],
-    'AGRI IoT': [5, 10, 15, 20],
-    'WALLET': [5, 10, 15, 20],
-    'SNACKS': [5, 10, 15, 20],
-    'QUICK COMMERCE': [5, 10, 15, 20],
-    'SMART STORAGE': [5, 10, 15, 20],
-    'RESTRO - CHAIN': [5, 10, 15, 20],
-    'TRACEABILITY': [5, 10, 15, 20],
-    'ROBO - PACKAGING': [5, 10, 15, 20]
+  const TEAM_UPGRADE_COSTS = {
+    2: 50,
+    3: 100,
+    4: 200
   };
 
   const stages = ["Launch", "Retain", "Grow", "Scale"];
@@ -63,15 +57,26 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
        const ownedData = ownedCompanies.find(c => c.name === selectedCompany.name);
        const prCosts = [100, 300, 500, 700];
        let baseCost = prCosts[ownedData ? (ownedData.team || 1) - 1 : 0] || 100;
-       if (activeEvent?.effect === 'pr_discount_100') {
-         baseCost = Math.max(0, baseCost - 100);
+       if (ownedData?.freePRRound === currentRound || localPlayer?.freePRRound === currentRound) {
+         baseCost = 0;
+       } else {
+         if (localPlayer?.taxDiscountRound === currentRound) {
+           baseCost = Math.round(baseCost / 2);
+         }
+         if (activeEvent?.effect === 'pr_discount_100') {
+           baseCost = Math.max(0, baseCost - 100);
+         }
        }
        requiredCost = baseCost;
     } else if (actionType === 'upgrade_workforce') {
        const ownedData = ownedCompanies.find(c => c.name === selectedCompany.name);
-       if (ownedData && teamUpgradeCosts[selectedCompany.name]) {
-         let baseCost = teamUpgradeCosts[selectedCompany.name][getStageIndex(ownedData.stage)];
-         if (activeEvent?.effect === 'workforce_discount_half') {
+       if (ownedData) {
+         const currentLvl = Math.min(4, Math.max(1, Number(ownedData.teamLevel || ownedData.team) || 1));
+         const nextLvl = currentLvl + 1;
+         let baseCost = TEAM_UPGRADE_COSTS[nextLvl] || 50;
+         if (ownedData?.freeWorkforceRound === currentRound || localPlayer?.freeWorkforceRound === currentRound) {
+           baseCost = 0;
+         } else if (activeEvent?.effect === 'workforce_discount_half') {
            baseCost = Math.round(baseCost / 2);
          }
          requiredCost = baseCost;
@@ -82,7 +87,11 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
       if (actionType === 'stage_up' && ownedData) {
          targetStageIdx = Math.min(getStageIndex(ownedData.stage) + 1, 3);
       }
-      requiredCost = selectedCompany.data[targetStageIdx][0];
+      let baseCost = selectedCompany.data[targetStageIdx][0];
+      if (actionType === 'stage_up' && (localPlayer?.hasHalfCostStageUp || ownedData?.halfCostAllStagesRound === currentRound || localPlayer?.halfCostAllStagesCompany === selectedCompany.name)) {
+         baseCost = Math.round(baseCost / 2);
+      }
+      requiredCost = baseCost;
     }
   }
 
@@ -119,6 +128,9 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
               } else if (getStageIndex(ownedData.stage) >= 3) {
                 isLockedForAction = true;
                 lockMessage = "MAX STAGE REACHED";
+              } else if (ownedData.stageUpBlockedRound === currentRound) {
+                isLockedForAction = true;
+                lockMessage = "BLOCKED BY TOXIC MENTOR";
               } else if (ownedData.upgradedRound === currentRound) {
                 isLockedForAction = true;
                 lockMessage = "MAX 1 UPGRADE PER ROUND";
@@ -132,12 +144,20 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                 lockMessage = "MAX 1 PR PER ROUND";
               }
             } else if (actionType === 'upgrade_workforce') {
+              const currentLvl = ownedData ? Math.min(4, Math.max(1, Number(ownedData.teamLevel || ownedData.team) || 1)) : 1;
+              const nextLvl = currentLvl + 1;
               if (!isLaunched) {
                 isLockedForAction = true;
                 lockMessage = "NOT LAUNCHED YET";
+              } else if (currentLvl >= 4) {
+                isLockedForAction = true;
+                lockMessage = "MAX WORKFORCE (LVL 4)";
               } else if (ownedData.workforceUpgradedRound === currentRound) {
                 isLockedForAction = true;
                 lockMessage = "MAX 1 UPGRADE PER ROUND";
+              } else if (teamTokenPool && (teamTokenPool[nextLvl] ?? teamTokenPool[String(nextLvl)] ?? 0) <= 0) {
+                isLockedForAction = true;
+                lockMessage = `NO LVL ${nextLvl} TOKENS LEFT`;
               }
             } else {
               isLockedForAction = !isLaunched;
@@ -178,7 +198,7 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                     {stages.map((stage, idx) => {
                       const rowData = company.data[idx];
                       const isActiveStage = idx === currentStageIdx;
-                      const teamLevel = isLaunched ? (ownedData?.team || 1) : 0;
+                      const teamLevel = isLaunched ? Math.min(4, Math.max(1, Number(ownedData?.teamLevel || ownedData?.team) || 1)) : 0;
                       const isTeamUnlocked = idx < teamLevel;
                       return (
                         <div key={idx} className={`grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-xs text-center ${isActiveStage ? 'bg-[#FFC240]/20 rounded-md py-1.5 border border-[#FFC240]/50 shadow-sm' : 'text-white/90 py-1'}`}>

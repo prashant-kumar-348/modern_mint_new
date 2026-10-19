@@ -15,7 +15,11 @@ import {
   Search,
   FileText,
   Activity,
-  Share2
+  Share2,
+  Rocket,
+  Building2,
+  Handshake,
+  ArrowRight
 } from 'lucide-react';
 
 import BankLoanModal from './modals/BankLoanModal';
@@ -40,6 +44,7 @@ import BankruptcyModal from './modals/BankruptcyModal';
 import FormalizeDealModal from './modals/FormalizeDealModal';
 import RoyaltyProposalModal from './modals/RoyaltyProposalModal';
 import RepayLoanModal from './modals/RepayLoanModal';
+import GameOverModal from './modals/GameOverModal';
 import PhaseTransitionOverlay from './board/PhaseTransitionOverlay';
 import TutorialOverlay from './tutorial/TutorialOverlay';
 import { TUTORIAL_STEPS } from './tutorial/tutorialData';
@@ -201,9 +206,10 @@ export const getStageTokenImage = (stage, playerIdx = 0, playerColor = null) => 
 
 export const getTeamTokenCoinImage = (teamLevel) => {
   const lvl = Number(teamLevel);
+  if (lvl === 2) return '/team-token-2-coin.png';
   if (lvl === 3) return '/team-token-3-coin.png';
   if (lvl === 4) return '/team-token-4-coin.png';
-  return '/team-token-2-coin.png';
+  return null;
 };
 
 const AVATAR_IMAGE_BY_ID = {
@@ -219,6 +225,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
   const [activeModal, setActiveModal] = useState(null); 
   const [isHoverOpenedMat, setIsHoverOpenedMat] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(true);
+  const [showRound1Intro, setShowRound1Intro] = useState(true);
   const [isPlayingTutorial, setIsPlayingTutorial] = useState(false);
   const [tutorialStepIndex, setTutorialStepIndex] = useState(1);
   // 'deal', 'topup', 'mentor', 'team_action', 'pe_fund', 'phaseEnd'
@@ -283,7 +290,16 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
   }, [roomId]);
 
   const maxRoomCapacity = roomInfo?.maxPlayers || 4;
-  const { gameState, notification: serverNotification, sendAction, startGame, socketId, drawnCard, clearDrawnCard, socket } = useMultiplayer(roomId, username, role, avatarId, maxRoomCapacity);
+  const isVsAiMode = Boolean(roomInfo?.isVsAi);
+  const { gameState, notification: serverNotification, sendAction, startGame, socketId, drawnCard, clearDrawnCard, socket } = useMultiplayer(
+    roomId,
+    username,
+    role,
+    avatarId,
+    maxRoomCapacity,
+    isVsAiMode,
+    roomInfo?.mode
+  );
   const rawGamePhase = gameState?.phase || 1;
   const gameRound = gameState?.round || 1;
 
@@ -323,6 +339,10 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
 
   useEffect(() => {
     if (serverNotification && serverNotification.show) {
+      if (serverNotification.message?.toUpperCase().includes('ACTION REJECTED') || 
+          serverNotification.message?.toUpperCase().includes('LIFELINE')) {
+        return;
+      }
       if (isDiceRolling) {
         setPendingNotification(serverNotification);
       } else {
@@ -564,9 +584,9 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
             setNotification({ show: true, message: 'Microphone permission required for voice chat' });
           }}
         />
-        <PhaseTransitionOverlay phase={gamePhase} />
+        <PhaseTransitionOverlay phase={gamePhase} round={gameRound} />
         
-        {isBankrupt && localPlayer && (
+        {(isBankrupt || (localPlayer && localPlayer.cash < 0)) && localPlayer && (
            <BankruptcyModal 
              player={localPlayer} 
              onResolve={(option, companyName) => sendAction('resolve_bankruptcy', { option, companyName })} 
@@ -668,7 +688,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
         </div>
 
         {/* MASSIVE GOLDEN NOTIFICATION BANNER */}
-        {notification.show && (() => {
+        {notification.show && !notification.message?.toUpperCase().includes('ACTION REJECTED') && !notification.message?.toUpperCase().includes('LIFELINE') && (() => {
           const matchedCompany = getLaunchedCompanyForMessage(notification.message);
           return (
             <div className="absolute top-[45%] left-0 w-full bg-gradient-to-r from-[#F59E0B] via-[#FBBF24] to-[#F59E0B] py-6 z-[100] shadow-[0_0_40px_rgba(245,158,11,0.4)] border-y-2 border-white/40 flex items-center justify-center animate-in zoom-in-y duration-300 pointer-events-none">
@@ -722,7 +742,9 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                       alt="Team 2 Token" 
                       className="w-[46px] h-[46px] object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.6)] select-none shrink-0" 
                     />
-                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">X 12</span>
+                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">
+                      X {gameState?.teamTokenPool ? (gameState.teamTokenPool[2] ?? gameState.teamTokenPool['2'] ?? 0) : 12}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3.5">
                     <img 
@@ -730,7 +752,9 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                       alt="Team 3 Token" 
                       className="w-[46px] h-[46px] object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.6)] select-none shrink-0" 
                     />
-                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">X 8</span>
+                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">
+                      X {gameState?.teamTokenPool ? (gameState.teamTokenPool[3] ?? gameState.teamTokenPool['3'] ?? 0) : 8}
+                    </span>
                   </div>
                   <div className="flex items-center gap-3.5">
                     <img 
@@ -738,7 +762,9 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                       alt="Team 4 Token" 
                       className="w-[46px] h-[46px] object-contain drop-shadow-[0_3px_10px_rgba(0,0,0,0.6)] select-none shrink-0" 
                     />
-                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">X 6</span>
+                    <span className="text-white font-medium text-[15px] tracking-wide whitespace-nowrap select-none">
+                      X {gameState?.teamTokenPool ? (gameState.teamTokenPool[4] ?? gameState.teamTokenPool['4'] ?? 0) : 4}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -897,13 +923,19 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                                       {c.stage}
                                     </span>
                                   </div>
-                                  {/* Team Token Coin using team-token-2.png */}
+                                  {/* Team Token Coin */}
                                   <div className="w-[32px] h-[32px] flex items-center justify-center shrink-0 select-none">
-                                    <img 
-                                      src="/team-token-2.png" 
-                                      alt="Team Token" 
-                                      className="w-full h-full object-contain drop-shadow-md select-none" 
-                                    />
+                                    {getTeamTokenCoinImage(c.teamLevel || c.team) ? (
+                                      <img 
+                                        src={getTeamTokenCoinImage(c.teamLevel || c.team)} 
+                                        alt="Team Token" 
+                                        className="w-full h-full object-contain drop-shadow-md select-none" 
+                                      />
+                                    ) : (
+                                      <div className="w-[26px] h-[26px] rounded-full border border-white/20 bg-black/40 flex items-center justify-center text-[10px] text-white/70 font-bold" title="Team Level 1 (Solo Founder)">
+                                        1
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               ))
@@ -1004,11 +1036,17 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                                             {c.stage}
                                           </span>
                                         </div>
-                                        <img 
-                                          src="/team-token-2.png" 
-                                          alt="Token" 
-                                          className="w-[16px] h-[16px] object-contain drop-shadow-sm select-none" 
-                                        />
+                                        {getTeamTokenCoinImage(c.teamLevel || c.team) ? (
+                                          <img 
+                                            src={getTeamTokenCoinImage(c.teamLevel || c.team)} 
+                                            alt="Token" 
+                                            className="w-[16px] h-[16px] object-contain drop-shadow-sm select-none" 
+                                          />
+                                        ) : (
+                                          <div className="w-[16px] h-[16px] rounded-full border border-white/20 bg-black/40 flex items-center justify-center text-[8px] text-white/70 font-bold" title="Team Level 1 (Solo Founder)">
+                                            1
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
                                     <span className="font-black text-[9px] text-white tracking-tight uppercase text-center leading-tight mt-1 select-none px-0.5 break-words max-w-full">
@@ -1158,11 +1196,17 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
 
                         {/* Team Token Coin */}
                         <div className="w-8 h-8 flex items-center justify-center shrink-0">
-                          <img 
-                            src={getTeamTokenCoinImage(comp.team)} 
-                            alt="Team Token" 
-                            className="w-full h-full object-contain drop-shadow-md select-none" 
-                          />
+                          {getTeamTokenCoinImage(comp.teamLevel || comp.team) ? (
+                            <img 
+                              src={getTeamTokenCoinImage(comp.teamLevel || comp.team)} 
+                              alt="Team Token" 
+                              className="w-full h-full object-contain drop-shadow-md select-none" 
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full border border-white/20 bg-black/40 flex items-center justify-center text-[10px] text-white/70 font-bold" title="Team Level 1 (Solo Founder)">
+                              1
+                            </div>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -1296,9 +1340,18 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                 <span className="text-[8px] md:text-[10px] text-white/70 uppercase tracking-widest leading-none mb-1">Round</span>
                 <span className="text-2xl md:text-3xl font-black text-white leading-none drop-shadow-md">{gameRound}</span>
               </div>
-              <div className="flex flex-col items-center justify-center">
+              <div className="flex flex-col items-center justify-center relative group">
                 <span className="text-[8px] md:text-[10px] text-white/70 uppercase tracking-widest leading-none mb-1">Phase</span>
                 <span className="text-2xl md:text-3xl font-black text-white leading-none drop-shadow-md">{gamePhase}</span>
+                {gameRound === 1 && gamePhase === 2 && (
+                  <button 
+                    onClick={() => setShowRound1Intro(true)}
+                    className="text-[8px] text-[#55ffb0] font-bold uppercase tracking-wider underline hover:text-white transition-colors cursor-pointer -mt-0.5"
+                    title="Click to learn why Round 1 starts in Phase 2"
+                  >
+                    Why Phase 2?
+                  </button>
+                )}
               </div>
               <div className="flex flex-col items-center justify-center min-w-[60px]">
                 <span className="text-[8px] md:text-[10px] text-white/70 uppercase tracking-widest leading-none mb-1">Turn</span>
@@ -1485,6 +1538,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
             localPlayer={localPlayer} 
             currentRound={gameRound} 
             activeEvent={gameState?.activeEvent} 
+            teamTokenPool={gameState?.teamTokenPool}
           />
         )}
 
@@ -1603,6 +1657,13 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
               />
             )}
 
+            {gameState?.isFinished && (
+              <GameOverModal 
+                gameState={gameState} 
+                roomId={roomId}
+              />
+            )}
+
           </div>
         )}
 
@@ -1652,6 +1713,100 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
             initialStep={1}
             onStepChange={(stepIdx) => setTutorialStepIndex(stepIdx)}
           />
+        )}
+
+        {/* ROUND 1 PHASE 2 BRIEFING MODAL */}
+        {gameRound === 1 && !isPlayingTutorial && !showTutorialPrompt && showRound1Intro && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300 pointer-events-auto font-sans select-none">
+            <div className="relative w-full max-w-lg bg-gradient-to-b from-[#0c241b] via-[#091a13] to-[#050e0a] border-2 border-[#d4af37]/70 rounded-3xl p-6 sm:p-7 shadow-[0_0_60px_rgba(212,175,55,0.25)] flex flex-col items-center overflow-hidden max-h-[92vh] overflow-y-auto hide-scrollbar">
+              
+              {/* Subtle Decorative Grid Pattern */}
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#55ffb00a_1px,transparent_1px),linear-gradient(to_bottom,#55ffb00a_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none rounded-3xl"></div>
+
+              {/* Ambient Golden Glow */}
+              <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-56 h-36 bg-[#d4af37]/15 rounded-full blur-3xl pointer-events-none"></div>
+
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowRound1Intro(false)}
+                className="absolute top-4 right-4 p-2 rounded-full text-white/40 hover:text-white hover:bg-white/10 transition-colors z-20 cursor-pointer"
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+
+              {/* Crest Badge */}
+              <div className="relative z-10 w-16 h-16 rounded-full bg-gradient-to-b from-[#16382a] to-[#0a1914] border-2 border-[#d4af37] shadow-[0_0_30px_rgba(212,175,55,0.45)] flex items-center justify-center mb-3">
+                <Rocket className="w-8 h-8 text-[#FFC240] drop-shadow-md" />
+              </div>
+
+              {/* Modern Mint Notice Header */}
+              <span className="relative z-10 text-[10px] uppercase tracking-[0.35em] text-[#d4af37] font-extrabold font-mono text-center">
+                Modern Mint Strategy Co. • Rulebook Notice
+              </span>
+              <h2 className="relative z-10 text-xl sm:text-2xl font-black text-white uppercase tracking-[0.16em] text-center mt-1 drop-shadow-md">
+                Round 1 Starts in Phase 2
+              </h2>
+              <div className="relative z-10 w-12 h-0.5 bg-[#d4af37]/60 mx-auto mt-2 mb-4"></div>
+
+              {/* Briefing Cards */}
+              <div className="relative z-10 w-full flex flex-col gap-2.5 my-1 text-left text-xs leading-relaxed">
+                {/* Card 1 */}
+                <div className="bg-[#071912]/90 border border-[#1c4d3d] hover:border-[#55ffb0]/40 rounded-xl p-3.5 flex gap-3 items-start transition-colors shadow-sm">
+                  <div className="w-8 h-8 rounded-lg bg-[#55ffb0]/10 border border-[#55ffb0]/30 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <Coins className="w-4 h-4 text-[#55ffb0]" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[#55ffb0] font-mono font-bold block text-[11px] uppercase tracking-wider mb-0.5">
+                      Why is Phase 1 (Fundraising) skipped?
+                    </span>
+                    <p className="text-white/80">
+                      According to official rules, Phase 1 is not performed in Round 1 because all Founders start with <strong className="text-white font-bold">$500K cash</strong> and have no operating companies to pitch yet.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Card 2 */}
+                <div className="bg-[#071912]/90 border border-[#d4af37]/40 hover:border-[#d4af37]/70 rounded-xl p-3.5 flex gap-3 items-start transition-colors shadow-sm">
+                  <div className="w-8 h-8 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/50 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <Building2 className="w-4 h-4 text-[#FFC240]" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[#FFC240] font-mono font-bold block text-[11px] uppercase tracking-wider mb-0.5">
+                      What happens now?
+                    </span>
+                    <p className="text-white/80">
+                      Round 1 starts directly in <strong className="text-white font-bold">Phase 2: Operations</strong>. Use your starting cash to launch startups, upgrade workforce, or buy PR!
+                    </p>
+                  </div>
+                </div>
+
+                {/* Card 3 */}
+                <div className="bg-[#071912]/70 border border-white/10 hover:border-white/20 rounded-xl p-3.5 flex gap-3 items-start transition-colors shadow-sm">
+                  <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/20 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+                    <Handshake className="w-4 h-4 text-[#a4d8c2]" />
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[#a4d8c2] font-mono font-bold block text-[11px] uppercase tracking-wider mb-0.5">
+                      Round 2+ Onwards
+                    </span>
+                    <p className="text-white/70">
+                      Starting in Round 2, Phase 1 (Pitching, Investor Deals &amp; Bank Loans) unlocks for all remaining rounds.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Button */}
+              <button
+                onClick={() => setShowRound1Intro(false)}
+                className="relative z-10 w-full mt-4 py-3.5 rounded-xl bg-gradient-to-r from-[#d4af37] via-[#FFE885] to-[#c59b27] hover:from-[#FFE885] hover:via-[#FFF0A0] hover:to-[#d4af37] text-black font-black uppercase tracking-[0.22em] text-xs shadow-[0_0_30px_rgba(212,175,55,0.4)] hover:shadow-[0_0_40px_rgba(255,232,133,0.65)] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span>Got It! Start Building</span>
+                <ArrowRight className="w-4 h-4 stroke-[3]" />
+              </button>
+            </div>
+          </div>
         )}
 
       </div>
