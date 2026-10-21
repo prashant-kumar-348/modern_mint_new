@@ -166,23 +166,18 @@ export default function SlotCard({
           backgroundRepeat: "no-repeat",
         }}
       >
-        {isOpen ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src="/lobby/create/OPEN SLOT.png"
-            alt="OPEN SLOT"
-            className="h-3.5 max-h-[16px] w-auto object-contain pointer-events-none drop-shadow"
-          />
-        ) : (
-          <span
-            className="text-[11px] font-black tracking-wider uppercase truncate px-2 text-white"
-            style={{
-              textShadow: "0 1px 2px rgba(0,0,0,0.9)",
-            }}
-          >
-            {displayName}
-          </span>
-        )}
+        <span
+          className={`text-[11px] font-black tracking-wider uppercase truncate px-2 ${
+            isOpen ? "text-[#2bf8b8]" : "text-white"
+          }`}
+          style={{
+            textShadow: isOpen
+              ? "0 0 10px rgba(43, 248, 184, 0.4), 0 1px 2px rgba(0,0,0,0.9)"
+              : "0 1px 2px rgba(0,0,0,0.9)",
+          }}
+        >
+          {displayName}
+        </span>
       </div>
 
       {/* ── Optional AI Bot tag below pill only when isAI ── */}

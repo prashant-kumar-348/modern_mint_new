@@ -109,7 +109,7 @@ function PanelLabel({
   label?: string;
   children?: React.ReactNode;
 }) {
-  const text = label || children;
+  const text = label || children || alt;
   return (
     <div className="flex justify-center mb-3">
       <div
@@ -120,23 +120,14 @@ function PanelLabel({
           backgroundRepeat: "no-repeat",
         }}
       >
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={image}
-            alt={alt || label || ""}
-            className="h-4.5 max-h-[19px] w-auto object-contain pointer-events-none drop-shadow filter brightness-110"
-          />
-        ) : (
-          <span
-            className="text-xs font-black uppercase tracking-[0.20em] text-white select-none"
-            style={{
-              textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.8)",
-            }}
-          >
-            {text}
-          </span>
-        )}
+        <span
+          className="text-xs font-black uppercase tracking-[0.20em] text-white select-none whitespace-nowrap"
+          style={{
+            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.8)",
+          }}
+        >
+          {text}
+        </span>
       </div>
     </div>
   );
@@ -146,10 +137,7 @@ function PanelLabel({
 
 function GroupHeader({ type, max }: { type: "founders" | "investors"; max: number }) {
   const isFounders = type === "founders";
-  const imageSrc = isFounders
-    ? "/lobby/create/FOUNDERS (MAX-4).png?v=2"
-    : "/lobby/create/INVESTORS (MAX-2).png?v=2";
-  const altText = isFounders ? `FOUNDERS (MAX-${max})` : `INVESTORS (MAX-${max})`;
+  const label = isFounders ? `FOUNDERS (MAX-${max})` : `INVESTORS (MAX-${max})`;
 
   return (
     <div className="flex justify-center mb-3">
@@ -161,12 +149,14 @@ function GroupHeader({ type, max }: { type: "founders" | "investors"; max: numbe
           backgroundRepeat: "no-repeat",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={imageSrc}
-          alt={altText}
-          className="h-5 max-h-[22px] w-auto object-contain pointer-events-none drop-shadow filter brightness-110"
-        />
+        <span
+          className="text-xs font-black uppercase tracking-[0.20em] text-white select-none whitespace-nowrap"
+          style={{
+            textShadow: "0 1px 3px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.8)",
+          }}
+        >
+          {label}
+        </span>
       </div>
     </div>
   );
@@ -277,7 +267,7 @@ export default function CreateGamePage() {
         display_name:  username,
       });
 
-      router.push(`/room/${room.id}${isAiGame ? "?vsAi=true" : ""}`);
+      router.push(`/lobby/join/${room.id}${isAiGame ? "?vsAi=true" : ""}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to create room.");
       setStarting(false);
@@ -379,7 +369,7 @@ export default function CreateGamePage() {
                 
                 {/* Column 1: DIFFICULTY LEVEL */}
                 <div className="flex flex-col h-full">
-                  <PanelLabel image="/lobby/create/DIFFICULTY LEVEL.png?v=2" alt="DIFFICULTY LEVEL" />
+                  <PanelLabel label="DIFFICULTY LEVEL" />
                   <div className="flex flex-col justify-around flex-1 px-4 py-2 min-h-[304px]">
                     {DIFFICULTY_OPTIONS.map((opt) => (
                       <DifficultyToggle
@@ -405,7 +395,7 @@ export default function CreateGamePage() {
 
                 {/* Column 2: MODE */}
                 <div className="flex flex-col items-center">
-                  <PanelLabel image="/lobby/create/MODE.png?v=2" alt="MODE" />
+                  <PanelLabel label="MODE" />
                   <div className="flex gap-3 px-1 items-center justify-center">
                     {(["60mins", "short", "full"] as GameMode[]).map((m) => (
                       <ModeCard
@@ -430,7 +420,7 @@ export default function CreateGamePage() {
 
                 {/* Column 3: GAME PRIVACY */}
                 <div className="flex flex-col h-full">
-                  <PanelLabel image="/lobby/create/GAME PRIVACY.png?v=2" alt="GAME PRIVACY" />
+                  <PanelLabel label="GAME PRIVACY" />
                   <div className="flex flex-col justify-around flex-1 items-center px-1 py-2 min-h-[304px]">
                     {(["open", "closed", "password"] as RoomPrivacy[]).map((v) => (
                       <PrivacyOption

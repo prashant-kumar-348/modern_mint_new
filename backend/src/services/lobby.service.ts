@@ -277,7 +277,13 @@ async function insertPlayer(
     [roomId, userId]
   );
   if (alreadyIn.rowCount && alreadyIn.rowCount > 0) {
-    // Already in room, allow proceeding/reconnecting without error
+    // Already in room (e.g. host updating role/avatar on Character Select screen)
+    await client.query(
+      `UPDATE room_players
+       SET role=$1, avatar_id=$2, display_name=$3
+       WHERE room_id=$4 AND user_id=$5`,
+      [role, avatar_id, display_name.trim(), roomId, userId]
+    );
     return;
   }
 
@@ -333,8 +339,8 @@ export async function joinRoom(
     }
     const room = roomResult.rows[0];
 
-    // Password rooms must be joined through the password endpoint
-    if (room.privacy === "password") {
+    // Password rooms must be joined through the password endpoint (unless host)
+    if (room.privacy === "password" && room.host_user_id !== userId) {
       throw { status: 403, message: "This room requires a password." };
     }
 

@@ -37,9 +37,12 @@ export default function JoinGamePage({
   const { id }   = use(params);
   const router   = useRouter();
 
-  const [room,       setRoom]       = useState<GameRoom | null>(null);
+  const [room,       setRoom]       = useState<(GameRoom & { raw?: any }) | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const currentUser = typeof window !== "undefined" ? getUser() : null;
+  const isHost = Boolean(room && currentUser && room.raw?.host_user_id === currentUser.id);
 
   const [role,       setRole]       = useState<PlayerRole>("founder");
   const [name,       setName]       = useState("");
@@ -68,6 +71,16 @@ export default function JoinGamePage({
       try {
         const result = await fetchRoom(id);
         setRoom(result);
+        const user = getUser();
+        const myFounder = result.raw?.founders?.find((f: any) => f.userId === user?.id);
+        const myInvestor = result.raw?.investors?.find((i: any) => i.userId === user?.id);
+        if (myFounder?.avatarId) {
+          setAvatarId(myFounder.avatarId);
+          setRole("founder");
+        } else if (myInvestor?.avatarId) {
+          setAvatarId(myInvestor.avatarId);
+          setRole("investor");
+        }
       } catch (err) {
         setFetchError(
           err instanceof ApiError ? err.message : "Failed to load room."
@@ -96,8 +109,17 @@ export default function JoinGamePage({
     setJoinError(null);
     setStarting(true);
 
+    const isVsAi = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("vsAi") === "true";
+
     try {
-      if (room?.privacy === "password") {
+      if (isHost) {
+        // Host is already authorized to enter their own room; join directly to save role/avatar
+        await joinRoom(id, {
+          role,
+          avatar_id:    avatarId,
+          display_name: name.trim(),
+        });
+      } else if (room?.privacy === "password") {
         const storedPw =
           (typeof window !== "undefined" && sessionStorage.getItem(`mm_room_pw_${id}`)) || "";
         const finalPw = password.trim() || storedPw;
@@ -117,7 +139,7 @@ export default function JoinGamePage({
           display_name: name.trim(),
         });
       }
-      router.push(`/room/${id}`);
+      router.push(`/room/${id}${isVsAi ? "?vsAi=true" : ""}`);
     } catch (err) {
       setJoinError(
         err instanceof ApiError ? err.message : "Failed to join room."
@@ -196,7 +218,7 @@ export default function JoinGamePage({
                 {/* Header */}
                 <div className="mb-4 text-center">
                   <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.35em] text-[#3dd6b5]">
-                    You are joining
+                    {isHost ? "Choose Your Character" : "You are joining"}
                   </span>
                   <h1 className="text-2xl md:text-3xl font-black uppercase tracking-[0.06em] text-white mt-1 drop-shadow truncate">
                     {room.name || "Global Leader Summit"}
@@ -334,9 +356,9 @@ export default function JoinGamePage({
                   </div>
                 </div>
 
-                {/* Bottom action section: Password (if required) + Join button */}
+                {/* Bottom action section: Password (if required for non-hosts) + Join button */}
                 <div className="w-full flex flex-col items-center gap-3">
-                  {room.privacy === "password" && (
+                  {room.privacy === "password" && !isHost && (
                     <div
                       className="w-full max-w-[275px] h-[78px] rounded-xl flex flex-col items-center justify-center px-4"
                       style={{
@@ -371,11 +393,11 @@ export default function JoinGamePage({
                     </div>
                   )}
 
-                  {/* Join Button */}
+                  {/* Join / Enter Room Button */}
                   <button
                     type="button"
                     onClick={handleStart}
-                    disabled={starting || !name.trim() || !avatarId || (room.privacy === "password" && !password.trim())}
+                    disabled={starting || !name.trim() || !avatarId || (!isHost && room.privacy === "password" && !password.trim())}
                     className="w-[146px] h-[33px] rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none shadow-lg"
                     style={{
                       backgroundImage: "url('/lobby/join/Rectangle 561.png')",
@@ -383,12 +405,18 @@ export default function JoinGamePage({
                       backgroundRepeat: "no-repeat",
                     }}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src="/lobby/join/JOIN.png"
-                      alt="JOIN"
-                      className="h-[20px] md:h-[22px] w-auto object-contain pointer-events-none drop-shadow translate-y-[2px]"
-                    />
+                    {isHost ? (
+                      <span className="text-[11px] font-black uppercase tracking-wider text-white select-none drop-shadow">
+                        ENTER ROOM
+                      </span>
+                    ) : (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src="/lobby/join/JOIN.png"
+                        alt="JOIN"
+                        className="h-[20px] md:h-[22px] w-auto object-contain pointer-events-none drop-shadow translate-y-[2px]"
+                      />
+                    )}
                   </button>
 
                   {joinError && (
