@@ -10,7 +10,109 @@ const RTC_CONFIG = {
 export default function VoiceChatManager({ roomName, username, isTalking, socket, onMicError }) {
   const localStreamRef = useRef(null);
   const peersRef = useRef({}); // { [peerSocketId]: RTCPeerConnection }
+  const candidateQueueRef = useRef({}); // { [peerSocketId]: RTCIceCandidateInit[] }
   const [remoteStreams, setRemoteStreams] = useState({}); // { [peerSocketId]: MediaStream }
+
+  // Helper to flush queued ICE candidates once remote description is set
+  const flushCandidateQueue = async (peerId, pc) => {
+    const queue = candidateQueueRef.current[peerId];
+    if (queue && queue.length > 0) {
+      for (const cand of queue) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch (e) {
+          console.warn('[VoiceChat] Failed to add queued ICE candidate:', e);
+        }
+      }
+      candidateQueueRef.current[peerId] = [];
+    }
+  };
+
+  // Helper to get or create RTCPeerConnection for a peer
+  const getOrCreatePeerConnection = (peerId) => {
+    if (peersRef.current[peerId]) {
+      return peersRef.current[peerId];
+    }
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && socket && roomName) {
+        socket.emit('voice_signal', {
+          roomId: roomName,
+          to: peerId,
+          signal: { type: 'candidate', candidate: event.candidate },
+          from: username,
+        });
+      }
+    };
+
+    pc.ontrack = (event) => {
+      const remoteStream = event.streams[0];
+      if (remoteStream) {
+        setRemoteStreams((prev) => ({
+          ...prev,
+          [peerId]: remoteStream,
+        }));
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        try {
+          pc.close();
+        } catch (_) {}
+        delete peersRef.current[peerId];
+        delete candidateQueueRef.current[peerId];
+        setRemoteStreams((prev) => {
+          const next = { ...prev };
+          delete next[peerId];
+          return next;
+        });
+      }
+    };
+
+    // If we have an active local microphone stream, attach tracks
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((track) => {
+        try {
+          pc.addTrack(track, localStreamRef.current);
+        } catch (_) {}
+      });
+    }
+
+    peersRef.current[peerId] = pc;
+    return pc;
+  };
+
+  // Helper to create and send offer to a peer
+  const createAndSendOffer = async (peerId, pc) => {
+    if (!socket || !roomName) return;
+    try {
+      // Ensure audio transceiver exists (in recvonly mode if local mic is muted)
+      const transceivers = pc.getTransceivers ? pc.getTransceivers() : [];
+      const hasAudio = transceivers.some(
+        (t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio'
+      );
+      if (!hasAudio && !localStreamRef.current && pc.addTransceiver) {
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+      }
+
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+      });
+      await pc.setLocalDescription(offer);
+
+      socket.emit('voice_signal', {
+        roomId: roomName,
+        to: peerId,
+        signal: { type: 'offer', sdp: pc.localDescription },
+        from: username,
+      });
+    } catch (e) {
+      console.warn('[VoiceChat] Failed to create offer:', e);
+    }
+  };
 
   // 1. Manage local microphone stream based on isTalking toggle
   useEffect(() => {
@@ -27,13 +129,13 @@ export default function VoiceChatManager({ roomName, username, isTalking, socket
           localStreamRef.current = null;
         }
 
-        // Remove local tracks from existing peer connections
+        // Disable outgoing audio tracks on existing peer connections
         Object.values(peersRef.current).forEach((pc) => {
           const senders = pc.getSenders();
           senders.forEach((sender) => {
-            if (sender.track) {
+            if (sender.track && sender.track.kind === 'audio') {
               try {
-                pc.removeTrack(sender);
+                sender.replaceTrack(null);
               } catch (_) {}
             }
           });
@@ -71,7 +173,7 @@ export default function VoiceChatManager({ roomName, username, isTalking, socket
 
         if (socket && roomName) {
           socket.emit('voice_state', { roomId: roomName, username, isTalking: true });
-          // Signal peers in room that this user unmuted
+          // Broadcast to room that this user unmuted and is speaking
           socket.emit('voice_signal', {
             roomId: roomName,
             signal: { type: 'peer_ready', fromUsername: username },
@@ -79,16 +181,20 @@ export default function VoiceChatManager({ roomName, username, isTalking, socket
           });
         }
 
-        // Add stream tracks to all active peer connections
-        Object.entries(peersRef.current).forEach(([peerId, pc]) => {
-          stream.getAudioTracks().forEach((track) => {
+        // Attach new live audio track to existing peer connections and renegotiate
+        for (const [peerId, pc] of Object.entries(peersRef.current)) {
+          const senders = pc.getSenders();
+          const audioSender = senders.find((s) => s.track && s.track.kind === 'audio');
+          const track = stream.getAudioTracks()[0];
+          if (audioSender && track) {
+            await audioSender.replaceTrack(track);
+          } else if (track) {
             try {
               pc.addTrack(track, stream);
+              await createAndSendOffer(peerId, pc);
             } catch (_) {}
-          });
-          // Re-negotiate offer
-          createAndSendOffer(peerId, pc);
-        });
+          }
+        }
       } catch (err) {
         console.warn('[VoiceChat] Microphone access denied or error:', err);
         if (onMicError) {
@@ -111,77 +217,6 @@ export default function VoiceChatManager({ roomName, username, isTalking, socket
     };
   }, [isTalking, roomName, username, socket]);
 
-  // Helper to create and send offer to a peer
-  const createAndSendOffer = async (peerId, pc) => {
-    if (!socket || !roomName) return;
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('voice_signal', {
-        roomId: roomName,
-        to: peerId,
-        signal: { type: 'offer', sdp: pc.localDescription },
-        from: username,
-      });
-    } catch (e) {
-      console.warn('[VoiceChat] Failed to create offer:', e);
-    }
-  };
-
-  // Helper to get or create RTCPeerConnection for a peer
-  const getOrCreatePeerConnection = (peerId) => {
-    if (peersRef.current[peerId]) {
-      return peersRef.current[peerId];
-    }
-
-    const pc = new RTCPeerConnection(RTC_CONFIG);
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate && socket && roomName) {
-        socket.emit('voice_signal', {
-          roomId: roomName,
-          to: peerId,
-          signal: { type: 'candidate', candidate: event.candidate },
-          from: username,
-        });
-      }
-    };
-
-    pc.ontrack = (event) => {
-      const remoteStream = event.streams[0];
-      if (remoteStream) {
-        setRemoteStreams((prev) => ({
-          ...prev,
-          [peerId]: remoteStream,
-        }));
-      }
-    };
-
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-        pc.close();
-        delete peersRef.current[peerId];
-        setRemoteStreams((prev) => {
-          const next = { ...prev };
-          delete next[peerId];
-          return next;
-        });
-      }
-    };
-
-    // If we have an active local microphone stream, attach tracks
-    if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach((track) => {
-        try {
-          pc.addTrack(track, localStreamRef.current);
-        } catch (_) {}
-      });
-    }
-
-    peersRef.current[peerId] = pc;
-    return pc;
-  };
-
   // 2. Listen for WebRTC signals from socket
   useEffect(() => {
     if (!socket) return;
@@ -191,14 +226,26 @@ export default function VoiceChatManager({ roomName, username, isTalking, socket
 
       try {
         if (signal.type === 'peer_ready') {
-          // Another peer is ready / unmuted. If we are also unmuted, connect and send offer
+          // Another peer is unmuted and speaking! Connect and send an offer to receive their audio
           const pc = getOrCreatePeerConnection(fromSocketId);
-          if (localStreamRef.current) {
-            await createAndSendOffer(fromSocketId, pc);
-          }
+          await createAndSendOffer(fromSocketId, pc);
         } else if (signal.type === 'offer') {
           const pc = getOrCreatePeerConnection(fromSocketId);
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          await flushCandidateQueue(fromSocketId, pc);
+
+          // If we have an active local microphone stream, attach track before answering
+          if (localStreamRef.current) {
+            const track = localStreamRef.current.getAudioTracks()[0];
+            if (track) {
+              const audioSender = pc.getSenders().find((s) => s.track && s.track.kind === 'audio');
+              if (!audioSender) {
+                try {
+                  pc.addTrack(track, localStreamRef.current);
+                } catch (_) {}
+              }
+            }
+          }
 
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
@@ -211,13 +258,23 @@ export default function VoiceChatManager({ roomName, username, isTalking, socket
           });
         } else if (signal.type === 'answer') {
           const pc = peersRef.current[fromSocketId];
-          if (pc && pc.signalingState !== 'stable') {
+          if (pc && pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+            await flushCandidateQueue(fromSocketId, pc);
           }
         } else if (signal.type === 'candidate') {
           const pc = peersRef.current[fromSocketId];
-          if (pc && signal.candidate) {
-            await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+          if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+            } catch (candErr) {
+              console.warn('[VoiceChat] Failed to add ICE candidate:', candErr);
+            }
+          } else {
+            if (!candidateQueueRef.current[fromSocketId]) {
+              candidateQueueRef.current[fromSocketId] = [];
+            }
+            candidateQueueRef.current[fromSocketId].push(signal.candidate);
           }
         }
       } catch (err) {
@@ -241,11 +298,12 @@ export default function VoiceChatManager({ roomName, username, isTalking, socket
         } catch (_) {}
       });
       peersRef.current = {};
+      candidateQueueRef.current = {};
     };
   }, []);
 
   return (
-    <div style={{ display: 'none' }} aria-hidden="true">
+    <div className="sr-only pointer-events-none fixed -top-96 -left-96 w-1 h-1 overflow-hidden" aria-hidden="true">
       {Object.entries(remoteStreams).map(([peerId, stream]) => (
         <AudioStreamPlayer key={peerId} stream={stream} />
       ))}
@@ -260,9 +318,21 @@ function AudioStreamPlayer({ stream }) {
   useEffect(() => {
     if (audioRef.current && stream) {
       audioRef.current.srcObject = stream;
-      audioRef.current.play().catch((err) => {
-        console.warn('[VoiceChat] Remote audio autoplay blocked:', err);
-      });
+      const playPromise = audioRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('[VoiceChat] Remote audio autoplay blocked:', err);
+        });
+      }
+
+      // If autoplay was blocked pending user gesture, resume on next interaction
+      const handleUserInteraction = () => {
+        if (audioRef.current && audioRef.current.paused) {
+          audioRef.current.play().catch(() => {});
+        }
+      };
+      window.addEventListener('click', handleUserInteraction, { once: true });
+      return () => window.removeEventListener('click', handleUserInteraction);
     }
   }, [stream]);
 

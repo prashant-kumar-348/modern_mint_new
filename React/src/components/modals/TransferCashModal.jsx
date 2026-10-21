@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import soundEffects from '../../utils/soundEffects';
 
 const TransferCashModal = ({ players, localPlayer, onClose, onTransfer, onOpenFormalizeDeal }) => {
   const [targetPlayerId, setTargetPlayerId] = useState('');
@@ -8,6 +9,7 @@ const TransferCashModal = ({ players, localPlayer, onClose, onTransfer, onOpenFo
 
   const handleTransfer = () => {
     if (targetPlayerId && amount > 0) {
+      soundEffects.play('coins');
       onTransfer(targetPlayerId, amount);
       onClose();
     }

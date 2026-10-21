@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import soundEffects from '../../utils/soundEffects';
 
 const BankruptcyModal = ({ player, onClose, onResolve }) => {
+  useEffect(() => {
+    soundEffects.play('alert');
+  }, []);
+
   const [selectedCompany, setSelectedCompany] = useState('');
   
   const shortfall = Math.abs(player.cash);

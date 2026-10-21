@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Handshake } from 'lucide-react';
+import soundEffects from '../../utils/soundEffects';
 
 const FormalizeDealModal = ({ players, localPlayer, onClose, sendAction }) => {
   const [founderId, setFounderId] = useState('');
@@ -9,6 +10,7 @@ const FormalizeDealModal = ({ players, localPlayer, onClose, sendAction }) => {
 
   const handlePropose = () => {
     if (founderId && investorId && companyName && percentage > 0) {
+      soundEffects.play('deal');
       // The target player is the ONE WHO IS NOT the local player
       const targetPlayerId = localPlayer.id === founderId ? investorId : founderId;
       
