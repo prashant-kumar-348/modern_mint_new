@@ -6,10 +6,10 @@ import { MOCK_TUTORIAL_PLAYERS } from './tutorialData';
 import { Users, DollarSign, Briefcase } from 'lucide-react';
 
 const AVATAR_IMAGE_BY_ID: Record<number, string> = {
-  1: 'https://modernmintgame.com/cdn/shop/files/01.png?v=1772091663&width=2000',
-  2: 'https://modernmintgame.com/cdn/shop/files/03.png?v=1772091662&width=2000',
-  3: 'https://modernmintgame.com/cdn/shop/files/02.png?v=1772091663&width=2000',
-  4: 'https://modernmintgame.com/cdn/shop/files/05.png?v=1772091663&width=2000',
+  1: '/lobby/join/founder-avatar-1.png',
+  2: '/lobby/join/founder-avatar-4.png',
+  3: '/lobby/join/founder-avatar-3.png',
+  4: '/lobby/join/founder-avatar-2.png',
 };
 
 export default function TutorialPreviewBoard() {

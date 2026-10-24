@@ -25,14 +25,14 @@ import type {
 function makeFounderSlots(username: string, vsAi: boolean = false): CreateSlot[] {
   if (vsAi) {
     return [
-      { dropdown: "You",  avatarId: 2, name: username },  // host only
+      { dropdown: "You",  avatarId: 1, name: username },  // host only
       { dropdown: "AI",   avatarId: 1, name: "Alpha Bot" },
       { dropdown: "AI",   avatarId: 3, name: "Delta Bot" },
       { dropdown: "AI",   avatarId: 4, name: "Omega Bot" },
     ];
   }
   return [
-    { dropdown: "You",  avatarId: 2, name: username },  // host only
+    { dropdown: "You",  avatarId: 1, name: username },  // host only
     { dropdown: "Open", avatarId: 5, name: "" },
     { dropdown: "Open", avatarId: 5, name: "" },
     { dropdown: "Open", avatarId: 5, name: "" },

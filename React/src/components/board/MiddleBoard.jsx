@@ -1,6 +1,33 @@
 import React, { useState } from 'react';
 
-export default function MiddleBoard({ players = [], onDeckClick, currentRound = 1, onBankLoanClick, onPRServicesClick }) {
+const AVATAR_IMAGE_BY_ID = {
+  1: '/lobby/join/founder-avatar-1.png',
+  2: '/lobby/join/founder-avatar-4.png',
+  3: '/lobby/join/founder-avatar-3.png',
+  4: '/lobby/join/founder-avatar-2.png',
+  5: '/lobby/join/Ellipse 197.png',
+  6: '/lobby/join/Ellipse 198.png',
+};
+
+/**
+ * @param {{
+ *   players?: any[],
+ *   onDeckClick?: () => void,
+ *   currentRound?: number,
+ *   onBankLoanClick?: () => void,
+ *   onPRServicesClick?: () => void
+ * }} props
+ */
+export default function MiddleBoard({ 
+  players = [], 
+  onDeckClick = () => {}, 
+  currentRound = 1, 
+  onBankLoanClick = undefined, 
+  onPRServicesClick = undefined,
+  onEventCardClick = undefined,
+  activeEvent = null,
+  revealedEvents = {}
+}) {
   const totalRounds = 9;
 
   const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
@@ -62,31 +89,12 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
   return (
     <div className="relative w-full h-full flex flex-col pointer-events-none font-sans text-white overflow-hidden bg-[#061c17]">
       
-      {/* City Map Background Pattern */}
-      <div 
-        className="absolute inset-0 opacity-20 pointer-events-none mix-blend-overlay"
-        style={{
-          backgroundImage: `
-            linear-gradient(45deg, transparent 48%, #55ffb0 49%, #55ffb0 51%, transparent 52%),
-            linear-gradient(-45deg, transparent 48%, #55ffb0 49%, #55ffb0 51%, transparent 52%),
-            radial-gradient(circle at 30% 30%, transparent 60%, #1c4d3d 61%, #1c4d3d 62%, transparent 63%)
-          `,
-          backgroundSize: '150px 150px, 120px 120px, 300px 300px',
-          backgroundPosition: '0 0, 40px 60px, -50px -50px'
-        }}
-      ></div>
-
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#061c17]/60 to-[#030d0a] pointer-events-none"></div>
-
-      {/* MODERN MINT Header */}
-      <div className="absolute top-0 w-full flex justify-center pt-2">
-         <div className="text-transparent bg-clip-text bg-gradient-to-b from-[#FFF2D8] via-[#d4af37] to-[#8a6818] font-serif font-black uppercase tracking-[0.3em] text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] px-8 py-2 border-b border-x border-[#144b3c] rounded-b-xl bg-[#061c17]/80 backdrop-blur-sm z-40 pointer-events-auto">
-            MODERN MINT
-         </div>
-         {/* Subtle grid lines extending from title */}
-         <div className="absolute top-8 left-0 right-0 h-[1px] bg-[#144b3c]/50 z-30"></div>
-         <div className="absolute top-12 left-0 right-0 h-[1px] bg-[#144b3c]/30 z-30"></div>
-      </div>
+      {/* Full Middle Board Background Image */}
+      <img 
+        src="/middle-board-bg.jpg" 
+        alt="Middle Board Background" 
+        className="absolute inset-0 w-full h-full object-fill pointer-events-none select-none" 
+      />
 
       <div className="flex-1 w-full h-full relative z-10 pt-[80px] pb-[60px] px-14 flex justify-between">
         
@@ -135,7 +143,11 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
             </div>
             
             {/* Event Card 4-6 (Custom Image) */}
-            <div className="w-full aspect-[2.5/3.5] bg-[#111] rounded-md shadow-[0_0_20px_rgba(0,225,255,0.2)] flex items-center justify-center relative overflow-hidden group hover:scale-105 transition-transform cursor-pointer border-2 border-[#1c4d3d]">
+            <div 
+              onClick={() => onEventCardClick && onEventCardClick(4)}
+              className="w-full aspect-[2.5/3.5] bg-[#111] rounded-md shadow-[0_0_20px_rgba(0,225,255,0.2)] flex items-center justify-center relative overflow-hidden group hover:scale-105 transition-transform cursor-pointer border-2 border-[#1c4d3d]"
+              title={currentRound >= 4 ? "Click to view Round 4 Event Card" : "Round 4 Event Card (Locked)"}
+            >
                <img 
                  src="/event-card.jpg" 
                  alt="Event Card 4-6" 
@@ -146,13 +158,17 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
                ) : (
                  <div className="absolute inset-0 bg-black/45 group-hover:bg-black/30 transition-colors flex items-center justify-center flex-col p-2 text-center select-none backdrop-blur-[0.5px]">
                     <span className="text-[#55ffb0] text-[13px] leading-tight font-black uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">Round 4<br/>Event</span>
-                    <span className="text-3xl mt-2 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]">🔒</span>
+                    <img src="/lock-icon.png" alt="Locked" className="w-10 h-10 object-contain mt-2 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]" />
                  </div>
                )}
             </div>
 
             {/* Event Card 7-9 (Custom Image) */}
-            <div className="w-full aspect-[2.5/3.5] bg-[#111] rounded-md shadow-[0_0_20px_rgba(0,225,255,0.2)] flex items-center justify-center relative overflow-hidden group hover:scale-105 transition-transform cursor-pointer border-2 border-[#1c4d3d]">
+            <div 
+              onClick={() => onEventCardClick && onEventCardClick(7)}
+              className="w-full aspect-[2.5/3.5] bg-[#111] rounded-md shadow-[0_0_20px_rgba(0,225,255,0.2)] flex items-center justify-center relative overflow-hidden group hover:scale-105 transition-transform cursor-pointer border-2 border-[#1c4d3d]"
+              title={currentRound >= 7 ? "Click to view Round 7 Event Card" : "Round 7 Event Card (Locked)"}
+            >
                <img 
                  src="/event-card.jpg" 
                  alt="Event Card 7-9" 
@@ -163,7 +179,7 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
                ) : (
                  <div className="absolute inset-0 bg-black/45 group-hover:bg-black/30 transition-colors flex items-center justify-center flex-col p-2 text-center select-none backdrop-blur-[0.5px]">
                     <span className="text-[#55ffb0] text-[13px] leading-tight font-black uppercase tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">Round 7<br/>Event</span>
-                    <span className="text-3xl mt-2 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]">🔒</span>
+                    <img src="/lock-icon.png" alt="Locked" className="w-10 h-10 object-contain mt-2 drop-shadow-[0_4px_10px_rgba(0,0,0,0.9)]" />
                  </div>
                )}
             </div>
@@ -177,31 +193,23 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
           
           <div className="relative w-[550px] h-[550px] flex items-center justify-center">
             
-            {/* Background colorful radiant glow */}
-            <div className="absolute inset-[10%] rounded-full opacity-70 mix-blend-screen blur-3xl pointer-events-none"
-                 style={{
-                   background: 'conic-gradient(from 0deg, #5b75a6, #844c8c, #c05c5c, #89a868, #5b75a6)'
-                 }}
-            ></div>
-
-            {/* Outer Golden Rings */}
-            <div className="absolute inset-2 rounded-full border-[3px] border-[#c49a45] shadow-[0_0_30px_rgba(229,193,88,0.3)]"></div>
-            <div className="absolute inset-4 rounded-full border border-[#c49a45]/40"></div>
-            
-            {/* Inner Art Deco Golden Wheel */}
-            <div className="absolute inset-12 rounded-full border border-[#c49a45]/60 overflow-hidden">
-               {/* Decorative wheel spokes/patterns */}
-               <div className="absolute inset-0 opacity-40 mix-blend-overlay" style={{
-                 backgroundImage: `repeating-conic-gradient(from 0deg, transparent 0deg, transparent 15deg, #c49a45 15deg, #c49a45 16deg)`
-               }}></div>
-            </div>
+            {/* Center Board Circle (Golden wheel & segments) */}
+            <img 
+               src="/center-board.png" 
+               alt="Center Board Circle" 
+               className="absolute w-full h-full object-contain pointer-events-none drop-shadow-[0_0_30px_rgba(229,193,88,0.3)]"
+            />
 
             {/* Center Diamond with Skyline (Custom Image) */}
-            <div onClick={onDeckClick} className="absolute z-20 flex items-center justify-center drop-shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-transform hover:scale-105 cursor-pointer pointer-events-auto">
+            <div 
+              onClick={onDeckClick} 
+              className="absolute z-20 flex items-center justify-center drop-shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-transform hover:scale-105 cursor-pointer pointer-events-auto"
+            >
                <img 
                  src="/center-mentor-card.png" 
                  alt="Mentor Card 20K" 
-                 className="w-[174px] h-[174px] object-contain -translate-x-[2px] -translate-y-[2px]" 
+                 className="w-[188px] h-[188px] object-contain translate-y-[5px]" 
+                 style={{ transform: 'translateY(5px)' }}
                />
             </div>
 
@@ -299,26 +307,38 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
                 return players.indexOf(a) - players.indexOf(b);
               });
               
+              const AVATAR_COLORS = {
+                1: '#9b2c3d',
+                2: '#e08b26',
+                3: '#4a4d50',
+                4: '#2b828a',
+                5: '#00e1ff',
+                6: '#d4af37'
+              };
+
               return sortedPlayers.map((p, sortedIdx) => {
                 const originalIdx = players.findIndex(pl => pl.id === p.id);
-                const borderColor = p.color || '#55ffb0';
+                const avatarColor = (p.avatarId && AVATAR_COLORS[p.avatarId]) || p.color || '#55ffb0';
                 
-                // Determine avatar image path based on their original index in the players roster
-                const avatarNum = (originalIdx !== -1 ? originalIdx : sortedIdx) % 4 + 1;
-                const avatarSrc = `/player-avatar-${avatarNum}.png`;
+                // Determine avatar image path based on their selected avatarId or original index fallback
+                const avatarSrc = p.avatarId && AVATAR_IMAGE_BY_ID[p.avatarId]
+                  ? AVATAR_IMAGE_BY_ID[p.avatarId]
+                  : `/player-avatar-${(originalIdx !== -1 ? originalIdx : sortedIdx) % 4 + 1}.png`;
 
                 return (
                   <div 
                     key={p.id}
-                    className="w-[70px] h-[70px] rounded-full border-4 flex items-center justify-center text-3xl cursor-pointer hover:scale-110 transition-transform relative shadow-[0_10px_20px_rgba(0,0,0,0.8)] bg-black"
+                    className="w-[70px] h-[70px] rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform relative select-none"
                     style={{ 
-                      borderColor: borderColor,
-                      boxShadow: `0 0 20px ${borderColor}80, inset 0 0 10px rgba(0,0,0,0.8)`
+                      filter: `drop-shadow(0 0 10px ${avatarColor}90) drop-shadow(0 4px 12px rgba(0,0,0,0.8))`
                     }}
+                    title={p.name}
                   >
-                    {/* Image overlay mock for characters */}
-                    <div className="absolute inset-0 rounded-full mix-blend-overlay opacity-50 bg-gradient-to-b from-transparent to-black pointer-events-none"></div>
-                    <img src={avatarSrc} alt={p.name} className="w-[120%] h-[120%] object-cover absolute z-10 rounded-full" />
+                    <img 
+                      src={avatarSrc} 
+                      alt={p.name} 
+                      className="w-full h-full object-contain pointer-events-none drop-shadow" 
+                    />
                   </div>
                 );
               });
@@ -353,7 +373,7 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
       {/* =========================================
           BOTTOM ACTION BAR (1-30)
       ========================================= */}
-      <div className="absolute bottom-0 left-0 w-full h-[45px] bg-[#061c17]/90 border-t border-[#1d6b56] flex pointer-events-auto z-40 backdrop-blur-sm">
+      <div className="absolute bottom-0 left-0 w-full h-[45px] bg-transparent flex pointer-events-auto z-40">
         {[...Array(30)].map((_, i) => {
           const squareNum = i + 1;
           const playersOnSquare = players.filter(p => (p.actionCount || 0) === squareNum);
@@ -361,9 +381,8 @@ export default function MiddleBoard({ players = [], onDeckClick, currentRound = 
           return (
             <div 
               key={i}
-              className="flex-1 border-r border-[#1d6b56]/50 relative flex flex-col items-center justify-center overflow-hidden hover:bg-[#1d6b56]/40 transition-colors"
+              className="flex-1 border-r border-[#1d6b56]/20 relative flex flex-col items-center justify-center overflow-hidden hover:bg-white/10 transition-colors"
             >
-              <span className="absolute text-[10px] text-[#30a887]/50 font-bold select-none z-0">{squareNum}</span>
               
               {/* Checkers-style Tokens */}
               {playersOnSquare.length > 0 && (

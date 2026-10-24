@@ -345,6 +345,22 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
     return { rows: [], rowCount: 0 };
   }
 
+  // Update room player (e.g. host or re-joining player changing avatar or role)
+  if (norm.includes("UPDATE ROOM_PLAYERS")) {
+    const role = params[0];
+    const avatar_id = Number(params[1]) || 1;
+    const display_name = (params[2] || "").trim();
+    const roomId = params[3];
+    const userId = params[4];
+    const rp = roomPlayers.find(p => p.room_id === roomId && p.user_id === userId);
+    if (rp) {
+      rp.role = role;
+      rp.avatar_id = avatar_id;
+      if (display_name) rp.display_name = display_name;
+    }
+    return { rows: rp ? [rp] : [], rowCount: rp ? 1 : 0 };
+  }
+
   // Already in room player check
   if (norm.includes("FROM ROOM_PLAYERS WHERE ROOM_ID=$1 AND USER_ID=$2")) {
     const roomId = params[0];

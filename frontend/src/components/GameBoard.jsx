@@ -45,6 +45,7 @@ import FormalizeDealModal from './modals/FormalizeDealModal';
 import RoyaltyProposalModal from './modals/RoyaltyProposalModal';
 import RepayLoanModal from './modals/RepayLoanModal';
 import GameOverModal from './modals/GameOverModal';
+import EventCardModal from './modals/EventCardModal';
 import PhaseTransitionOverlay from './board/PhaseTransitionOverlay';
 import TutorialOverlay from './tutorial/TutorialOverlay';
 import { TUTORIAL_STEPS } from './tutorial/tutorialData';
@@ -74,30 +75,45 @@ const getPlayerGradient = (color) => {
   return 'from-gray-800 to-gray-700';
 };
 
-const getPlayerPillStyle = (color, name = '') => {
+export const AVATAR_COLORS = {
+  1: '#9b2c3d', // Katana Girl - Maroon / Crimson
+  2: '#e08b26', // Glasses Girl - Amber / Gold
+  3: '#4a4d50', // Smiling Guy - Dark Grey / Charcoal
+  4: '#2b828a', // VR Goggles Boy - Teal / Cyan Blue
+  5: '#00e1ff', // Investor 1 - Cyan
+  6: '#d4af37', // Investor 2 - Gold
+};
+
+const getPlayerPillStyle = (color, name = '', avatarId = null) => {
   const c = String(color || '').toLowerCase();
   const n = String(name || '').toLowerCase();
-  if (n.includes('ruthless') || c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) {
+  if (avatarId === 1 || n.includes('ruthless') || c.includes('ef4444') || c.includes('9b2c3d') || c.includes('843040') || c.includes('red') || c.includes('rn')) {
     return {
       backgroundImage: "url('/Rectangle-24.png')",
       backgroundSize: '100% 100%',
       backgroundRepeat: 'no-repeat'
     };
   }
-  if (n.includes('robotic') || c.includes('55ffb0') || c.includes('teal') || c.includes('green') || c.includes('gt')) {
+  if (avatarId === 4 || n.includes('robotic') || c.includes('2b828a') || c.includes('55ffb0') || c.includes('teal') || c.includes('green') || c.includes('gt')) {
     return {
       backgroundImage: "url('/Rectangle-508.png')",
       backgroundSize: '100% 100%',
       backgroundRepeat: 'no-repeat'
     };
   }
-  if (c.includes('d4af37') || c.includes('ffc240') || c.includes('gold') || c.includes('gd') || c.includes('yellow')) {
+  if (avatarId === 2 || c.includes('e08b26') || c.includes('d4af37') || c.includes('ffc240') || c.includes('gold') || c.includes('gd') || c.includes('yellow')) {
     return {
       background: 'linear-gradient(to right, #4a3412, #291c07)',
-      border: '1px solid rgba(212, 175, 55, 0.4)'
+      border: '1px solid rgba(224, 139, 38, 0.4)'
     };
   }
-  if (c.includes('00e1ff') || c.includes('blue') || c.includes('bl')) {
+  if (avatarId === 3 || c.includes('4a4d50') || c.includes('grey') || c.includes('gray')) {
+    return {
+      background: 'linear-gradient(to right, #2c2f32, #18191a)',
+      border: '1px solid rgba(130, 135, 140, 0.4)'
+    };
+  }
+  if (avatarId === 5 || avatarId === 6 || c.includes('00e1ff') || c.includes('blue') || c.includes('bl')) {
     return {
       background: 'linear-gradient(to right, #0d3446, #071d28)',
       border: '1px solid rgba(0, 225, 255, 0.4)'
@@ -213,12 +229,12 @@ export const getTeamTokenCoinImage = (teamLevel) => {
 };
 
 const AVATAR_IMAGE_BY_ID = {
-  1: 'https://modernmintgame.com/cdn/shop/files/01.png?v=1772091663&width=2000',
-  2: 'https://modernmintgame.com/cdn/shop/files/03.png?v=1772091662&width=2000',
-  3: 'https://modernmintgame.com/cdn/shop/files/02.png?v=1772091663&width=2000',
-  4: 'https://modernmintgame.com/cdn/shop/files/05.png?v=1772091663&width=2000',
-  5: 'https://modernmintgame.com/cdn/shop/files/04.png?v=1772091663&width=2000',
-  6: 'https://modernmintgame.com/cdn/shop/files/06.png?v=1772091663&width=2000',
+  1: '/lobby/join/founder-avatar-1.png',
+  2: '/lobby/join/founder-avatar-4.png',
+  3: '/lobby/join/founder-avatar-3.png',
+  4: '/lobby/join/founder-avatar-2.png',
+  5: '/lobby/join/Ellipse 197.png',
+  6: '/lobby/join/Ellipse 198.png',
 };
 
 function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole, avatarId, roomInfo }) {
@@ -253,6 +269,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
 
   const [isTalking, setIsTalking] = useState(false);
   const [dealTarget, setDealTarget] = useState(null);
+  const [selectedEventRound, setSelectedEventRound] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '' });
   const [isActionTrayOpen, setIsActionTrayOpen] = useState(true);
 
@@ -298,7 +315,8 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
     avatarId,
     maxRoomCapacity,
     isVsAiMode,
-    roomInfo?.mode
+    roomInfo?.mode,
+    roomInfo?.difficulty
   );
   const rawGamePhase = gameState?.phase || 1;
   const gameRound = gameState?.round || 1;
@@ -862,30 +880,34 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                   <div key={player.id} className="w-full flex flex-col items-end gap-1">
                     <div className="flex gap-2 items-start w-full justify-end">
                       {/* Circular Avatar */}
-                      <div 
-                        onClick={() => setExpandedPlayerId(prev => prev === player.id ? null : player.id)}
-                        className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 border-2 overflow-hidden bg-gray-900 transition-all cursor-pointer hover:opacity-95 select-none relative ${
-                          (isPlayerTalking && gamePhase === 1) ? 'ring-2 ring-emerald-400' : ''
-                        }`}
-                        style={{ 
-                          borderColor: player.isLocked ? '#d4af37' : (player.color || '#55ffb0'),
-                          boxShadow: (isPlayerTalking && gamePhase === 1)
-                            ? '0 0 16px #34d399, inset 0 0 8px rgba(52,211,153,0.5)'
-                            : player.isLocked 
-                              ? '0 0 15px rgba(212, 175, 55, 0.9), inset 0 0 8px rgba(212, 175, 55, 0.4)' 
-                              : `0 0 12px ${player.color || '#55ffb0'}`
-                        }}
-                      >
-                        <img 
-                          src={getPlayerAvatarSrc(player, playerIdx)} 
-                          alt={player.name} 
-                          className="w-full h-full object-cover select-none pointer-events-none" 
-                        />
-                        {/* Speaking badge indicator on avatar */}
-                        {(isPlayerTalking && gamePhase === 1) && (
-                          <div className="absolute inset-0 bg-emerald-500/20 pointer-events-none animate-pulse"></div>
-                        )}
-                      </div>
+                      {(() => {
+                        const avatarColor = (player.avatarId && AVATAR_COLORS[player.avatarId]) || player.color || '#55ffb0';
+                        return (
+                          <div 
+                            onClick={() => setExpandedPlayerId(prev => prev === player.id ? null : player.id)}
+                            className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-105 select-none relative ${
+                              (isPlayerTalking && gamePhase === 1) ? 'ring-2 ring-emerald-400' : ''
+                            }`}
+                            style={{ 
+                              filter: (isPlayerTalking && gamePhase === 1)
+                                ? 'drop-shadow(0 0 10px #34d399)'
+                                : player.isLocked 
+                                  ? 'drop-shadow(0 0 8px rgba(212, 175, 55, 0.9))' 
+                                  : `drop-shadow(0 0 6px ${avatarColor}90)`
+                            }}
+                          >
+                            <img 
+                              src={getPlayerAvatarSrc(player, playerIdx)} 
+                              alt={player.name} 
+                              className="w-full h-full object-contain select-none pointer-events-none drop-shadow" 
+                            />
+                            {/* Speaking badge indicator on avatar */}
+                            {(isPlayerTalking && gamePhase === 1) && (
+                              <div className="absolute inset-0 rounded-full border border-emerald-400 animate-pulse pointer-events-none"></div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     
                     {/* Banner or Expanded Dropdown */}
                     <div 
@@ -946,7 +968,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                         </div>
                       ) : (
                         <div 
-                          style={getPlayerPillStyle(player.color, player.name)}
+                          style={getPlayerPillStyle(player.color, player.name, player.avatarId)}
                           className="w-[230px] h-[38px] rounded-[6px] flex items-center justify-between px-3.5 shadow-lg border border-white/10 select-none"
                         >
                           <span className="text-[14px] md:text-[15px] font-bold text-white tracking-wide truncate drop-shadow-sm">
@@ -1105,6 +1127,12 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                  currentRound={gameRound} 
                  onBankLoanClick={() => setActiveModal('loan')} 
                  onPRServicesClick={() => setActiveModal('buy_pr')} 
+                 onEventCardClick={(roundNum) => {
+                   setSelectedEventRound(roundNum);
+                   setActiveModal('eventCard');
+                 }}
+                 activeEvent={gameState?.activeEvent}
+                 revealedEvents={gameState?.revealedEvents}
                />
             </div>
 
@@ -1634,7 +1662,20 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
               />
             )}
 
-            {activeModal === 'mentorInventory' && (
+            
+            {activeModal === 'eventCard' && (
+              <EventCardModal
+                onClose={() => {
+                  setActiveModal(null);
+                  setSelectedEventRound(null);
+                }}
+                roundNum={selectedEventRound || (gameRound >= 7 ? 7 : 4)}
+                activeEvent={gameState?.activeEvent}
+                revealedEvents={gameState?.revealedEvents}
+                currentRound={gameRound}
+              />
+            )}
+{activeModal === 'mentorInventory' && (
               <MentorInventoryModal 
                 onClose={() => setActiveModal(null)} 
                 player={localPlayer}

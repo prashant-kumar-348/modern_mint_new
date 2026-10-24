@@ -139,7 +139,10 @@ export default function JoinGamePage({
           display_name: name.trim(),
         });
       }
-      router.push(`/room/${id}${isVsAi ? "?vsAi=true" : ""}`);
+      const search = new URLSearchParams();
+      if (isVsAi) search.set("vsAi", "true");
+      if (avatarId) search.set("avatarId", String(avatarId));
+      router.push(`/room/${id}${search.toString() ? `?${search.toString()}` : ""}`);
     } catch (err) {
       setJoinError(
         err instanceof ApiError ? err.message : "Failed to join room."

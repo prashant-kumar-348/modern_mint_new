@@ -3,6 +3,7 @@ import { Server as HttpServer } from "http";
 import { generateMentorDeck, MentorCard } from "./mentorCardsData";
 import { generateEventDeck, EventCard } from "./eventCardsData";
 import { DUMMY_INVESTORS, getActiveDummyPeriod, DummyInvestorProfile } from "./dummyInvestorData";
+import { pool } from "./config/database";
 
 
 // In-memory game rooms dictionary
@@ -342,7 +343,16 @@ export const getStartingTeamTokenPool = (playerCount: number = 4) => {
   return pools[playerCount] ? { ...pools[playerCount] } : { 2: 12, 3: 8, 4: 4 };
 };
 
-const createEmptyRoom = (maxPlayers = 4, mode = 'standard') => {
+export const AVATAR_COLORS: Record<number, string> = {
+  1: '#9b2c3d', // Katana Girl - Maroon / Crimson
+  2: '#e08b26', // Glasses Girl - Amber / Gold
+  3: '#4a4d50', // Smiling Guy - Dark Grey / Charcoal
+  4: '#2b828a', // VR Goggles Boy - Teal / Steel Blue
+  5: '#00e1ff', // Investor 1 - Cyan
+  6: '#d4af37', // Investor 2 - Gold
+};
+
+const createEmptyRoom = (maxPlayers = 4, mode = 'standard', difficulty = 'medium') => {
   const isQuick = mode === 'quick' || mode === 'short';
   const fullEventDeck = shuffle(generateEventDeck());
   const eventCardsToPlace = isQuick ? 1 : 2;
@@ -354,6 +364,7 @@ const createEmptyRoom = (maxPlayers = 4, mode = 'standard') => {
     mentorDeck: shuffle(generateMentorDeck()),
     eventDeck: eventDeck,
     activeEvent: undefined as EventCard | undefined,
+    revealedEvents: {} as Record<number, EventCard>,
     dummyInvestor: null as any,
     capital: 100,
     globalLoan: 10,
@@ -957,9 +968,15 @@ const io = new SocketServer(server, {
       aiRoles = ['Founder', 'Founder', 'Investor'];
     }
 
+    const availableFounderAvatars = [1, 2, 4, 3].filter(id => id !== humanPlayer.avatarId);
+    const availableInvestorAvatars = [5, 6].filter(id => id !== humanPlayer.avatarId);
+
     for (let i = 0; i < 3; i++) {
       const role = aiRoles[i];
-      const color = availableColors[i % availableColors.length];
+      const assignedAvatarId = role === 'Investor' 
+        ? (availableInvestorAvatars.shift() || 5) 
+        : (availableFounderAvatars.shift() || 1);
+      const color = AVATAR_COLORS[assignedAvatarId] || availableColors[i % availableColors.length];
       const name = `${availableNames[i]} (${role})`;
       const startCash = role === 'Investor' ? 5000 : 1000;
       const startCapital = startCash / 1000;
@@ -977,7 +994,7 @@ const io = new SocketServer(server, {
         cash: startCash,
         valuation: 0,
         actionCount: 0,
-        avatarId: role === 'Investor' ? 5 : (i + 1),
+        avatarId: assignedAvatarId,
         mentorCards: [],
         boughtMentorRound: 0,
         lifelines: 2,
@@ -990,22 +1007,47 @@ const io = new SocketServer(server, {
   };
 
   const playAIPhase1 = (room: any, player: any, io: any, roomId: string) => {
-    console.log(`[AI Phase 1] Running for ${player.name}`);
+    const difficulty = (room.difficulty || 'medium').toLowerCase();
+    console.log(`[AI Phase 1] Running for ${player.name} (Difficulty: ${difficulty})`);
     let actualLoanGranted = 0;
     let companiesString = "";
 
     if (player.role?.toLowerCase() === 'founder' && player.ownedCompanies.length > 0) {
-      const companyToLoan = player.ownedCompanies.find((c: any) => c.loanTakenStage !== c.stage);
-      if (companyToLoan && player.cash < 20) {
-        const dataRow = COMPANY_DATA_MAP[companyToLoan.name];
-        if (dataRow) {
-          const stageIndex = getStageIndex(companyToLoan.stage);
-          const maxLoan = dataRow[stageIndex][3];
-          if (maxLoan > 0) {
-            companyToLoan.loanTakenStage = companyToLoan.stage;
-            companyToLoan.loan = (companyToLoan.loan || 0) + maxLoan;
-            actualLoanGranted = maxLoan;
-            companiesString = companyToLoan.name;
+      let loanThreshold = 20;
+      let shouldConsiderLoan = true;
+      if (difficulty === 'easy') {
+        loanThreshold = 10;
+        shouldConsiderLoan = Math.random() < 0.5;
+      } else if (difficulty === 'hard') {
+        loanThreshold = 60;
+      } else if (difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+        loanThreshold = 100;
+      }
+
+      if (shouldConsiderLoan && player.cash < loanThreshold) {
+        const eligible = player.ownedCompanies.filter((c: any) => c.loanTakenStage !== c.stage);
+        if (eligible.length > 0) {
+          let chosen = eligible[0];
+          if (difficulty === 'hard' || difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+            chosen = eligible.reduce((best: any, curr: any) => {
+              const bestRow = COMPANY_DATA_MAP[best.name];
+              const currRow = COMPANY_DATA_MAP[curr.name];
+              const bestMax = bestRow ? bestRow[getStageIndex(best.stage)][3] : 0;
+              const currMax = currRow ? currRow[getStageIndex(curr.stage)][3] : 0;
+              return currMax > bestMax ? curr : best;
+            }, eligible[0]);
+          }
+
+          const dataRow = COMPANY_DATA_MAP[chosen.name];
+          if (dataRow) {
+            const stageIndex = getStageIndex(chosen.stage);
+            const maxLoan = dataRow[stageIndex][3];
+            if (maxLoan > 0) {
+              chosen.loanTakenStage = chosen.stage;
+              chosen.loan = (chosen.loan || 0) + maxLoan;
+              actualLoanGranted = maxLoan;
+              companiesString = chosen.name;
+            }
           }
         }
       }
@@ -1059,28 +1101,55 @@ const io = new SocketServer(server, {
   };
 
   const playAIPhase2 = (room: any, player: any, io: any, roomId: string) => {
-    console.log(`[AI Phase 2] Running for ${player.name}`);
+    const difficulty = (room.difficulty || 'medium').toLowerCase();
+    console.log(`[AI Phase 2] Running for ${player.name} (Difficulty: ${difficulty})`);
     
     if (player.role?.toLowerCase() === 'founder') {
+      const templates = [
+        'CONTRACT FARMING', 'AGRI IoT', 'WALLET', 'SNACKS', 'QUICK COMMERCE',
+        'SMART STORAGE', 'RESTRO - CHAIN', 'TRACEABILITY', 'ROBO - PACKAGING'
+      ];
+      const preferredByDifficulty: Record<string, string[]> = {
+        hard: ['RESTRO - CHAIN', 'CONTRACT FARMING', 'QUICK COMMERCE', 'SNACKS', 'WALLET'],
+        unfair: ['RESTRO - CHAIN', 'CONTRACT FARMING', 'QUICK COMMERCE'],
+        expert: ['RESTRO - CHAIN', 'CONTRACT FARMING', 'QUICK COMMERCE'],
+        legendary: ['RESTRO - CHAIN', 'CONTRACT FARMING', 'QUICK COMMERCE']
+      };
+
       if (player.ownedCompanies.length < 2) {
-        const templates = [
-          'CONTRACT FARMING', 'AGRI IoT', 'WALLET', 'SNACKS', 'QUICK COMMERCE',
-          'SMART STORAGE', 'RESTRO - CHAIN', 'TRACEABILITY', 'ROBO - PACKAGING'
-        ];
         const unowned = templates.filter(name => !player.ownedCompanies.some((c: any) => c.name === name));
-        if (unowned.length > 0) {
-          const companyName = unowned[Math.floor(Math.random() * unowned.length)];
+        let companyName: string | null = null;
+
+        if (difficulty === 'hard' || difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+          const pref = preferredByDifficulty[difficulty] || preferredByDifficulty.hard;
+          const affordablePref = pref.filter(name => {
+            const row = COMPANY_DATA_MAP[name];
+            return row && unowned.includes(name) && player.cash >= row[0][0];
+          });
+          if (affordablePref.length > 0) {
+            companyName = affordablePref[0];
+          }
+        }
+
+        if (!companyName && unowned.length > 0) {
+          const affordableUnowned = unowned.filter(name => {
+            const row = COMPANY_DATA_MAP[name];
+            return row && player.cash >= row[0][0];
+          });
+          if (affordableUnowned.length > 0) {
+            companyName = affordableUnowned[Math.floor(Math.random() * affordableUnowned.length)];
+          } else if (unowned.length > 0) {
+            companyName = unowned[Math.floor(Math.random() * unowned.length)];
+          }
+        }
+
+        if (companyName) {
           const dataRow = COMPANY_DATA_MAP[companyName];
-          if (dataRow) {
+          if (dataRow && player.cash >= dataRow[0][0]) {
             const stage = 'L';
-            const team = player.color === '#ef4444' ? 'RN' :
-                         player.color === '#55ffb0' ? 'GT' :
-                         player.color === '#d4af37' ? 'GD' : 'BL';
-            
             const invest = dataRow[0][0];
             const revenue = dataRow[0][1];
             const valuation = dataRow[0][2];
-            const loan = dataRow[0][3];
 
             const icons: Record<string, string> = {
               'CONTRACT FARMING': '/mat-icons/mat-icon-contract-farming.png',
@@ -1122,56 +1191,136 @@ const io = new SocketServer(server, {
           }
         }
       } else {
-        const compToUpgrade = player.ownedCompanies.find((c: any) => getStageIndex(c.stage) < 3 && c.upgradedRound !== room.round);
-        if (compToUpgrade) {
-          const currentIndex = getStageIndex(compToUpgrade.stage);
-          const dataRow = COMPANY_DATA_MAP[compToUpgrade.name];
-          if (dataRow) {
-            const nextStageIndex = currentIndex + 1;
-            const stageUpCost = dataRow[nextStageIndex][0];
-            const nextValuation = dataRow[nextStageIndex][2];
+        // Upgrade existing companies
+        let shouldUpgradeStage = true;
+        if (difficulty === 'easy') {
+          shouldUpgradeStage = Math.random() < 0.4;
+        }
 
-            player.cash -= stageUpCost;
-            compToUpgrade.stage = ['L', 'R', 'G', 'S'][nextStageIndex];
-            compToUpgrade.upgradedRound = room.round;
-            
-            const oldValuation = compToUpgrade.valuation || 0;
-            compToUpgrade.valuation = nextValuation;
-
-            player.valuation = player.valuation - (oldValuation / 1000) + (nextValuation / 1000);
-            player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
-
-            if (room.mode !== 'quick' && room.mode !== 'short') {
-              room.actionCount += 1;
-              player.actionCount = (player.actionCount || 0) + 1;
+        if (shouldUpgradeStage) {
+          const eligibleToUpgrade = player.ownedCompanies.filter((c: any) => getStageIndex(c.stage) < 3 && c.upgradedRound !== room.round);
+          if (eligibleToUpgrade.length > 0) {
+            let compToUpgrade = eligibleToUpgrade[0];
+            if (difficulty === 'hard' || difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+              const affordableEligible = eligibleToUpgrade.filter((c: any) => {
+                const row = COMPANY_DATA_MAP[c.name];
+                return row && player.cash >= row[getStageIndex(c.stage) + 1][0];
+              });
+              if (affordableEligible.length > 0) {
+                compToUpgrade = affordableEligible.reduce((best: any, curr: any) => {
+                  const bRow = COMPANY_DATA_MAP[best.name];
+                  const cRow = COMPANY_DATA_MAP[curr.name];
+                  const bVal = bRow ? bRow[getStageIndex(best.stage) + 1][2] : 0;
+                  const cVal = cRow ? cRow[getStageIndex(curr.stage) + 1][2] : 0;
+                  return cVal > bVal ? curr : best;
+                }, affordableEligible[0]);
+              }
             }
 
-            io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED ${compToUpgrade.name.toUpperCase()} TO STAGE ${compToUpgrade.stage}`);
-            io.to(roomId).emit('game_state_update', room);
+            const currentIndex = getStageIndex(compToUpgrade.stage);
+            const dataRow = COMPANY_DATA_MAP[compToUpgrade.name];
+            if (dataRow) {
+              const nextStageIndex = currentIndex + 1;
+              const stageUpCost = dataRow[nextStageIndex][0];
+              const nextValuation = dataRow[nextStageIndex][2];
+
+              if (player.cash >= stageUpCost) {
+                player.cash -= stageUpCost;
+                compToUpgrade.stage = ['L', 'R', 'G', 'S'][nextStageIndex];
+                compToUpgrade.upgradedRound = room.round;
+                
+                const oldValuation = compToUpgrade.valuation || 0;
+                compToUpgrade.valuation = nextValuation;
+
+                player.valuation = player.valuation - (oldValuation / 1000) + (nextValuation / 1000);
+                player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+
+                if (room.mode !== 'quick' && room.mode !== 'short') {
+                  room.actionCount += 1;
+                  player.actionCount = (player.actionCount || 0) + 1;
+                }
+
+                io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED ${compToUpgrade.name.toUpperCase()} TO STAGE ${compToUpgrade.stage}`);
+                io.to(roomId).emit('game_state_update', room);
+              }
+            }
+          }
+        }
+
+        // Hard & Super Hard bots also leverage Workforce upgrades if they have cash & tokens
+        if (difficulty === 'hard' || difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+          const maxTargetLvl = (difficulty === 'hard') ? 3 : 4;
+          const cashBuffer = (difficulty === 'hard') ? 50 : 25;
+          const compForWorkforce = player.ownedCompanies.find((c: any) => {
+            const curLvl = Number(c.teamLevel || c.team) || 1;
+            const nextLvl = curLvl + 1;
+            return curLvl < maxTargetLvl && (room.teamTokenPool?.[nextLvl] || 0) > 0 && c.workforceUpgradedRound !== room.round;
+          });
+
+          if (compForWorkforce) {
+            const curLvl = Number(compForWorkforce.teamLevel || compForWorkforce.team) || 1;
+            const nextLvl = curLvl + 1;
+            const TEAM_UPGRADE_COSTS: Record<number, number> = { 2: 50, 3: 100, 4: 200 };
+            const wfCost = TEAM_UPGRADE_COSTS[nextLvl] || 50;
+
+            if (player.cash >= (wfCost + cashBuffer) && (room.teamTokenPool?.[nextLvl] || 0) > 0) {
+              player.cash -= wfCost;
+              room.teamTokenPool[nextLvl] -= 1;
+              room.teamTokenPoolModified = true;
+              compForWorkforce.teamLevel = nextLvl;
+              compForWorkforce.team = nextLvl;
+              compForWorkforce.workforceUpgradedRound = room.round;
+              player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
+
+              io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED WORKFORCE FOR ${compForWorkforce.name.toUpperCase()} TO LEVEL ${nextLvl}`);
+              io.to(roomId).emit('game_state_update', room);
+            }
           }
         }
       }
     } else {
       if (player.isDummy) {
         // Dummy investor takes no actions in Phase 2
-      } else if (player.boughtMentorRound !== room.round) {
-         player.cash -= 20;
-         player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
-         player.boughtMentorRound = room.round;
-         if (!room.mentorDeck || room.mentorDeck.length === 0) {
+      } else {
+        let shouldBuyMentor = true;
+        if (difficulty === 'easy') {
+          shouldBuyMentor = Math.random() < 0.35;
+        }
+
+        if (shouldBuyMentor && player.boughtMentorRound !== room.round && player.cash >= 20) {
+          player.cash -= 20;
+          player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000);
+          player.boughtMentorRound = room.round;
+          if (!room.mentorDeck || room.mentorDeck.length === 0) {
             room.mentorDeck = shuffle(generateMentorDeck());
-         }
-         const card = room.mentorDeck.shift();
-         if (card) {
+          }
+          const card = room.mentorDeck.shift();
+          if (card) {
             if (card.type === 'PLAY NOW') {
-               applyMentorCardEffect(player, room, card, '', '');
-               io.to(roomId).emit('notification', `${player.name.toUpperCase()} PLAYED NOW: ${card.name.toUpperCase()}`);
+              applyMentorCardEffect(player, room, card, '', '');
+              io.to(roomId).emit('notification', `${player.name.toUpperCase()} PLAYED NOW: ${card.name.toUpperCase()}`);
             } else {
-               player.mentorCards.push(card);
-               io.to(roomId).emit('notification', `${player.name.toUpperCase()} BOUGHT AND STORED: ${card.name.toUpperCase()}`);
+              player.mentorCards.push(card);
+              io.to(roomId).emit('notification', `${player.name.toUpperCase()} BOUGHT AND STORED: ${card.name.toUpperCase()}`);
             }
-         }
-         io.to(roomId).emit('game_state_update', room);
+          }
+          io.to(roomId).emit('game_state_update', room);
+        }
+
+        // Hard & Super Hard bots play stored mentor cards if beneficial
+        if (difficulty === 'hard' || difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+          if (player.mentorCards && player.mentorCards.length > 0) {
+            const playableIdx = player.mentorCards.findIndex((c: any) => 
+              c.effectType === 'add_multiplier' || c.effectType === 'add_multiplier_2' || c.effectType === 'free_stage_or_cash'
+            );
+            if (playableIdx !== -1) {
+              const cardToPlay = player.mentorCards.splice(playableIdx, 1)[0];
+              applyMentorCardEffect(player, room, cardToPlay, '', '');
+              io.to(roomId).emit('notification', `${player.name.toUpperCase()} PLAYED: ${cardToPlay.name.toUpperCase()}`);
+              io.to(roomId).emit('game_state_update', room);
+            }
+          }
+        }
       }
     }
 
@@ -1217,7 +1366,7 @@ const io = new SocketServer(server, {
                 if (creditor) {
                   creditor.cash += invInterest;
                   creditor.capital = (creditor.cash / 1000) + creditor.valuation - (creditor.loan / 1000) - ((creditor.survivalLoan || 0) / 1000);
-                  io.to(creditor.id).emit('notification', `LOAN INTEREST: Received $${invInterest}K interest from ${p.name}.`);
+                  io.to(creditor.id).emit('notification', `LOAN INTEREST: Received ${invInterest}K interest from ${p.name}.`);
                 }
                 io.to(p.id).emit('notification', `PAID INVESTOR INTEREST: Paid $${invInterest}K to ${creditor ? creditor.name : 'Investor'}.`);
               }
@@ -1230,7 +1379,7 @@ const io = new SocketServer(server, {
          if (!p.is_ai && p.cash < 0) {
             const shortfall = Math.abs(p.cash);
             io.to(p.id).emit('trigger_bankruptcy', { shortfall });
-            io.to(roomId).emit('notification', `BANKRUPTCY ALERT: ${p.name} went bankrupt by -$${shortfall}K due to interest payments!`);
+            io.to(roomId).emit('notification', `BANKRUPTCY ALERT: ${p.name} went bankrupt by -${shortfall}K due to interest payments!`);
          }
        });
        io.to(roomId).emit('notification', 'PHASE 3: REVENUE GENERATION PHASE. IT IS TIME TO ROLL THE DICE!');
@@ -1245,13 +1394,79 @@ const io = new SocketServer(server, {
   };
 
   const playAIPhase3 = (room: any, player: any, io: any, roomId: string) => {
-    console.log(`[AI Phase 3] Running for ${player.name}`);
+    const difficulty = (room.difficulty || 'medium').toLowerCase();
+    console.log(`[AI Phase 3] Running for ${player.name} (Difficulty: ${difficulty})`);
 
-    const roll = Math.floor(Math.random() * 10) + 1;
+    let roll: number;
+    if (difficulty === 'easy') {
+      roll = Math.floor(Math.random() * 10) + 1;
+    } else if (difficulty === 'medium') {
+      roll = Math.floor(Math.random() * 10) + 1;
+    } else if (difficulty === 'hard') {
+      // Advantage: roll 2 dice, take higher
+      const r1 = Math.floor(Math.random() * 10) + 1;
+      const r2 = Math.floor(Math.random() * 10) + 1;
+      roll = Math.max(r1, r2);
+    } else {
+      // Super Hard ('unfair' or other): Advantage with floor of 4
+      const r1 = Math.floor(Math.random() * 10) + 1;
+      const r2 = Math.floor(Math.random() * 10) + 1;
+      roll = Math.max(r1, r2, 4);
+    }
+
     player.currentPhase3Roll = roll;
     io.to(roomId).emit('notification', `${player.name.toUpperCase()} ROLLED A ${roll}!`);
     io.to(roomId).emit('initial_roll_result', { playerId: player.id, roll: roll });
     io.to(roomId).emit('game_state_update', room);
+
+    // Lifeline Second Chance evaluation for AI
+    let shouldUseLifeline = false;
+    if (player.lifelines > 0) {
+      if (difficulty === 'medium') {
+        const estRevenue = computeTotalRevenue(player, room, roll);
+        if (estRevenue < 0 && Math.random() < 0.5) {
+          shouldUseLifeline = true;
+        }
+      } else if (difficulty === 'hard') {
+        if (roll <= 3) {
+          shouldUseLifeline = true;
+        }
+      } else if (difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+        if (roll <= 5) {
+          shouldUseLifeline = true;
+        }
+      }
+    }
+
+    if (shouldUseLifeline && player.lifelines > 0) {
+      player.lifelines -= 1;
+      const oldRoll = roll;
+      let newRoll = Math.floor(Math.random() * 10) + 1;
+      if (difficulty === 'hard') {
+        newRoll = Math.max(Math.floor(Math.random() * 10) + 1, Math.floor(Math.random() * 10) + 1);
+      } else if (difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
+        newRoll = Math.max(Math.floor(Math.random() * 10) + 1, Math.floor(Math.random() * 10) + 1, 4);
+      }
+
+      const oldTotal = computeTotalRevenue(player, room, oldRoll);
+      const newTotal = computeTotalRevenue(player, room, newRoll);
+      const wasKept = newTotal > oldTotal || (newTotal === oldTotal && newRoll > oldRoll);
+      if (wasKept) {
+        roll = newRoll;
+        player.currentPhase3Roll = roll;
+      }
+
+      io.to(roomId).emit('second_chance_result', {
+        playerId: player.id,
+        roll: player.currentPhase3Roll,
+        remainingLifelines: player.lifelines,
+        wasKept: wasKept,
+        newRollTested: newRoll,
+        previousRoll: oldRoll
+      });
+      io.to(roomId).emit('notification', `${player.name.toUpperCase()} USED SECOND CHANCE! NEW ROLL: ${newRoll} (${wasKept ? 'KEPT' : 'DISCARDED'}).`);
+      io.to(roomId).emit('game_state_update', room);
+    }
 
     setTimeout(() => {
        const currentRoom = rooms[roomId];
@@ -1259,10 +1474,11 @@ const io = new SocketServer(server, {
        const currentPlayer = currentRoom.players.find((p: any) => p.id === player.id);
        if (!currentPlayer) return;
 
+       const finalRoll = currentPlayer.currentPhase3Roll || roll;
        let totalActualRevenue = 0;
        if (currentPlayer.role?.toLowerCase() === 'founder') {
          (currentPlayer.ownedCompanies || []).forEach((pCompany: any) => {
-           const res = calculateCompanyRevenue(pCompany, currentPlayer, currentRoom, roll);
+           const res = calculateCompanyRevenue(pCompany, currentPlayer, currentRoom, finalRoll);
            totalActualRevenue += res.founderNetRevenue;
 
            // Settle investor royalty
@@ -1284,7 +1500,7 @@ const io = new SocketServer(server, {
        currentPlayer.isLocked = true;
        currentRoom.phase3TurnIndex = (currentRoom.phase3TurnIndex || 0) + 1;
 
-       io.to(roomId).emit('notification', `${currentPlayer.name.toUpperCase()} CLAIMED $${totalActualRevenue}K REVENUE ON DICE ROLL ${roll}.`);
+       io.to(roomId).emit('notification', `${currentPlayer.name.toUpperCase()} CLAIMED $${totalActualRevenue}K REVENUE ON DICE ROLL ${finalRoll}.`);
        resolveAIBankruptcyIfNeeded(currentPlayer, currentRoom, io, roomId);
        io.to(roomId).emit('game_state_update', currentRoom);
 
@@ -1305,9 +1521,7 @@ const io = new SocketServer(server, {
     }, 1500);
   };
 
-  
-
-    const triggerAIIfNeeded = (room: any, io: any, roomId: string) => {
+  const triggerAIIfNeeded = (room: any, io: any, roomId: string) => {
     let activePlayer: any = null;
     if (room.phase === 1) {
       activePlayer = room.players[room.phase1TurnIndex || 0];
@@ -1420,6 +1634,8 @@ const io = new SocketServer(server, {
     if (room.round === 4 || (room.round === 7 && room.mode !== 'quick' && room.mode !== 'short')) {
       room.activeEvent = room.eventDeck.shift();
       if (room.activeEvent) {
+        if (!room.revealedEvents) room.revealedEvents = {};
+        room.revealedEvents[room.round] = room.activeEvent;
         io.to(roomId).emit('notification', `MARKET SHOCK (ROUND ${room.round} EVENT): ${room.activeEvent.name} — ${room.activeEvent.description}`);
         
         if (room.activeEvent.effect === 'immediate_stimulus_100') {
@@ -1471,10 +1687,12 @@ const io = new SocketServer(server, {
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join_room', ({ roomId, username, role, avatarId, maxPlayers, isVsAi, mode }) => {
+    socket.on('join_room', ({ roomId, username, role, avatarId, maxPlayers, isVsAi, mode, difficulty }) => {
       console.log(`Socket ${socket.id} is attempting to join room ${roomId} as username: "${username}" with role: "${role}" and avatarId: ${avatarId}`);
       if (!rooms[roomId]) {
-        rooms[roomId] = createEmptyRoom(maxPlayers || 4, mode || 'standard');
+        rooms[roomId] = createEmptyRoom(maxPlayers || 4, mode || 'standard', difficulty || 'medium');
+      } else if (difficulty && (!rooms[roomId].difficulty || rooms[roomId].difficulty === 'medium')) {
+        rooms[roomId].difficulty = difficulty;
       } else if (mode && !rooms[roomId].mode) {
         rooms[roomId].mode = mode;
       }
@@ -1512,6 +1730,9 @@ const io = new SocketServer(server, {
         }
         if (avatarId) {
           existingPlayer.avatarId = avatarId;
+          if (AVATAR_COLORS[avatarId]) {
+            existingPlayer.color = AVATAR_COLORS[avatarId];
+          }
         }
       } else {
         console.log(`Creating new player entry for "${username}" with socket ID ${socket.id} and avatarId ${avatarId}`);
@@ -1519,10 +1740,12 @@ const io = new SocketServer(server, {
         const startCash = finalRole === 'Investor' ? 5000 : 1000;
         const startCapital = startCash / 1000;
         const playerColors = ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff', '#b06aff', '#ff7a2a'];
+        const finalAvatarId = avatarId || (finalRole === 'Investor' ? 5 : 1);
+        const playerColor = AVATAR_COLORS[finalAvatarId] || playerColors[roomState.players.length % playerColors.length];
         roomState.players.push({
           id: socket.id,
           name: username || `Player ${roomState.players.length + 1}`,
-          color: playerColors[roomState.players.length % playerColors.length],
+          color: playerColor,
           isLocked: false,
           ownedCompanies: [],
           capital: startCapital,
@@ -1532,7 +1755,7 @@ const io = new SocketServer(server, {
           cash: startCash,
           valuation: 0,
           actionCount: 0,
-          avatarId: avatarId || (finalRole === 'Investor' ? 5 : 1),
+          avatarId: finalAvatarId,
           mentorCards: [],
           boughtMentorRound: 0,
           lifelines: 2,

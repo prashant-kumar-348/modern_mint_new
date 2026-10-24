@@ -5,7 +5,7 @@ const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "http://localhost:5001";
 
-export function useMultiplayer(roomId, username, role, avatarId, maxPlayers, isVsAi = false, mode = 'standard') {
+export function useMultiplayer(roomId, username, role, avatarId, maxPlayers, isVsAi = false, mode = 'standard', difficulty = 'medium') {
   const [gameState, setGameState] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '' });
   const [drawnCard, setDrawnCard] = useState(null);
@@ -31,7 +31,8 @@ export function useMultiplayer(roomId, username, role, avatarId, maxPlayers, isV
         avatarId,
         maxPlayers,
         isVsAi: !!isVsAi,
-        mode: mode || 'standard'
+        mode: mode || 'standard',
+        difficulty: difficulty || 'medium'
       });
     });
 

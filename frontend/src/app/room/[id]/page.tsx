@@ -30,6 +30,7 @@ export default function GameRoomPage({
     isHost: boolean;
     maxPlayers: number;
     isVsAi?: boolean;
+    difficulty?: string;
   } | null>(null);
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export default function GameRoomPage({
           isHost,
           maxPlayers,
           isVsAi,
+          difficulty: rawRoom.ai_difficulty || 'medium',
         });
 
         // Search for user in founders or investors
@@ -70,17 +72,20 @@ export default function GameRoomPage({
           (i) => i.userId === user.id
         );
 
+        const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+        const queryAvatarId = urlParams ? parseInt(urlParams.get("avatarId") || "0", 10) : 0;
+
         if (founderSlot) {
           setPlayerDetails({
             username: founderSlot.name || user.username,
             role: "Founder",
-            avatarId: founderSlot.avatarId,
+            avatarId: queryAvatarId || founderSlot.avatarId || 1,
           });
         } else if (investorSlot) {
           setPlayerDetails({
             username: investorSlot.name || user.username,
             role: "Investor",
-            avatarId: investorSlot.avatarId,
+            avatarId: queryAvatarId || investorSlot.avatarId || 5,
           });
         } else {
           // Player has not joined the room officially
