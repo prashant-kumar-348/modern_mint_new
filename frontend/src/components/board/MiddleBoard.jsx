@@ -26,7 +26,9 @@ export default function MiddleBoard({
   onPRServicesClick = undefined,
   onEventCardClick = undefined,
   activeEvent = null,
-  revealedEvents = {}
+  revealedEvents = {},
+  onCompanyClick = undefined,
+  localPlayer = null
 }) {
   const totalRounds = 9;
 
@@ -227,14 +229,27 @@ export default function MiddleBoard({
               const top = `calc(50% + ${yOffset}px)`;
               const left = `calc(50% + ${xOffset}px)`;
 
+              const isOwnedByMe = localPlayer?.ownedCompanies?.some(
+                c => c.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === comp.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+              );
+
               return (
                 <div 
                   key={idx}
-                  className="absolute z-30 pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-110 transition-transform"
+                  onClick={() => onCompanyClick && onCompanyClick(comp)}
+                  className="absolute z-30 pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-110 active:scale-95 transition-all select-none"
                   style={{ top, left }}
+                  title={isOwnedByMe ? `${comp.name} (Launched)` : `Click to Launch ${comp.name}`}
                 >
                   <div className="relative flex flex-col items-center gap-1">
                      
+                     {/* Launch Chip on Hover if Unlaunched */}
+                     {!isOwnedByMe && (
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-4 bg-[#FFC240] text-[#2A0D12] text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(255,194,64,0.6)] z-50 pointer-events-none whitespace-nowrap border border-[#2A0D12]/40">
+                          🚀 Launch
+                        </div>
+                     )}
+
                      {/* Floating Stage Tokens (L / R / G / S) */}
                      {comp.tags && comp.tags.length > 0 && (
                         <div className="absolute -top-10 -right-7 flex flex-col gap-1 z-40 drop-shadow-lg">
@@ -247,9 +262,9 @@ export default function MiddleBoard({
                      )}
 
                      {/* Company 3D Illustration / Emoji */}
-                     <div className="w-16 h-16 rounded-xl border-transparent flex items-center justify-center text-5xl drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] mb-1 relative overflow-visible transition-transform">
+                     <div className="w-16 h-16 rounded-xl border-transparent flex items-center justify-center text-5xl drop-shadow-[0_10px_10px_rgba(0,0,0,0.8)] mb-1 relative overflow-visible transition-transform group-hover:scale-105">
                        {comp.image ? (
-                         <img src={comp.image} alt={comp.name} className="w-[200%] h-[200%] max-w-none object-contain relative z-10 drop-shadow-[0_10px_15px_rgba(0,0,0,0.95)] -translate-y-2" />
+                         <img src={comp.image} alt={comp.name} className="w-[200%] h-[200%] max-w-none object-contain relative z-10 drop-shadow-[0_10px_15px_rgba(0,0,0,0.95)] -translate-y-2 group-hover:drop-shadow-[0_0_20px_rgba(255,194,64,0.7)] transition-all" />
                        ) : (
                          <span className="relative z-10 bg-[#0c2e26]/50 p-2 rounded-lg backdrop-blur border border-[#30a887]/30">{comp.icon}</span>
                        )}
@@ -257,7 +272,7 @@ export default function MiddleBoard({
                      
                      {/* Golden Plaque Name Tag */}
                      <div className="absolute -bottom-7 w-40 flex justify-center z-30">
-                        <div className="bg-gradient-to-b from-[#e5c158] to-[#b38836] px-4 py-2 border-2 border-[#5c4015] rounded text-[10px] font-black uppercase tracking-widest text-[#2a1a08] shadow-[0_4px_10px_rgba(0,0,0,0.8)] relative whitespace-nowrap">
+                        <div className="bg-gradient-to-b from-[#e5c158] to-[#b38836] px-4 py-2 border-2 border-[#5c4015] rounded text-[10px] font-black uppercase tracking-widest text-[#2a1a08] shadow-[0_4px_10px_rgba(0,0,0,0.8)] relative whitespace-nowrap group-hover:brightness-110 group-hover:shadow-[0_0_15px_rgba(229,193,88,0.5)] transition-all">
                            {comp.name}
                            {/* Side rivets/decorations */}
                            <div className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-1.5 h-3.5 border-r border-y border-[#5c4015] rounded-l bg-[#c29641]"></div>
@@ -274,39 +289,49 @@ export default function MiddleBoard({
         {/* =========================================
             RIGHT COLUMN: Info Boxes & Players
         ========================================= */}
-        <div className="flex flex-col justify-between items-end w-[280px] pointer-events-auto z-30 pt-6 pb-2">
+        <div className="flex flex-col justify-between items-end w-[280px] pointer-events-auto z-30 pt-1 pb-1 h-full">
           
           {/* Bank Loan Info */}
           <div 
             onClick={onBankLoanClick}
-            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pb-6 shadow-xl relative overflow-hidden group ${onBankLoanClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
+            className={`w-full shrink-0 bg-[#0c2e26]/85 backdrop-blur-md border border-[#1d6b56] p-3 pb-3.5 shadow-xl relative overflow-hidden group ${onBankLoanClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.01] active:scale-[0.99] transition-all' : ''}`}
           >
-            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors"></div>
+            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors pointer-events-none"></div>
             <div className="absolute top-1 left-1 w-2 h-2 border-t border-l border-[#55ffb0]"></div>
             <div className="absolute top-1 right-1 w-2 h-2 border-t border-r border-[#55ffb0]"></div>
             <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l border-[#55ffb0]"></div>
             <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-[#55ffb0]"></div>
 
-            <h3 className="text-[#55ffb0] font-black text-[14px] uppercase tracking-[0.2em] mb-3 text-center relative z-10 group-hover:text-white transition-colors">Bank Loan</h3>
-            <ul className="text-[12px] text-[#a4d8c2] space-y-2.5 leading-snug list-disc pl-5 font-sans pr-2 relative z-10 font-medium">
+            <h3 className="text-[#55ffb0] font-black text-[13px] uppercase tracking-[0.2em] mb-2 text-center relative z-10 group-hover:text-white transition-colors">Bank Loan</h3>
+            <ul className="text-[11.5px] text-[#a4d8c2] space-y-1.5 leading-snug list-disc pl-5 font-sans pr-2 relative z-10 font-medium">
               <li>Pay 10% interest each round</li>
-              <li>Borrow up to your eligible limit<br/><span className="text-[10px] text-[#a4d8c2]/70 font-normal">(see Player Mat)</span></li>
+              <li>Borrow up to your eligible limit<br/><span className="text-[9.5px] text-[#a4d8c2]/70 font-normal">(see Player Mat)</span></li>
             </ul>
           </div>
 
-          {/* Player Tokens Stack (Avatars with glowing borders) */}
-          <div className="flex flex-col justify-center items-center gap-4 w-full z-20 -my-4 relative">
+          {/* Founder Turn Order Stack */}
+          <div className="flex-1 flex flex-col justify-center items-center w-full z-20 py-2 relative my-auto">
+            <div className="text-[11px] text-[#55ffb0] uppercase font-black tracking-[0.2em] text-center mb-2.5 drop-shadow select-none">
+              TURN ORDER
+            </div>
+            
             {(() => {
-              // Sort valid players by actionCount ascending (least actions / lowest at the top)
-              const sortedPlayers = [...players].sort((a, b) => {
+              const founderPlayers = players.filter(p => (p.role || '').toLowerCase() === 'founder');
+              const turnOrderPlayers = founderPlayers.length > 0 ? founderPlayers : players;
+              const investorPlayers = players.filter(p => (p.role || '').toLowerCase() === 'investor');
+
+              // Sort by actionCount ascending (least actions = goes first)
+              const sortedFounders = [...turnOrderPlayers].sort((a, b) => {
                 const acA = a.actionCount || 0;
                 const acB = b.actionCount || 0;
-                if (acA !== acB) {
-                  return acA - acB;
-                }
+                if (acA !== acB) return acA - acB;
                 return players.indexOf(a) - players.indexOf(b);
               });
-              
+
+              const totalCount = sortedFounders.length;
+              const avatarSize = totalCount <= 3 ? 'w-[54px] h-[54px]' : totalCount === 4 ? 'w-[50px] h-[50px]' : 'w-[42px] h-[42px]';
+              const gapClass = totalCount <= 3 ? 'gap-4' : totalCount === 4 ? 'gap-3.5' : 'gap-2';
+
               const AVATAR_COLORS = {
                 1: '#9b2c3d',
                 2: '#e08b26',
@@ -316,54 +341,86 @@ export default function MiddleBoard({
                 6: '#d4af37'
               };
 
-              return sortedPlayers.map((p, sortedIdx) => {
-                const originalIdx = players.findIndex(pl => pl.id === p.id);
-                const avatarColor = (p.avatarId && AVATAR_COLORS[p.avatarId]) || p.color || '#55ffb0';
-                
-                // Determine avatar image path based on their selected avatarId or original index fallback
-                const avatarSrc = p.avatarId && AVATAR_IMAGE_BY_ID[p.avatarId]
-                  ? AVATAR_IMAGE_BY_ID[p.avatarId]
-                  : `/player-avatar-${(originalIdx !== -1 ? originalIdx : sortedIdx) % 4 + 1}.png`;
+              return (
+                <>
+                  <div className={`flex flex-col items-center ${gapClass} w-full`}>
+                    {sortedFounders.map((p, rankIdx) => {
+                      const originalIdx = players.findIndex(pl => pl.id === p.id);
+                      const avatarColor = (p.avatarId && AVATAR_COLORS[p.avatarId]) || p.color || '#55ffb0';
+                      const avatarSrc = p.avatarId && AVATAR_IMAGE_BY_ID[p.avatarId]
+                        ? AVATAR_IMAGE_BY_ID[p.avatarId]
+                        : `/player-avatar-${(originalIdx !== -1 ? originalIdx : rankIdx) % 4 + 1}.png`;
 
-                return (
-                  <div 
-                    key={p.id}
-                    className="w-[70px] h-[70px] rounded-full flex items-center justify-center cursor-pointer hover:scale-110 transition-transform relative select-none"
-                    style={{ 
-                      filter: `drop-shadow(0 0 10px ${avatarColor}90) drop-shadow(0 4px 12px rgba(0,0,0,0.8))`
-                    }}
-                    title={p.name}
-                  >
-                    <img 
-                      src={avatarSrc} 
-                      alt={p.name} 
-                      className="w-full h-full object-contain pointer-events-none drop-shadow" 
-                    />
+                      return (
+                        <div key={p.id} className="flex items-center gap-3.5 group cursor-pointer">
+                          <span className="text-xs font-black text-[#55ffb0]/80 w-4 text-right select-none drop-shadow">
+                            {rankIdx + 1}
+                          </span>
+                          <div 
+                            className={`${avatarSize} rounded-full flex items-center justify-center hover:scale-110 transition-transform relative select-none`}
+                            style={{ 
+                              filter: `drop-shadow(0 0 10px ${avatarColor}95) drop-shadow(0 4px 10px rgba(0,0,0,0.85))`
+                            }}
+                            title={`${p.name} (Actions: ${p.actionCount || 0})`}
+                          >
+                            <img 
+                              src={avatarSrc} 
+                              alt={p.name} 
+                              className="w-full h-full object-contain pointer-events-none drop-shadow" 
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              });
+
+                  {/* Dedicated Investors Row */}
+                  {investorPlayers.length > 0 && (
+                    <div className="flex items-center justify-center gap-3 mt-4 pt-3 border-t border-[#1d6b56]/60 w-[85%]">
+                      <span className="text-[9.5px] uppercase tracking-widest font-black text-[#FFC240] select-none drop-shadow">INVESTORS:</span>
+                      <div className="flex items-center gap-3">
+                        {investorPlayers.map(inv => {
+                          const avatarSrc = inv.avatarId && AVATAR_IMAGE_BY_ID[inv.avatarId]
+                            ? AVATAR_IMAGE_BY_ID[inv.avatarId]
+                            : `/lobby/join/Ellipse 197.png`;
+                          return (
+                            <div 
+                              key={inv.id}
+                              className="w-8 h-8 rounded-full flex items-center justify-center hover:scale-110 transition-transform relative cursor-pointer"
+                              title={`${inv.name} (Investor)`}
+                              style={{ filter: 'drop-shadow(0 0 8px rgba(255,194,64,0.7))' }}
+                            >
+                              <img src={avatarSrc} alt={inv.name} className="w-full h-full object-contain pointer-events-none" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
             })()}
           </div>
 
           {/* PR Services Info */}
           <div 
             onClick={onPRServicesClick}
-            className={`w-full bg-[#0c2e26]/80 backdrop-blur-md border border-[#1d6b56] p-4 pt-5 pb-5 shadow-xl relative overflow-hidden group ${onPRServicesClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all' : ''}`}
+            className={`w-full shrink-0 bg-[#0c2e26]/85 backdrop-blur-md border border-[#1d6b56] p-3 py-2.5 shadow-xl relative overflow-hidden group ${onPRServicesClick ? 'cursor-pointer hover:border-[#55ffb0] hover:shadow-[0_0_25px_rgba(85,255,176,0.25)] hover:scale-[1.01] active:scale-[0.99] transition-all' : ''}`}
           >
-            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors"></div>
+            <div className="absolute inset-1 border border-[#30a887]/40 rounded-sm group-hover:border-[#55ffb0]/60 transition-colors pointer-events-none"></div>
             <div className="absolute top-1 left-1 w-2 h-2 border-t border-l border-[#55ffb0]"></div>
             <div className="absolute top-1 right-1 w-2 h-2 border-t border-r border-[#55ffb0]"></div>
             <div className="absolute bottom-1 left-1 w-2 h-2 border-b border-l border-[#55ffb0]"></div>
             <div className="absolute bottom-1 right-1 w-2 h-2 border-b border-r border-[#55ffb0]"></div>
 
-            <h3 className="text-[#55ffb0] font-black text-[14px] uppercase tracking-[0.2em] mb-3 text-center group-hover:text-white transition-colors">PR Services</h3>
-            <div className="flex flex-col items-center gap-1.5 text-[12px] font-semibold text-[#a4d8c2] font-sans">
+            <h3 className="text-[#55ffb0] font-black text-[13px] uppercase tracking-[0.2em] mb-2 text-center group-hover:text-white transition-colors">PR Services</h3>
+            <div className="flex flex-col items-center gap-1 text-[11px] font-semibold text-[#a4d8c2] font-sans">
               <div>Team 3: Pay $500K</div>
               <div>Team 2: Pay $300K</div>
               <div>Team 1: Pay $100K</div>
             </div>
-            <div className="text-[10px] text-[#55ffb0] mt-3 text-center uppercase tracking-wider font-bold">Projected Revenue will be DOUBLED</div>
-            <div className="text-[8.5px] text-[#a4d8c2]/70 text-center uppercase tracking-wide mt-1 font-medium">*One applies per company per round</div>
+            <div className="text-[9.5px] text-[#55ffb0] mt-1.5 text-center uppercase tracking-wider font-bold">Projected Revenue will be DOUBLED</div>
+            <div className="text-[8px] text-[#a4d8c2]/70 text-center uppercase tracking-wide mt-0.5 font-medium">*One applies per company per round</div>
           </div>
 
         </div>

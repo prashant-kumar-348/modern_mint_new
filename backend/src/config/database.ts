@@ -361,6 +361,38 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
     return { rows: rp ? [rp] : [], rowCount: rp ? 1 : 0 };
   }
 
+  // Check if avatar is taken by another player in the room
+  if (norm.includes("FROM ROOM_PLAYERS WHERE ROOM_ID=$1 AND AVATAR_ID=$2")) {
+    const roomId = params[0];
+    const avatarId = Number(params[1]);
+    const excludeUserId = params[2];
+    const checkHumanOnly = norm.includes("IS_AI=FALSE");
+    const taken = roomPlayers.find(
+      p => p.room_id === roomId && p.avatar_id === avatarId && (!excludeUserId || p.user_id !== excludeUserId) && (!checkHumanOnly || !p.is_ai)
+    );
+    return { rows: taken ? [taken] : [], rowCount: taken ? 1 : 0 };
+  }
+
+  // Delete AI investor when human investor joins
+  if (norm.includes("DELETE FROM ROOM_PLAYERS") && norm.includes("IS_AI=TRUE")) {
+    const roomId = params[0];
+    const targetAvatarId = Number(params[1]);
+    const idx = roomPlayers.findIndex(
+      p => p.room_id === roomId && p.role === "investor" && p.is_ai && (targetAvatarId ? p.avatar_id === targetAvatarId : true)
+    );
+    if (idx !== -1) {
+      roomPlayers.splice(idx, 1);
+    } else {
+      const anyAiIdx = roomPlayers.findIndex(
+        p => p.room_id === roomId && p.role === "investor" && p.is_ai
+      );
+      if (anyAiIdx !== -1) {
+        roomPlayers.splice(anyAiIdx, 1);
+      }
+    }
+    return { rows: [], rowCount: 1 };
+  }
+
   // Already in room player check
   if (norm.includes("FROM ROOM_PLAYERS WHERE ROOM_ID=$1 AND USER_ID=$2")) {
     const roomId = params[0];
@@ -369,12 +401,13 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
     return { rows: rp ? [rp] : [], rowCount: rp ? 1 : 0 };
   }
 
-  // Count human players in room in role
-  if (norm.includes("FROM ROOM_PLAYERS WHERE ROOM_ID=$1 AND ROLE=$2 AND IS_AI=FALSE")) {
+  // Count players in room in role
+  if (norm.includes("FROM ROOM_PLAYERS WHERE ROOM_ID=$1 AND ROLE=$2")) {
     const roomId = params[0];
     const role = params[1];
+    const checkHumanOnly = norm.includes("IS_AI=FALSE");
     const count = roomPlayers.filter(
-      p => p.room_id === roomId && p.role === role && !p.is_ai
+      p => p.room_id === roomId && p.role === role && (!checkHumanOnly || !p.is_ai)
     ).length;
     return { rows: [{ count: String(count) }], rowCount: 1 };
   }

@@ -46,6 +46,7 @@ import RoyaltyProposalModal from './modals/RoyaltyProposalModal';
 import RepayLoanModal from './modals/RepayLoanModal';
 import GameOverModal from './modals/GameOverModal';
 import EventCardModal from './modals/EventCardModal';
+import LaunchCompanyModal from './modals/LaunchCompanyModal';
 import PhaseTransitionOverlay from './board/PhaseTransitionOverlay';
 import TutorialOverlay from './tutorial/TutorialOverlay';
 import { TUTORIAL_STEPS } from './tutorial/tutorialData';
@@ -197,6 +198,24 @@ const getCompanyLogoImage = (name) => {
   return '/company-quick-commerce.png';
 };
 
+const CANONICAL_COMPANIES = [
+  'CONTRACT FARMING',
+  'AGRI IoT',
+  'WALLET',
+  'SNACKS',
+  'QUICK COMMERCE',
+  'SMART STORAGE',
+  'RESTRO - CHAIN',
+  'TRACEABILITY',
+  'ROBO - PACKAGING'
+];
+
+export const getCanonicalCompanyName = (name) => {
+  if (!name) return '';
+  const clean = String(name).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+  return CANONICAL_COMPANIES.find(c => c.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === clean) || name.toUpperCase();
+};
+
 export const getStageTokenImage = (stage, playerIdx = 0, playerColor = null) => {
   const stageMap = {
     'L': 'L', '0': 'L', 0: 'L',
@@ -238,7 +257,9 @@ const AVATAR_IMAGE_BY_ID = {
 };
 
 function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole, avatarId, roomInfo }) {
-  const [activeModal, setActiveModal] = useState(null); 
+  const [activeModal, setActiveModal] = useState(null);
+  const [selectedLaunchCompany, setSelectedLaunchCompany] = useState(null);
+  const [returnToModal, setReturnToModal] = useState(null);
   const [isHoverOpenedMat, setIsHoverOpenedMat] = useState(false);
   const [showTutorialPrompt, setShowTutorialPrompt] = useState(true);
   const [showRound1Intro, setShowRound1Intro] = useState(true);
@@ -588,6 +609,53 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
 
   const handleLaunchCompany = (playerId) => {
     sendAction('launch_company', { targetPlayerId: playerId });
+  };
+
+  const handleCompanyClick = (comp) => {
+    if (!comp) return;
+    const canonicalName = getCanonicalCompanyName(comp.name);
+    const isOwnedByMe = (localPlayer?.ownedCompanies || []).some(
+      c => getCanonicalCompanyName(c.name) === canonicalName
+    );
+
+    if (localPlayer?.role?.toLowerCase() === 'investor') {
+      setPendingNotification({
+        title: 'FOUNDER ONLY ACTION',
+        message: 'Investors cannot launch companies. You invest in founders during Phase 1!'
+      });
+      return;
+    }
+
+    if (isOwnedByMe) {
+      const owned = localPlayer?.ownedCompanies?.find(c => getCanonicalCompanyName(c.name) === canonicalName);
+      setPendingNotification({
+        title: 'COMPANY ALREADY LAUNCHED',
+        message: `${canonicalName} is already in your portfolio (Stage ${owned?.stage || 'L'}). Use your Player Mat to Stage Up or Upgrade Workforce.`
+      });
+      return;
+    }
+
+    if ((localPlayer?.ownedCompanies || []).length >= 4) {
+      setPendingNotification({
+        title: 'PORTFOLIO LIMIT REACHED',
+        message: 'Maximum of 4 company launches allowed per founder.'
+      });
+      return;
+    }
+
+    const dataRow = companyDataMap[canonicalName] || [[10, 100, 500, 0]];
+    setSelectedLaunchCompany({
+      name: canonicalName,
+      displayName: comp.name,
+      image: comp.image || getCompanyLogoImage(canonicalName),
+      icon: comp.icon || getCompanyLogoImage(canonicalName),
+      data: dataRow,
+      invest: dataRow[0][0],
+      revenue: dataRow[0][1],
+      valuation: dataRow[0][2],
+      loan: dataRow[0][3]
+    });
+    setActiveModal('launchCompanyModal');
   };
 
   return (
@@ -1133,6 +1201,8 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                  }}
                  activeEvent={gameState?.activeEvent}
                  revealedEvents={gameState?.revealedEvents}
+                 onCompanyClick={handleCompanyClick}
+                 localPlayer={localPlayer}
                />
             </div>
 
@@ -1239,7 +1309,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                       </div>
                     ) : (
                       <button 
-                        onClick={() => setActiveModal('playerMat')}
+                        onClick={() => setActiveModal('launch')}
                         className="w-[78px] h-[32px] rounded-[8px] bg-[#546461] hover:bg-[#637571] text-white text-[9px] font-bold uppercase tracking-wider leading-tight flex flex-col items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
                       >
                         <span>LAUNCH</span>
@@ -1602,6 +1672,33 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
               />
             )}
 
+            {/* DEDICATED LAUNCH COMPANY MODAL */}
+            {activeModal === 'launchCompanyModal' && selectedLaunchCompany && (
+              <LaunchCompanyModal
+                company={selectedLaunchCompany}
+                localPlayer={localPlayer}
+                gamePhase={gamePhase}
+                isTurnLocked={isTurnLocked}
+                onClose={() => {
+                  const ret = returnToModal;
+                  setReturnToModal(null);
+                  setActiveModal(ret || null);
+                  setSelectedLaunchCompany(null);
+                }}
+                onConfirmLaunch={(companyName, investCost) => {
+                  sendAction('phase2_action', {
+                    actionType: 'launch',
+                    companyName,
+                    amount: Number(investCost)
+                  });
+                  const ret = returnToModal;
+                  setReturnToModal(null);
+                  setActiveModal(ret || null);
+                  setSelectedLaunchCompany(null);
+                }}
+              />
+            )}
+
 
 
             {activeModal === 'loan' && (
@@ -1659,6 +1756,26 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                 ownedCompanies={localPlayer?.ownedCompanies || []}
                 isHoverOpened={isHoverOpenedMat}
                 onPin={() => setIsHoverOpenedMat(false)}
+                onLaunchCompany={(company) => {
+                  setReturnToModal('playerMat');
+                  setIsHoverOpenedMat(false);
+                  handleCompanyClick(company);
+                }}
+                onUndoLaunch={(company) => {
+                  const canonicalName = getCanonicalCompanyName(company.name);
+                  const launchAction = (localPlayer?.roundActions || []).find(
+                    a => a.type === 'launch' && a.round === gameRound &&
+                    getCanonicalCompanyName(a.companyName) === canonicalName
+                  );
+                  if (launchAction) {
+                    sendAction('undo_action', { actionId: launchAction.id });
+                  } else {
+                    setPendingNotification({
+                      title: 'CANNOT UNDO',
+                      message: 'You can only undo company launches made during the current round.'
+                    });
+                  }
+                }}
               />
             )}
 

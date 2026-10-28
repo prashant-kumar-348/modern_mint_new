@@ -216,9 +216,11 @@ export async function createRoom(
     if (ai_founders && ai_founders > 0) {
       const aiFounderNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
       const effectiveAiFounders = Math.min(ai_founders, max_founders - 1);
+      const allFounderAvatars = [1, 2, 3, 4];
+      const availableFounderAvatars = allFounderAvatars.filter(id => id !== avatar_id);
       for (let i = 0; i < effectiveAiFounders; i++) {
         const name = aiFounderNames[i] || `AI Founder ${i + 1}`;
-        const avId = (i % 4) + 1;
+        const avId = availableFounderAvatars[i % availableFounderAvatars.length] || (i + 1);
         await client.query(
           `INSERT INTO room_players
              (room_id, user_id, role, avatar_id, display_name, is_ai)
@@ -231,9 +233,11 @@ export async function createRoom(
     if (ai_investors && ai_investors > 0) {
       const aiInvestorNames = ["Sigma Bot", "Apex Bot"];
       const effectiveAiInvestors = Math.min(ai_investors, max_investors);
+      const allInvestorAvatars = [5, 6];
+      const availableInvestorAvatars = allInvestorAvatars.filter(id => id !== avatar_id);
       for (let i = 0; i < effectiveAiInvestors; i++) {
         const name = aiInvestorNames[i] || `AI Investor ${i + 1}`;
-        const avId = 5 + (i % 2);
+        const avId = availableInvestorAvatars[i % availableInvestorAvatars.length] || (5 + i);
         await client.query(
           `INSERT INTO room_players
              (room_id, user_id, role, avatar_id, display_name, is_ai)
@@ -271,6 +275,15 @@ async function insertPlayer(
   avatar_id: number,
   display_name: string
 ): Promise<void> {
+  // Check if avatar is already taken by another player in this room
+  const avatarTaken = await client.query(
+    `SELECT id FROM room_players WHERE room_id=$1 AND avatar_id=$2 AND user_id!=$3 LIMIT 1`,
+    [roomId, avatar_id, userId]
+  );
+  if (avatarTaken.rowCount && avatarTaken.rowCount > 0) {
+    throw { status: 409, message: "This character is already taken by another player." };
+  }
+
   // Check if already in the room
   const alreadyIn = await client.query(
     `SELECT id FROM room_players WHERE room_id=$1 AND user_id=$2 LIMIT 1`,
@@ -287,10 +300,10 @@ async function insertPlayer(
     return;
   }
 
-  // Count current human players in the requested role
+  // Count current players in the requested role
   const countResult = await client.query<{ count: string }>(
     `SELECT COUNT(*) AS count FROM room_players
-     WHERE room_id=$1 AND role=$2 AND is_ai=false`,
+     WHERE room_id=$1 AND role=$2`,
     [roomId, role]
   );
   const currentCount = parseInt(countResult.rows[0].count, 10);
@@ -298,6 +311,14 @@ async function insertPlayer(
 
   if (currentCount >= max) {
     throw { status: 409, message: `No ${role} slots available.` };
+  }
+
+  // If a human joins as an investor, replace one AI investor to keep exactly 2 investors
+  if (role === "investor") {
+    await client.query(
+      `DELETE FROM room_players WHERE room_id=$1 AND role='investor' AND is_ai=true AND (avatar_id=$2 OR id IN (SELECT id FROM room_players WHERE room_id=$1 AND role='investor' AND is_ai=true LIMIT 1))`,
+      [roomId, avatar_id]
+    );
   }
 
   // Insert player

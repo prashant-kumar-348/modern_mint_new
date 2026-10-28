@@ -26,29 +26,29 @@ function makeFounderSlots(username: string, vsAi: boolean = false): CreateSlot[]
   if (vsAi) {
     return [
       { dropdown: "You",  avatarId: 1, name: username },  // host only
-      { dropdown: "AI",   avatarId: 1, name: "Alpha Bot" },
+      { dropdown: "AI",   avatarId: 2, name: "Alpha Bot" },
       { dropdown: "AI",   avatarId: 3, name: "Delta Bot" },
       { dropdown: "AI",   avatarId: 4, name: "Omega Bot" },
     ];
   }
   return [
     { dropdown: "You",  avatarId: 1, name: username },  // host only
-    { dropdown: "Open", avatarId: 5, name: "" },
-    { dropdown: "Open", avatarId: 5, name: "" },
-    { dropdown: "Open", avatarId: 5, name: "" },
+    { dropdown: "Open", avatarId: 2, name: "" },
+    { dropdown: "Open", avatarId: 3, name: "" },
+    { dropdown: "Open", avatarId: 4, name: "" },
   ];
 }
 
 function makeInvestorSlots(vsAi: boolean = false): CreateSlot[] {
   if (vsAi) {
     return [
-      { dropdown: "AI",   avatarId: 5, name: "Sigma Bot" },
-      { dropdown: "AI",   avatarId: 6, name: "Apex Bot" },
+      { dropdown: "AI", avatarId: 5, name: "Sigma Bot" },
+      { dropdown: "AI", avatarId: 6, name: "Apex Bot" },
     ];
   }
   return [
-    { dropdown: "Open",   avatarId: 5, name: "" },
-    { dropdown: "Open",   avatarId: 5, name: "" },
+    { dropdown: "Open", avatarId: 5, name: "" },
+    { dropdown: "Open", avatarId: 6, name: "" },
   ];
 }
 

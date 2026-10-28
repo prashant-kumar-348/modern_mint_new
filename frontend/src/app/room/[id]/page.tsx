@@ -51,8 +51,7 @@ export default function GameRoomPage({
         const maxPlayers = (rawRoom.founders?.length || 4) + (rawRoom.investors?.length || 0);
         const isVsAi =
           (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("vsAi") === "true") ||
-          rawRoom.founders?.some((f) => f.kind === "ai") ||
-          rawRoom.investors?.some((i) => i.kind === "ai");
+          (rawRoom.privacy === "closed" && (rawRoom.founders?.filter((f: any) => f.kind === "ai").length || 0) >= 2);
 
         setRoomInfo({
           name: rawRoom.name,

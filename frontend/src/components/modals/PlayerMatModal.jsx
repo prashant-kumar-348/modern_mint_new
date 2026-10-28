@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Lock } from 'lucide-react';
 
-export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOpened = false, onPin }) {
+export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOpened = false, onPin, onLaunchCompany, onUndoLaunch }) {
   // Exact data extracted from your uploaded Player Mat screenshot
   const companies = [
     { id: 'c1', name: 'CONTRACT FARMING', icon: '/mat-icons/mat-icon-contract-farming.png', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
@@ -83,7 +83,7 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
           {/* ================================================= */}
           <div className="flex-[3] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {companies.map(company => {
-              const isLaunched = ownedCompanies.some(c => c.name === company.name);
+              const isLaunched = ownedCompanies.some(c => (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === company.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase());
 
               return (
                 <div key={company.id} className="bg-[#7D3C4A] rounded-xl pt-2.5 px-3.5 pb-3 border border-[#3A141A] flex flex-col justify-between relative shadow-lg min-h-[315px]">
@@ -105,8 +105,14 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
                      <div className="absolute inset-0 top-5 z-20 flex flex-col items-center justify-center bg-black/10 rounded-b-xl border-t border-white/5 pointer-events-none">
                         <Lock size={26} className="text-white/60 mb-2 drop-shadow-md" />
                         <button 
-                          onClick={() => toggleLaunch(company.id)}
-                          className="pointer-events-auto bg-[#FFF2D8] text-[#4A1720] px-5 py-2 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest hover:bg-[#EAE4D3] hover:scale-105 transition-all shadow-xl text-xs cursor-pointer"
+                          onClick={() => {
+                            if (onLaunchCompany) {
+                              onLaunchCompany(company);
+                            } else {
+                              toggleLaunch(company.id);
+                            }
+                          }}
+                          className="pointer-events-auto bg-[#FFF2D8] text-[#4A1720] px-5 py-2 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest hover:bg-[#EAE4D3] hover:scale-105 active:scale-95 transition-all shadow-xl text-xs cursor-pointer"
                         >
                           Launch Company
                         </button>
@@ -115,7 +121,16 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
 
                   {/* Undo Launch Button */}
                   {isLaunched && (
-                     <button onClick={() => toggleLaunch(company.id)} className="absolute top-3 right-3 text-[10px] text-white/50 hover:text-white uppercase font-bold z-10 transition-colors">
+                     <button 
+                       onClick={() => {
+                         if (onUndoLaunch) {
+                           onUndoLaunch(company);
+                         } else {
+                           toggleLaunch(company.id);
+                         }
+                       }} 
+                       className="absolute top-3 right-3 text-[10px] text-white/50 hover:text-white uppercase font-bold z-10 transition-colors cursor-pointer hover:underline"
+                     >
                        Undo Launch
                      </button>
                   )}

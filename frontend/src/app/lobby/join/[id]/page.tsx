@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, useEffect } from "react";
+import { use, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import PageBackground from "@/components/PageBackground";
@@ -99,13 +99,79 @@ export default function JoinGamePage({
     full:     { label: "Full Mode",  icon: "/lobby/modes/crown.png"     },
   };
 
+  // Calculate avatar IDs already taken by other players or AI in this room
+  const takenAvatarIds = useMemo(() => {
+    const taken = new Set<number>();
+    if (!room) return taken;
+
+    const currentUserId = currentUser?.id;
+    const allSlots = [
+      ...(room.raw?.founders || room.founders || []),
+      ...(room.raw?.investors || room.investors || []),
+    ];
+
+    for (const s of allSlots) {
+      if (!s || !s.avatarId || s.kind === "open") continue;
+
+      const slotUserId = (s as any).userId || (s as any).user_id;
+      // Do not mark as taken if it belongs to the current user (e.g. host modifying choices)
+      const isMe = currentUserId && slotUserId && slotUserId === currentUserId;
+      if (!isMe) {
+        if (s.kind === "human" || s.kind === "you" || (s as any).status === "online") {
+          taken.add(Number(s.avatarId));
+        } else if (s.kind === "ai") {
+          // AI Founder bots (avatars 1-4) in VS AI cannot be chosen.
+          // AI investor bots (avatars 5-6) can be selected by human players to take over an investor role.
+          if (Number(s.avatarId) <= 4) {
+            taken.add(Number(s.avatarId));
+          }
+        }
+      }
+    }
+    return taken;
+  }, [room, currentUser]);
+
+  // Periodic poll to keep taken avatars live across clients while in lobby
+  useEffect(() => {
+    if (!ready || !id || starting) return;
+    const interval = setInterval(async () => {
+      try {
+        const updated = await fetchRoom(id);
+        setRoom(updated);
+      } catch {
+        // ignore polling errors
+      }
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [ready, id, starting]);
+
+  // Auto-switch to an available avatar if the selected one is taken
+  useEffect(() => {
+    if (!room) return;
+    const roleAvatars = avatarsForRole(role);
+    if (!avatarId || takenAvatarIds.has(avatarId)) {
+      const free = roleAvatars.find((a) => !takenAvatarIds.has(a.id));
+      if (free) {
+        setAvatarId(free.id);
+      } else {
+        setAvatarId(null);
+      }
+    }
+  }, [takenAvatarIds, role, room]);
+
   function selectRole(r: PlayerRole) {
     setRole(r);
-    setAvatarId(avatarsForRole(r)[0].id);
+    const roleAvatars = avatarsForRole(r);
+    const free = roleAvatars.find((a) => !takenAvatarIds.has(a.id));
+    setAvatarId(free ? free.id : null);
   }
 
   async function handleStart() {
     if (!name.trim() || !avatarId) return;
+    if (takenAvatarIds.has(avatarId)) {
+      setJoinError("This character is already taken. Please choose another character.");
+      return;
+    }
     setJoinError(null);
     setStarting(true);
 
@@ -306,25 +372,44 @@ export default function JoinGamePage({
                     {role === "founder" ? (
                       <div className="grid grid-cols-2 gap-4">
                         {avatars.map((a) => {
+                          const isTaken = takenAvatarIds.has(a.id);
                           const active = avatarId === a.id;
                           return (
                             <button
                               key={a.id}
                               type="button"
-                              onClick={() => setAvatarId(a.id)}
-                              className={`relative rounded-full overflow-hidden cursor-pointer transition-transform duration-150 focus:outline-none ${
-                                active ? "scale-105" : "opacity-80 hover:opacity-100 hover:scale-102"
+                              onClick={() => !isTaken && setAvatarId(a.id)}
+                              disabled={isTaken}
+                              title={isTaken ? "This character is already taken by another player" : "Select Character"}
+                              className={`relative rounded-full overflow-hidden transition-all duration-150 focus:outline-none ${
+                                isTaken
+                                  ? "opacity-35 grayscale cursor-not-allowed filter saturate-0 scale-95"
+                                  : active 
+                                    ? "scale-105 cursor-pointer" 
+                                    : "opacity-85 hover:opacity-100 hover:scale-102 cursor-pointer"
                               }`}
                               style={{
                                 width: 78,
                                 height: 78,
-                                boxShadow: active
-                                  ? "0 0 20px rgba(240, 207, 116, 0.7), 0 0 0 2.5px #f0cf74"
-                                  : "0 0 0 1px rgba(240, 207, 116, 0.25)",
+                                boxShadow: isTaken
+                                  ? "none"
+                                  : active
+                                    ? "0 0 20px rgba(240, 207, 116, 0.7), 0 0 0 2.5px #f0cf74"
+                                    : "0 0 0 1px rgba(240, 207, 116, 0.25)",
                               }}
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={a.src} alt="" className="w-full h-full object-contain pointer-events-none" />
+
+                              {/* TAKEN overlay */}
+                              {isTaken && (
+                                <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center p-1 text-center select-none backdrop-blur-[1px]">
+                                  <img src="/lock-icon.png" alt="Taken" className="w-5 h-5 object-contain mb-0.5 opacity-90 drop-shadow" />
+                                  <span className="text-[9px] font-black uppercase tracking-wider text-red-400 drop-shadow">
+                                    TAKEN
+                                  </span>
+                                </div>
+                              )}
                             </button>
                           );
                         })}
@@ -332,31 +417,55 @@ export default function JoinGamePage({
                     ) : (
                       <div className="flex flex-col gap-5">
                         {avatars.map((a) => {
+                          const isTaken = takenAvatarIds.has(a.id);
                           const active = avatarId === a.id;
                           return (
                             <button
                               key={a.id}
                               type="button"
-                              onClick={() => setAvatarId(a.id)}
-                              className={`relative rounded-full overflow-hidden cursor-pointer transition-transform duration-150 focus:outline-none ${
-                                active ? "scale-105" : "opacity-80 hover:opacity-100 hover:scale-102"
+                              onClick={() => !isTaken && setAvatarId(a.id)}
+                              disabled={isTaken}
+                              title={isTaken ? "This character is already taken by another player" : "Select Character"}
+                              className={`relative rounded-full overflow-hidden transition-all duration-150 focus:outline-none ${
+                                isTaken
+                                  ? "opacity-35 grayscale cursor-not-allowed filter saturate-0 scale-95"
+                                  : active 
+                                    ? "scale-105 cursor-pointer" 
+                                    : "opacity-85 hover:opacity-100 hover:scale-102 cursor-pointer"
                               }`}
                               style={{
                                 width: 86,
                                 height: 86,
-                                boxShadow: active
-                                  ? "0 0 20px rgba(240, 207, 116, 0.7), 0 0 0 2.5px #f0cf74"
-                                  : "none",
+                                boxShadow: isTaken
+                                  ? "none"
+                                  : active
+                                    ? "0 0 20px rgba(240, 207, 116, 0.7), 0 0 0 2.5px #f0cf74"
+                                    : "none",
                               }}
                             >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={a.src} alt="" className="w-full h-full object-contain pointer-events-none" />
+
+                              {/* TAKEN overlay */}
+                              {isTaken && (
+                                <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center p-1 text-center select-none backdrop-blur-[1px]">
+                                  <img src="/lock-icon.png" alt="Taken" className="w-6 h-6 object-contain mb-0.5 opacity-90 drop-shadow" />
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-red-400 drop-shadow">
+                                    TAKEN
+                                  </span>
+                                </div>
+                              )}
                             </button>
                           );
                         })}
                       </div>
                     )}
                   </div>
+                  {avatars.every((a) => takenAvatarIds.has(a.id)) && (
+                    <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider mt-2 text-center">
+                      All characters in this role are taken.
+                    </span>
+                  )}
                 </div>
 
                 {/* Bottom action section: Password (if required for non-hosts) + Join button */}
@@ -400,7 +509,7 @@ export default function JoinGamePage({
                   <button
                     type="button"
                     onClick={handleStart}
-                    disabled={starting || !name.trim() || !avatarId || (!isHost && room.privacy === "password" && !password.trim())}
+                    disabled={starting || !name.trim() || !avatarId || takenAvatarIds.has(avatarId) || (!isHost && room.privacy === "password" && !password.trim())}
                     className="w-[146px] h-[33px] rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none shadow-lg"
                     style={{
                       backgroundImage: "url('/lobby/join/Rectangle 561.png')",

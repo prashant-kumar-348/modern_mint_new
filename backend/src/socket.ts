@@ -352,7 +352,7 @@ export const AVATAR_COLORS: Record<number, string> = {
   6: '#d4af37', // Investor 2 - Gold
 };
 
-const createEmptyRoom = (maxPlayers = 4, mode = 'standard', difficulty = 'medium') => {
+const createEmptyRoom = (maxPlayers = 6, mode = 'standard', difficulty = 'medium') => {
   const isQuick = mode === 'quick' || mode === 'short';
   const fullEventDeck = shuffle(generateEventDeck());
   const eventCardsToPlace = isQuick ? 1 : 2;
@@ -946,6 +946,46 @@ const io = new SocketServer(server, {
     }
   };
 
+  const ensureAIInvestors = (room: any) => {
+    const existingInvestors = (room.players || []).filter((p: any) => p.role?.toLowerCase() === 'investor');
+    if (existingInvestors.length >= 2) return;
+
+    const needed = 2 - existingInvestors.length;
+    const aiInvestorConfigs = [
+      { name: "Sigma Bot", avatarId: 5, color: AVATAR_COLORS[5] || '#00e1ff' },
+      { name: "Apex Bot",  avatarId: 6, color: AVATAR_COLORS[6] || '#d4af37' },
+    ];
+
+    for (let i = 0; i < needed; i++) {
+      const config = aiInvestorConfigs.find(
+        c => !room.players.some((p: any) => p.avatarId === c.avatarId || p.name === c.name)
+      ) || aiInvestorConfigs[i % aiInvestorConfigs.length];
+
+      room.players.push({
+        id: 'ai_investor_' + config.avatarId + '_' + Math.random().toString(36).substring(2, 9),
+        name: config.name,
+        color: config.color,
+        isLocked: false,
+        ownedCompanies: [],
+        capital: 5,
+        loan: 0,
+        survivalLoan: 0,
+        lastRevenueClaimed: 0,
+        cash: 5000,
+        valuation: 0,
+        actionCount: 0,
+        avatarId: config.avatarId,
+        mentorCards: [],
+        boughtMentorRound: 0,
+        lifelines: 2,
+        currentPhase3Roll: null,
+        roundActions: [],
+        role: 'Investor',
+        is_ai: true
+      });
+    }
+  };
+
   const addAIPlayers = (room: any) => {
     const humanPlayer = room.players[0];
     if (!humanPlayer) return;
@@ -953,57 +993,77 @@ const io = new SocketServer(server, {
     // Guard: never add duplicates if AI players already exist in the room
     if (room.players.some((p: any) => p.is_ai)) return;
 
-    const names = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
-    const colors = ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff'];
-    const humanColor = humanPlayer.color;
-    const humanRole = humanPlayer.role;
+    const founderNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
+    const allFounderAvatars = [1, 2, 3, 4];
+    const takenAvatarIds = new Set(room.players.map((p: any) => p.avatarId));
+    const availableFounderAvatars = allFounderAvatars.filter(id => !takenAvatarIds.has(id));
 
-    const availableColors = colors.filter(c => c !== humanColor);
-    const availableNames = names;
-
-    let aiRoles: string[] = [];
-    if (humanRole === 'Investor') {
-      aiRoles = ['Founder', 'Founder', 'Founder'];
+    // Add 3 AI Founders if human is Founder
+    if (humanPlayer.role?.toLowerCase() === 'founder') {
+      for (let i = 0; i < 3; i++) {
+        const avId = availableFounderAvatars[i] !== undefined
+          ? availableFounderAvatars[i]
+          : (allFounderAvatars.find(id => !takenAvatarIds.has(id)) || ((i % 4) + 1));
+        takenAvatarIds.add(avId);
+        const name = founderNames[i] || `Bot ${i + 1}`;
+        room.players.push({
+          id: 'ai_founder_' + Math.random().toString(36).substring(2, 9),
+          name: name,
+          color: AVATAR_COLORS[avId] || '#55ffb0',
+          isLocked: false,
+          ownedCompanies: [],
+          capital: 0.5,
+          loan: 0,
+          survivalLoan: 0,
+          lastRevenueClaimed: 0,
+          cash: 500,
+          valuation: 0,
+          actionCount: 0,
+          avatarId: avId,
+          mentorCards: [],
+          boughtMentorRound: 0,
+          lifelines: 2,
+          currentPhase3Roll: null,
+          roundActions: [],
+          role: 'Founder',
+          is_ai: true
+        });
+      }
     } else {
-      aiRoles = ['Founder', 'Founder', 'Investor'];
+      // Human is Investor -> Add 4 AI Founders
+      for (let i = 0; i < 4; i++) {
+        const avId = availableFounderAvatars[i] !== undefined
+          ? availableFounderAvatars[i]
+          : ((i % 4) + 1);
+        takenAvatarIds.add(avId);
+        const name = `${founderNames[i % 3] || 'Bot'} ${i + 1}`;
+        room.players.push({
+          id: 'ai_founder_' + Math.random().toString(36).substring(2, 9),
+          name: name,
+          color: AVATAR_COLORS[avId] || '#55ffb0',
+          isLocked: false,
+          ownedCompanies: [],
+          capital: 0.5,
+          loan: 0,
+          survivalLoan: 0,
+          lastRevenueClaimed: 0,
+          cash: 500,
+          valuation: 0,
+          actionCount: 0,
+          avatarId: avId,
+          mentorCards: [],
+          boughtMentorRound: 0,
+          lifelines: 2,
+          currentPhase3Roll: null,
+          roundActions: [],
+          role: 'Founder',
+          is_ai: true
+        });
+      }
     }
 
-    const availableFounderAvatars = [1, 2, 4, 3].filter(id => id !== humanPlayer.avatarId);
-    const availableInvestorAvatars = [5, 6].filter(id => id !== humanPlayer.avatarId);
-
-    for (let i = 0; i < 3; i++) {
-      const role = aiRoles[i];
-      const assignedAvatarId = role === 'Investor' 
-        ? (availableInvestorAvatars.shift() || 5) 
-        : (availableFounderAvatars.shift() || 1);
-      const color = AVATAR_COLORS[assignedAvatarId] || availableColors[i % availableColors.length];
-      const name = `${availableNames[i]} (${role})`;
-      const startCash = role === 'Investor' ? 5000 : 1000;
-      const startCapital = startCash / 1000;
-      
-      room.players.push({
-        id: 'ai_' + Math.random().toString(36).substring(2, 15),
-        name: name,
-        color: color,
-        isLocked: false,
-        ownedCompanies: [],
-        capital: startCapital,
-        loan: 0,
-        survivalLoan: 0,
-        lastRevenueClaimed: 0,
-        cash: startCash,
-        valuation: 0,
-        actionCount: 0,
-        avatarId: assignedAvatarId,
-        mentorCards: [],
-        boughtMentorRound: 0,
-        lifelines: 2,
-        currentPhase3Roll: null,
-        roundActions: [],
-        role: role,
-        is_ai: true
-      });
-    }
+    // Now ensure 2 investors exist
+    ensureAIInvestors(room);
   };
 
   const playAIPhase1 = (room: any, player: any, io: any, roomId: string) => {
@@ -1173,7 +1233,8 @@ const io = new SocketServer(server, {
               stage,
               team: 1,
               teamLevel: 1,
-              equityGiven: 0
+              equityGiven: 0,
+              launchedRound: room.round
             };
             
             player.ownedCompanies.push(newCompany);
@@ -1198,7 +1259,11 @@ const io = new SocketServer(server, {
         }
 
         if (shouldUpgradeStage) {
-          const eligibleToUpgrade = player.ownedCompanies.filter((c: any) => getStageIndex(c.stage) < 3 && c.upgradedRound !== room.round);
+          const eligibleToUpgrade = player.ownedCompanies.filter((c: any) => 
+            getStageIndex(c.stage) < 3 &&
+            Number(c.launchedRound) !== Number(room.round) &&
+            Number(c.upgradedRound) !== Number(room.round)
+          );
           if (eligibleToUpgrade.length > 0) {
             let compToUpgrade = eligibleToUpgrade[0];
             if (difficulty === 'hard' || difficulty === 'unfair' || difficulty === 'expert' || difficulty === 'legendary') {
@@ -1705,7 +1770,7 @@ const io = new SocketServer(server, {
       
       let finalRole = role ? (role.charAt(0).toUpperCase() + role.slice(1).toLowerCase()) : 'Founder';
       if (finalRole === 'Investor') {
-         const investorCount = roomState.players.filter((p: any) => p.role === 'Investor').length;
+         const investorCount = roomState.players.filter((p: any) => p.role?.toLowerCase() === 'investor').length;
          if (investorCount >= 2) {
             finalRole = 'Founder';
             socket.emit('notification', 'Maximum 2 Investors reached. You have joined as a Founder.');
@@ -1729,18 +1794,29 @@ const io = new SocketServer(server, {
           console.log(`Socket ${socket.id} is already registered as "${username}".`);
         }
         if (avatarId) {
-          existingPlayer.avatarId = avatarId;
-          if (AVATAR_COLORS[avatarId]) {
-            existingPlayer.color = AVATAR_COLORS[avatarId];
+          const takenByOther = roomState.players.some((p: any) => p.name !== username && p.avatarId === avatarId);
+          if (!takenByOther) {
+            existingPlayer.avatarId = avatarId;
+            if (AVATAR_COLORS[avatarId]) {
+              existingPlayer.color = AVATAR_COLORS[avatarId];
+            }
           }
         }
       } else {
         console.log(`Creating new player entry for "${username}" with socket ID ${socket.id} and avatarId ${avatarId}`);
 
-        const startCash = finalRole === 'Investor' ? 5000 : 1000;
+        const startCash = finalRole === 'Investor' ? 5000 : 500;
         const startCapital = startCash / 1000;
         const playerColors = ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff', '#b06aff', '#ff7a2a'];
-        const finalAvatarId = avatarId || (finalRole === 'Investor' ? 5 : 1);
+        const takenAvatarIds = new Set(roomState.players.map((p: any) => p.avatarId));
+        let finalAvatarId = avatarId || (finalRole === 'Investor' ? 5 : 1);
+        if (takenAvatarIds.has(finalAvatarId)) {
+          const roleAvatars = finalRole === 'Investor' ? [5, 6] : [1, 2, 3, 4];
+          const available = roleAvatars.find(id => !takenAvatarIds.has(id));
+          if (available) {
+            finalAvatarId = available;
+          }
+        }
         const playerColor = AVATAR_COLORS[finalAvatarId] || playerColors[roomState.players.length % playerColors.length];
         roomState.players.push({
           id: socket.id,
@@ -1778,7 +1854,8 @@ const io = new SocketServer(server, {
         }
 
         // Multiplayer: Start game automatically ONLY when all player slots are full
-        if (!roomState.isStarted && roomState.players.length >= (roomState.maxPlayers || 4)) {
+        if (!roomState.isStarted && roomState.players.length >= (roomState.maxPlayers || 6)) {
+          ensureAIInvestors(roomState);
           roomState.isStarted = true;
           if (!roomState.teamTokenPoolModified) {
             roomState.teamTokenPool = getStartingTeamTokenPool(roomState.players.length);
@@ -1803,15 +1880,16 @@ const io = new SocketServer(server, {
     socket.on('start_game', ({ roomId }) => {
       const room = rooms[roomId];
       if (room && !room.isStarted && room.players.length >= 2) {
+        ensureAIInvestors(room);
         room.isStarted = true;
         const realPlayers = room.players.filter((p: any) => !p.isDummy);
         if (!room.teamTokenPoolModified) {
           room.teamTokenPool = getStartingTeamTokenPool(realPlayers.length);
         }
         
-        // Dummy Investor setup for 2-3 player games without human investors
-        const realInvestors = realPlayers.filter((p: any) => p.role?.toLowerCase() === 'investor');
-        if (realPlayers.length <= 3 && realInvestors.length === 0) {
+        // Dummy Investor fallback (only if no investors exist)
+        const totalInvestors = room.players.filter((p: any) => p.role?.toLowerCase() === 'investor');
+        if (totalInvestors.length === 0) {
           const selected = DUMMY_INVESTORS[Math.floor(Math.random() * DUMMY_INVESTORS.length)];
           room.dummyInvestor = { ...selected };
           
@@ -2481,6 +2559,13 @@ const io = new SocketServer(server, {
               return;
            }
 
+           if (companyName) {
+              const canonicalKey = Object.keys(COMPANY_DATA_MAP).find(
+                k => k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(companyName).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+              );
+              if (canonicalKey) companyName = canonicalKey;
+           }
+
            if (actionType === 'launch') {
                const dataRow = COMPANY_DATA_MAP[companyName];
                if (dataRow) {
@@ -2488,7 +2573,7 @@ const io = new SocketServer(server, {
                      socket.emit('notification', 'ACTION REJECTED: Maximum of 4 company launches allowed per Founder.');
                      return;
                   }
-                  if (player.ownedCompanies.some((c: any) => c.name.toUpperCase() === companyName.toUpperCase())) {
+                  if (player.ownedCompanies.some((c: any) => c.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === companyName.replace(/[^a-zA-Z0-9]/g, '').toLowerCase())) {
                      socket.emit('notification', 'ACTION REJECTED: You already own this company.');
                      return;
                   }
@@ -2524,7 +2609,8 @@ const io = new SocketServer(server, {
                     stage,
                     team: 1,
                     teamLevel: 1,
-                    equityGiven: 0
+                    equityGiven: 0,
+                    launchedRound: room.round
                   };
                   
                   player.ownedCompanies.push(newCompany);
@@ -2550,19 +2636,25 @@ const io = new SocketServer(server, {
                   io.to(roomId).emit('notification', `${player.name.toUpperCase()} LAUNCHED ${newCompany.name.toUpperCase()} (STAGE ${stage})`);
                }
            } else if (actionType === 'stage_up') {
-              const comp = player.ownedCompanies.find((c: any) => c.name === companyName);
+              const targetCanonical = (companyName || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              const comp = player.ownedCompanies.find((c: any) => (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === targetCanonical);
               if (comp) {
                  if (comp.stageUpBlockedRound === room.round) {
                     socket.emit('notification', `ACTION REJECTED: ${comp.name} is blocked from staging up this round due to Toxic Mentor.`);
                     return;
                  }
-                 if (comp.upgradedRound === room.round) {
-                    socket.emit('notification', 'ACTION REJECTED: Company already staged up this round.');
+                 if (Number(comp.launchedRound) === Number(room.round)) {
+                    socket.emit('notification', `ACTION REJECTED: ${comp.name} was launched this round. You cannot stage up a company in the same round it was launched.`);
+                    return;
+                 }
+                 if (Number(comp.upgradedRound) === Number(room.round)) {
+                    socket.emit('notification', `ACTION REJECTED: ${comp.name} was already staged up this round. Only 1 stage-up allowed per company per round.`);
                     return;
                  }
                  const currentIndex = getStageIndex(comp.stage);
                  if (currentIndex < 3) {
-                    const dataRow = COMPANY_DATA_MAP[comp.name];
+                    const dataKey = Object.keys(COMPANY_DATA_MAP).find(k => k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === targetCanonical) || comp.name;
+                    const dataRow = COMPANY_DATA_MAP[dataKey] || COMPANY_DATA_MAP[comp.name];
                     if (dataRow) {
                        const nextStageIndex = currentIndex + 1;
                        let stageUpCost = dataRow[nextStageIndex][0];
@@ -2630,9 +2722,10 @@ const io = new SocketServer(server, {
                  }
               }
             } else if (actionType === 'buy_pr') {
-               const comp = player.ownedCompanies.find((c: any) => c.name === companyName);
+               const targetCanonical = (companyName || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+               const comp = player.ownedCompanies.find((c: any) => (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === targetCanonical);
                if (comp) {
-                  if (comp.prBoughtRound === room.round) {
+                  if (Number(comp.prBoughtRound) === Number(room.round)) {
                      socket.emit('notification', 'ACTION REJECTED: Max 1 PR Service per company per round.');
                      return;
                   }
@@ -2676,9 +2769,10 @@ const io = new SocketServer(server, {
                   io.to(roomId).emit('notification', `${player.name.toUpperCase()} BOUGHT PR SERVICES FOR ${comp.name.toUpperCase()}`);
                }
             } else if (actionType === 'upgrade_workforce') {
-               const comp = player.ownedCompanies.find((c: any) => c.name === companyName);
+               const targetCanonical = (companyName || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+               const comp = player.ownedCompanies.find((c: any) => (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === targetCanonical);
                if (comp) {
-                  if (comp.workforceUpgradedRound === room.round) {
+                  if (Number(comp.workforceUpgradedRound) === Number(room.round)) {
                      socket.emit('notification', 'ACTION REJECTED: Max 1 Workforce Upgrade per company per round.');
                      return;
                   }

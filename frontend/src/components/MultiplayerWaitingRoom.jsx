@@ -44,7 +44,7 @@ export default function MultiplayerWaitingRoom({
   const roomName = roomInfo?.name || "Modern Mint Arena";
   const gameMode = roomInfo?.mode === "60mins" ? "60 Mins Mode" : roomInfo?.mode === "short" ? "Short Game" : "Full Game";
 
-  const isVsAiRoom = Boolean(roomInfo?.isVsAi || gameState?.isVsAi || gameState?.players?.some(p => p.is_ai));
+  const isVsAiRoom = Boolean(roomInfo?.isVsAi || gameState?.isVsAi);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-[#030806] flex items-center justify-center font-sans select-none">
@@ -87,7 +87,7 @@ export default function MultiplayerWaitingRoom({
               <p className="text-xs text-white/50 tracking-wide mt-0.5">
                 {isVsAiRoom
                   ? "VS AI Match • Adaptive AI Opponents"
-                  : "Multiplayer Waiting Room • No AI Bots Allowed"}
+                  : "Multiplayer Arena • Up to 4 Founders + 2 Investors"}
               </p>
             </div>
           </div>
