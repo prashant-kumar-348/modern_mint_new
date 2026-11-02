@@ -1,42 +1,50 @@
 import React from 'react';
 
 const getCompanyMatIcon = (name) => {
-  if (!name) return '/mat-icons/mat-icon-quick-commerce.png';
+  if (!name) return '/company-quick-commerce.png';
   const clean = name.toUpperCase().replace(/[^A-Z]/g, '');
-  if (clean.includes("FARM") || clean.includes("CONTRACT") || clean.includes("KHETI")) return '/mat-icons/mat-icon-contract-farming.png';
-  if (clean.includes("IOT") || clean.includes("AGRI")) return '/mat-icons/mat-icon-agri-iot.png';
-  if (clean.includes("WALLET")) return '/mat-icons/mat-icon-wallet.png';
-  if (clean.includes("SNACK")) return '/mat-icons/mat-icon-snacks.png';
-  if (clean.includes("COMM") || clean.includes("QUICK")) return '/mat-icons/mat-icon-quick-commerce.png';
-  if (clean.includes("STOR")) return '/mat-icons/mat-icon-smart-storage.png';
-  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD") || clean.includes("FARMA")) return '/mat-icons/mat-icon-restro-chain.png';
-  if (clean.includes("TRACE")) return '/mat-icons/mat-icon-traceability.png';
-  if (clean.includes("ROBO") || clean.includes("PACK")) return '/mat-icons/mat-icon-robo-packaging.png';
-  return '/mat-icons/mat-icon-quick-commerce.png';
+  if (clean.includes("FARM") || clean.includes("CONTRACT") || clean.includes("KHETI")) return '/company-contract-farming.png';
+  if (clean.includes("IOT") || clean.includes("AGRI")) return '/company-agri-iot.png';
+  if (clean.includes("WALLET")) return '/company-wallet.png';
+  if (clean.includes("SNACK")) return '/company-snacks.png';
+  if (clean.includes("COMM") || clean.includes("QUICK")) return '/company-quick-commerce.png';
+  if (clean.includes("STOR")) return '/company-smart-storage.png';
+  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD") || clean.includes("FARMA")) return '/company-restro-chain.png';
+  if (clean.includes("TRACE")) return '/company-traceability.png';
+  if (clean.includes("ROBO") || clean.includes("PACK")) return '/company-robo-packaging.png';
+  return '/company-quick-commerce.png';
 };
 
 export default function ActionTrackerTray({
   actions = [],
-  onUndo
+  onUndo,
+  currentRound = 1
 }) {
   if (!actions || actions.length === 0) return null;
 
-  const totalMoneyUsed = actions.reduce((sum, a) => sum + (Number(a.cost) || 0), 0);
+  const currentRoundActions = actions.filter(a => !a.round || a.round === currentRound);
+  const roundMoneyUsed = currentRoundActions.reduce((sum, a) => sum + (Number(a.cost) || 0), 0);
 
   // Map original 1-based index and reverse so newest / highest ACTION is at the top
   const reversedActions = actions.map((action, idx) => ({
     ...action,
-    actionNumber: idx + 1
+    actionNumber: idx + 1,
+    canUndo: !action.round || action.round === currentRound
   })).reverse();
 
   return (
     <div className="w-[214px] flex flex-col gap-1.5 mb-0.5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Top Header: Money used in this round */}
-      <div className="w-full flex items-center justify-end text-white text-[9.5px] font-medium gap-1.5 pr-0.5 mb-0.5 select-none">
-        <span className="text-white/80">Money used in this round</span>
-        <span className="font-extrabold text-white text-[10px] tracking-wide">
-          ${totalMoneyUsed}k
+      {/* Top Header: Total Actions count out of 30 & Round spend */}
+      <div className="w-full flex items-center justify-between text-white text-[9.5px] font-medium gap-1.5 pr-0.5 mb-0.5 select-none">
+        <span className="text-[#FFE885] font-black font-mono text-[9.5px] tracking-wide">
+          {actions.length}/30 Actions
         </span>
+        <div className="flex items-center gap-1">
+          <span className="text-white/80">Round {currentRound}:</span>
+          <span className="font-extrabold text-[#55ffb0] text-[10px] tracking-wide">
+            ${roundMoneyUsed}k
+          </span>
+        </div>
       </div>
 
       {/* Action List Items */}
@@ -78,14 +86,16 @@ export default function ActionTrackerTray({
               ${action.cost || 0}k
             </div>
 
-            {/* Right Button: Red [X] Cancel/Undo */}
-            <button 
-              onClick={() => onUndo && onUndo(action.id)} 
-              title="Undo this action"
-              className="w-[18px] h-[18px] rounded-full bg-gradient-to-br from-[#8a141b] to-[#590a0f] hover:from-[#a81c24] hover:to-[#730f15] border border-[#ff4d4d]/40 text-white font-black text-[9px] flex items-center justify-center shadow-md active:scale-90 transition-all cursor-pointer shrink-0"
-            >
-              ✕
-            </button>
+            {/* Right Button: Red [X] Cancel/Undo (only allowed for actions in current round) */}
+            {action.canUndo && (
+              <button 
+                onClick={() => onUndo && onUndo(action.id)} 
+                title="Undo this action"
+                className="w-[18px] h-[18px] rounded-full bg-gradient-to-br from-[#8a141b] to-[#590a0f] hover:from-[#a81c24] hover:to-[#730f15] border border-[#ff4d4d]/40 text-white font-black text-[9px] flex items-center justify-center shadow-md active:scale-90 transition-all cursor-pointer shrink-0"
+              >
+                ✕
+              </button>
+            )}
           </div>
         ))}
       </div>

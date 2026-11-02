@@ -59,15 +59,15 @@ export default function MiddleBoard({
 
   // 9 Companies in Orbit
   const baseCompanies = [
-    { name: 'Wallet', icon: '/mat-icons/mat-icon-wallet.png', image: '/company-wallet.png', angle: 0 },
-    { name: 'Quick Commerce', icon: '/mat-icons/mat-icon-quick-commerce.png', image: '/company-quick-commerce.png', angle: 50 },
-    { name: 'Snacks', icon: '/mat-icons/mat-icon-snacks.png', image: '/company-snacks.png', angle: 90 },
-    { name: 'Restro - Chain', icon: '/mat-icons/mat-icon-restro-chain.png', image: '/company-restro-chain.png', angle: 135 },
-    { name: 'Contract Farming', icon: '/mat-icons/mat-icon-contract-farming.png', image: '/company-contract-farming.png', angle: 170 }, 
-    { name: 'Agri IoT', icon: '/mat-icons/mat-icon-agri-iot.png', image: '/company-agri-iot.png', angle: 205 }, 
-    { name: 'Smart Storage', icon: '/mat-icons/mat-icon-smart-storage.png', image: '/company-smart-storage.png', angle: 240 }, 
-    { name: 'Robo - Packaging', icon: '/mat-icons/mat-icon-robo-packaging.png', image: '/company-robo-packaging.png', angle: 275 }, 
-    { name: 'Traceability', icon: '/mat-icons/mat-icon-traceability.png', image: '/company-traceability.png', angle: 320 },
+    { name: 'Wallet', icon: '/company-wallet.png', image: '/company-wallet.png', angle: 0 },
+    { name: 'Quick Commerce', icon: '/company-quick-commerce.png', image: '/company-quick-commerce.png', angle: 50 },
+    { name: 'Snacks', icon: '/company-snacks.png', image: '/company-snacks.png', angle: 90 },
+    { name: 'Restro - Chain', icon: '/company-restro-chain.png', image: '/company-restro-chain.png', angle: 135 },
+    { name: 'Contract Farming', icon: '/company-contract-farming.png', image: '/company-contract-farming.png', angle: 170 }, 
+    { name: 'Agri IoT', icon: '/company-agri-iot.png', image: '/company-agri-iot.png', angle: 205 }, 
+    { name: 'Smart Storage', icon: '/company-smart-storage.png', image: '/company-smart-storage.png', angle: 240 }, 
+    { name: 'Robo - Packaging', icon: '/company-robo-packaging.png', image: '/company-robo-packaging.png', angle: 275 }, 
+    { name: 'Traceability', icon: '/company-traceability.png', image: '/company-traceability.png', angle: 320 },
   ];
 
   const companies = baseCompanies.map(comp => {

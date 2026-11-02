@@ -2,18 +2,18 @@ import React, { useState } from 'react';
 import { X, Lock, Edit2 } from 'lucide-react';
 
 const getCompanyMatIcon = (name) => {
-  if (!name) return '/mat-icons/mat-icon-quick-commerce.png';
+  if (!name) return '/company-quick-commerce.png';
   const clean = name.toUpperCase().replace(/[^A-Z]/g, '');
-  if (clean.includes("FARM") || clean.includes("CONTRACT")) return '/mat-icons/mat-icon-contract-farming.png';
-  if (clean.includes("IOT") || clean.includes("AGRI")) return '/mat-icons/mat-icon-agri-iot.png';
-  if (clean.includes("WALLET")) return '/mat-icons/mat-icon-wallet.png';
-  if (clean.includes("SNACK")) return '/mat-icons/mat-icon-snacks.png';
-  if (clean.includes("COMM") || clean.includes("QUICK")) return '/mat-icons/mat-icon-quick-commerce.png';
-  if (clean.includes("STOR")) return '/mat-icons/mat-icon-smart-storage.png';
-  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD")) return '/mat-icons/mat-icon-restro-chain.png';
-  if (clean.includes("TRACE")) return '/mat-icons/mat-icon-traceability.png';
-  if (clean.includes("ROBO") || clean.includes("PACK")) return '/mat-icons/mat-icon-robo-packaging.png';
-  return '/mat-icons/mat-icon-quick-commerce.png';
+  if (clean.includes("FARM") || clean.includes("CONTRACT")) return '/company-contract-farming.png';
+  if (clean.includes("IOT") || clean.includes("AGRI")) return '/company-agri-iot.png';
+  if (clean.includes("WALLET")) return '/company-wallet.png';
+  if (clean.includes("SNACK")) return '/company-snacks.png';
+  if (clean.includes("COMM") || clean.includes("QUICK")) return '/company-quick-commerce.png';
+  if (clean.includes("STOR")) return '/company-smart-storage.png';
+  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD")) return '/company-restro-chain.png';
+  if (clean.includes("TRACE")) return '/company-traceability.png';
+  if (clean.includes("ROBO") || clean.includes("PACK")) return '/company-robo-packaging.png';
+  return '/company-quick-commerce.png';
 };
 
 export default function SelfPortfolioModal({ onClose, player, sendAction }) {

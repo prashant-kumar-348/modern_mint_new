@@ -1644,7 +1644,7 @@ const io = new SocketServer(server, {
 
     room.round += 1;
     room.phase = 1;
-    room.actionCount = 0;
+    // Section J: Action Count is cumulative across all 9 rounds (max 30 actions). Do NOT reset room.actionCount!
     room.dealCount = 0;
     room.phase1TurnIndex = 0;
     room.phase2TurnIndex = 0;
@@ -1674,8 +1674,7 @@ const io = new SocketServer(server, {
       p.mentorMultiplier = 0;
       p.riskMultiplierActive = 0;
       p.extraActions = 0;
-      p.actionCount = 0;
-      p.roundActions = [];
+      // Section J: Action points & actions persist across rounds up to 30 total actions. Do NOT reset actionCount or roundActions!
       p.loansBlocked = false;
       p.loansBlockedRound = undefined;
       p.hasHalfCostStageUp = false;
@@ -2559,6 +2558,11 @@ const io = new SocketServer(server, {
               return;
            }
 
+           if ((player.actionCount || 0) >= 30) {
+              socket.emit('notification', 'ACTION LIMIT REACHED: You have used all 30 action points allowed across the 9 rounds.');
+              return;
+           }
+
            if (companyName) {
               const canonicalKey = Object.keys(COMPANY_DATA_MAP).find(
                 k => k.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === String(companyName).replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
@@ -3144,6 +3148,11 @@ const io = new SocketServer(server, {
         const actIndex = player.roundActions.findIndex((a: any) => a.id === actionId);
         if (actIndex === -1) return;
         const action = player.roundActions[actIndex];
+
+        if (action.round && action.round !== room.round) {
+          socket.emit('notification', 'CANNOT UNDO: Actions from previous rounds cannot be undone.');
+          return;
+        }
 
         if (action.type === 'launch') {
           const wasUpgraded = player.roundActions.some((a: any, i: number) => i > actIndex && a.companyName === action.companyName);

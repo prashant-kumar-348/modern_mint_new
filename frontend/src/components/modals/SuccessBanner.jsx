@@ -6,15 +6,15 @@ const getLaunchedCompanyForMessage = (message) => {
   if (!msgUpper.includes("LAUNCHED")) return null;
   
   const baseCompanies = [
-    { name: 'Wallet', icon: '/mat-icons/mat-icon-wallet.png', image: '/company-wallet.png' },
-    { name: 'Quick Commerce', icon: '/mat-icons/mat-icon-quick-commerce.png', image: '/company-quick-commerce.png' },
-    { name: 'Snacks', icon: '/mat-icons/mat-icon-snacks.png', image: '/company-snacks.png' },
-    { name: 'Restro - Chain', icon: '/mat-icons/mat-icon-restro-chain.png', image: '/company-restro-chain.png' },
-    { name: 'Contract Farming', icon: '/mat-icons/mat-icon-contract-farming.png', image: '/company-contract-farming.png' }, 
-    { name: 'Agri IoT', icon: '/mat-icons/mat-icon-agri-iot.png', image: '/company-agri-iot.png' }, 
-    { name: 'Smart Storage', icon: '/mat-icons/mat-icon-smart-storage.png', image: '/company-smart-storage.png' }, 
-    { name: 'Robo - Packaging', icon: '/mat-icons/mat-icon-robo-packaging.png', image: '/company-robo-packaging.png' }, 
-    { name: 'Traceability', icon: '/mat-icons/mat-icon-traceability.png', image: '/company-traceability.png' },
+    { name: 'Wallet', icon: '/company-wallet.png', image: '/company-wallet.png' },
+    { name: 'Quick Commerce', icon: '/company-quick-commerce.png', image: '/company-quick-commerce.png' },
+    { name: 'Snacks', icon: '/company-snacks.png', image: '/company-snacks.png' },
+    { name: 'Restro - Chain', icon: '/company-restro-chain.png', image: '/company-restro-chain.png' },
+    { name: 'Contract Farming', icon: '/company-contract-farming.png', image: '/company-contract-farming.png' }, 
+    { name: 'Agri IoT', icon: '/company-agri-iot.png', image: '/company-agri-iot.png' }, 
+    { name: 'Smart Storage', icon: '/company-smart-storage.png', image: '/company-smart-storage.png' }, 
+    { name: 'Robo - Packaging', icon: '/company-robo-packaging.png', image: '/company-robo-packaging.png' }, 
+    { name: 'Traceability', icon: '/company-traceability.png', image: '/company-traceability.png' },
   ];
 
   const match = baseCompanies.find(comp => {

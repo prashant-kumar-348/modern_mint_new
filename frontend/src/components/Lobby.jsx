@@ -36,9 +36,12 @@ export default function Lobby({ onJoin, existingRoomId }) {
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#030806_80%)] pointer-events-none"></div>
       
       <div className="bg-[#0a1914]/80 border border-[#1c4d3d] p-12 rounded-2xl shadow-[0_0_50px_rgba(28,77,61,0.5)] flex flex-col items-center gap-8 relative z-10 w-[400px]">
-        <h1 className="text-4xl font-black text-[#55ffb0] tracking-widest uppercase drop-shadow-md text-center">
-          Modern Mint
-        </h1>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/modern-mint-title.png"
+          alt="Modern Mint"
+          className="h-10 w-auto object-contain select-none filter drop-shadow-[0_2px_14px_rgba(212,168,67,0.35)]"
+        />
         
         <div className="w-full flex flex-col gap-2">
           <label className="text-xs uppercase tracking-widest text-[#a4d8c2]">Your Name</label>

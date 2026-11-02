@@ -89,8 +89,17 @@ export default function DealSheetModal({
       onClose();
       return;
     }
-    if (!activeForm.proposerSigned || !activeForm.receiverSigned) {
-      alert("Both parties must sign the Deal Sheet before finalizing!");
+    if (!activeForm.proposerSigned) {
+      alert("Please sign your Proposer Signature before offering the deal!");
+      return;
+    }
+    const hasValue = (Number(activeForm.cash) || 0) > 0 ||
+                     (Number(activeForm.equity) || 0) > 0 ||
+                     (Number(activeForm.loan) || 0) > 0 ||
+                     (Number(activeForm.royalty) || 0) > 0 ||
+                     Boolean(activeForm.terms && activeForm.terms.trim());
+    if (!hasValue) {
+      alert("Please specify at least one deal term (Cash, Equity, Loan, Royalty, or Conditions)!");
       return;
     }
     if (onSubmitDeal && currentOpponent) {
@@ -256,24 +265,25 @@ export default function DealSheetModal({
 
           {/* SIGNATURES BLOCK */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 border-y border-gray-100 my-4">
+            {/* Proposer Signature: Interactive for the user proposing */}
             <div 
               onClick={() => {
                 if (!isViewMode) {
                   updateField('proposerSigned', !activeForm.proposerSigned);
                 }
               }} 
-              className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-all select-none ${
+              className={`border-2 border-dashed rounded-lg p-3 text-center transition-all select-none ${
                 activeForm.proposerSigned 
-                  ? 'border-emerald-500 bg-emerald-50/50 text-emerald-800' 
+                  ? 'border-emerald-500 bg-emerald-50/50 text-emerald-800 shadow-sm' 
                   : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-400'
-              } ${isViewMode ? 'cursor-default pointer-events-none' : ''}`}
+              } ${isViewMode ? 'cursor-default pointer-events-none' : 'cursor-pointer'}`}
             >
               <div className="flex justify-center mb-1">
                 {activeForm.proposerSigned ? (
                   <div className="p-1 bg-emerald-500 text-white rounded-full"><Check size={14} /></div>
                 ) : (
                   <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 font-bold text-xs uppercase font-mono">
-                    {username ? username.substring(0, 2).toUpperCase() : 'RN'}
+                    {username ? username.substring(0, 2).toUpperCase() : 'ME'}
                   </div>
                 )}
               </div>
@@ -283,30 +293,29 @@ export default function DealSheetModal({
               </div>
             </div>
 
+            {/* Opponent Signature: Disabled for the proposer; opponent signs on their side */}
             <div 
-              onClick={() => {
-                if (!isViewMode) {
-                  updateField('receiverSigned', !activeForm.receiverSigned);
-                }
-              }} 
-              className={`border-2 border-dashed rounded-lg p-3 text-center cursor-pointer transition-all select-none ${
-                activeForm.receiverSigned 
-                  ? 'border-emerald-500 bg-emerald-50/50 text-emerald-800' 
-                  : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-400'
-              } ${isViewMode ? 'cursor-default pointer-events-none' : ''}`}
+              className={`border-2 border-dashed rounded-lg p-3 text-center transition-all select-none ${
+                isViewMode && activeForm.receiverSigned
+                  ? 'border-emerald-500 bg-emerald-50/50 text-emerald-800'
+                  : 'border-gray-200 bg-gray-50/80 text-gray-400 cursor-not-allowed opacity-90'
+              }`}
+              title={isViewMode ? 'Opponent signature status' : 'The opponent will sign upon reviewing your offer'}
             >
               <div className="flex justify-center mb-1">
-                {activeForm.receiverSigned ? (
+                {isViewMode && activeForm.receiverSigned ? (
                   <div className="p-1 bg-emerald-500 text-white rounded-full"><Check size={14} /></div>
                 ) : (
-                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-gray-400 font-bold text-xs uppercase font-mono">
+                  <div className="w-6 h-6 rounded-full bg-gray-200/90 flex items-center justify-center text-gray-400 font-bold text-xs uppercase font-mono">
                     {currentOpponent ? currentOpponent.name.substring(0, 2).toUpperCase() : 'OP'}
                   </div>
                 )}
               </div>
-              <div className="text-[10px] font-bold uppercase">Opponent Signature</div>
-              <div className="text-[9px] mt-0.5 font-mono italic">
-                {activeForm.receiverSigned ? 'Signed digitally' : 'Click to Sign'}
+              <div className="text-[10px] font-bold uppercase text-gray-600">Opponent Signature</div>
+              <div className="text-[9px] mt-0.5 font-mono italic text-amber-600/90 font-medium">
+                {isViewMode 
+                  ? (activeForm.receiverSigned ? 'Signed digitally' : 'Awaiting signature') 
+                  : 'Awaiting opponent signature'}
               </div>
             </div>
           </div>
@@ -324,8 +333,11 @@ export default function DealSheetModal({
                   {isViewMode ? 'Close' : 'Cancel'}
                 </button>
                 {!isViewMode && (
-                  <button type="submit" className="flex-2 sm:flex-none px-6 py-3 sm:py-2 bg-black hover:bg-gray-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-md">
-                    APPLY DEAL
+                  <button 
+                    type="submit" 
+                    className="flex-2 sm:flex-none px-6 py-3 sm:py-2 bg-gradient-to-r from-[#d4af37] via-[#FFE885] to-[#c59b27] hover:from-[#FFE885] hover:to-[#d4af37] text-black rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-md hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    OFFER DEAL
                   </button>
                 )}
             </div>

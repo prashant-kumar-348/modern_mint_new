@@ -2,20 +2,20 @@ import React from 'react';
 import { X, Rocket, AlertCircle, Lock } from 'lucide-react';
 
 const MAT_ICONS = {
-  'CONTRACT FARMING': '/mat-icons/mat-icon-contract-farming.png',
-  'AGRI IOT': '/mat-icons/mat-icon-agri-iot.png',
-  'AGRI IoT': '/mat-icons/mat-icon-agri-iot.png',
-  'WALLET': '/mat-icons/mat-icon-wallet.png',
-  'SNACKS': '/mat-icons/mat-icon-snacks.png',
-  'QUICK COMMERCE': '/mat-icons/mat-icon-quick-commerce.png',
-  'SMART STORAGE': '/mat-icons/mat-icon-smart-storage.png',
-  'RESTRO - CHAIN': '/mat-icons/mat-icon-restro-chain.png',
-  'RESTRO CHAIN': '/mat-icons/mat-icon-restro-chain.png',
-  'RESTRO-CHAIN': '/mat-icons/mat-icon-restro-chain.png',
-  'TRACEABILITY': '/mat-icons/mat-icon-traceability.png',
-  'ROBO - PACKAGING': '/mat-icons/mat-icon-robo-packaging.png',
-  'ROBO PACKAGING': '/mat-icons/mat-icon-robo-packaging.png',
-  'ROBO-PACKAGING': '/mat-icons/mat-icon-robo-packaging.png',
+  'CONTRACT FARMING': '/company-contract-farming.png',
+  'AGRI IOT': '/company-agri-iot.png',
+  'AGRI IoT': '/company-agri-iot.png',
+  'WALLET': '/company-wallet.png',
+  'SNACKS': '/company-snacks.png',
+  'QUICK COMMERCE': '/company-quick-commerce.png',
+  'SMART STORAGE': '/company-smart-storage.png',
+  'RESTRO - CHAIN': '/company-restro-chain.png',
+  'RESTRO CHAIN': '/company-restro-chain.png',
+  'RESTRO-CHAIN': '/company-restro-chain.png',
+  'TRACEABILITY': '/company-traceability.png',
+  'ROBO - PACKAGING': '/company-robo-packaging.png',
+  'ROBO PACKAGING': '/company-robo-packaging.png',
+  'ROBO-PACKAGING': '/company-robo-packaging.png',
 };
 
 const COMPANY_STAGE_DATA = {
@@ -55,7 +55,7 @@ export default function LaunchCompanyModal({
   if (!company) return null;
 
   const canonicalKey = getCanonicalMatKey(company.name);
-  const companyIcon = MAT_ICONS[canonicalKey] || company.icon || company.image || '/mat-icons/mat-icon-quick-commerce.png';
+  const companyIcon = MAT_ICONS[canonicalKey] || company.icon || company.image || '/company-quick-commerce.png';
   const stageData = company.data || COMPANY_STAGE_DATA[canonicalKey] || [[10, 100, 500, 0], [100, 200, 1000, 20], [1000, 1000, 2500, 200], [2000, 2000, 10000, 400]];
   const stages = ["Launch", "Retain", "Grow", "Scale"];
 

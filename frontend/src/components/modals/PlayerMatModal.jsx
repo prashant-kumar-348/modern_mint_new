@@ -1,18 +1,56 @@
 import React, { useState } from 'react';
 import { X, Lock } from 'lucide-react';
 
-export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOpened = false, onPin, onLaunchCompany, onUndoLaunch }) {
+const AVATAR_IMAGE_BY_ID = {
+  1: '/lobby/join/founder-avatar-1.png',
+  2: '/lobby/join/founder-avatar-4.png',
+  3: '/lobby/join/founder-avatar-3.png',
+  4: '/lobby/join/founder-avatar-2.png',
+  5: '/lobby/join/Ellipse 197.png',
+  6: '/lobby/join/Ellipse 198.png',
+};
+
+const getPlayerAvatarSrc = (player) => {
+  if (player?.avatarId && AVATAR_IMAGE_BY_ID[player.avatarId]) {
+    return AVATAR_IMAGE_BY_ID[player.avatarId];
+  }
+  if (player?.avatar && AVATAR_IMAGE_BY_ID[player.avatar]) {
+    return AVATAR_IMAGE_BY_ID[player.avatar];
+  }
+  if (typeof player?.avatar === 'string' && (player.avatar.startsWith('/') || player.avatar.startsWith('http'))) {
+    return player.avatar;
+  }
+  if (player?.profileImageUrl) {
+    return player.profileImageUrl;
+  }
+  const c = String(player?.color || '').toLowerCase();
+  const n = String(player?.name || '').toLowerCase();
+  if (n.includes('ruthless') || c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) {
+    return '/avatar-ruthless.png';
+  }
+  if (n.includes('robotic') || c.includes('55ffb0') || c.includes('teal') || c.includes('green') || c.includes('gt')) {
+    return '/avatar-robotic.png';
+  }
+  return '/lobby/join/founder-avatar-1.png';
+};
+
+export default function PlayerMatModal({ onClose, ownedCompanies = [], player = null, isHoverOpened = false, onPin, onLaunchCompany, onUndoLaunch }) {
+  // Lifeline / Second Chance tracker (2 lifelines per game)
+  const currentLifelines = player?.lifelines !== undefined ? Number(player.lifelines) : 2;
+  const isFirstChanceStricken = currentLifelines < 2;
+  const isSecondChanceStricken = currentLifelines < 1;
+  const avatarSrc = getPlayerAvatarSrc(player);
   // Exact data extracted from your uploaded Player Mat screenshot
   const companies = [
-    { id: 'c1', name: 'CONTRACT FARMING', icon: '/mat-icons/mat-icon-contract-farming.png', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
-    { id: 'c2', name: 'AGRI IoT', icon: '/mat-icons/mat-icon-agri-iot.png', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
-    { id: 'c3', name: 'WALLET', icon: '/mat-icons/mat-icon-wallet.png', data: [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]] },
-    { id: 'c4', name: 'SNACKS', icon: '/mat-icons/mat-icon-snacks.png', data: [[10,20,1000,0], [300,200,1500,200], [1000,1100,7500,1500], [6000,4000,32000,8000]] },
-    { id: 'c5', name: 'QUICK COMMERCE', icon: '/mat-icons/mat-icon-quick-commerce.png', data: [[10,30,100,0], [200,400,2500,100], [2000,1200,10000,800], [10000,4000,50000,6000]] },
-    { id: 'c6', name: 'SMART STORAGE', icon: '/mat-icons/mat-icon-smart-storage.png', data: [[200,200,2000,200], [3000,1600,5000,2000], [3000,5400,9000,4000], [10000,7500,40000,12000]] },
-    { id: 'c7', name: 'RESTRO - CHAIN', icon: '/mat-icons/mat-icon-restro-chain.png', data: [[150, 300, 1000, 200], [300, 400, 2000, 500], [1200, 1400, 4000, 2000], [12000, 8000, 26000, 15000]] },
-    { id: 'c8', name: 'TRACEABILITY', icon: '/mat-icons/mat-icon-traceability.png', data: [[30,30,300,0], [300,200,2000,200], [1200,2000,7500,1000], [10000,8000,38000,5000]] },
-    { id: 'c9', name: 'ROBO - PACKAGING', icon: '/mat-icons/mat-icon-robo-packaging.png', data: [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]] },
+    { id: 'c1', name: 'CONTRACT FARMING', icon: '/company-contract-farming.png', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
+    { id: 'c2', name: 'AGRI IoT', icon: '/company-agri-iot.png', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
+    { id: 'c3', name: 'WALLET', icon: '/company-wallet.png', data: [[50,10,1000,0], [1200,400,3000,400], [1500,2000,8000,1800], [7000,10000,36000,5000]] },
+    { id: 'c4', name: 'SNACKS', icon: '/company-snacks.png', data: [[10,20,1000,0], [300,200,1500,200], [1000,1100,7500,1500], [6000,4000,32000,8000]] },
+    { id: 'c5', name: 'QUICK COMMERCE', icon: '/company-quick-commerce.png', data: [[10,30,100,0], [200,400,2500,100], [2000,1200,10000,800], [10000,4000,50000,6000]] },
+    { id: 'c6', name: 'SMART STORAGE', icon: '/company-smart-storage.png', data: [[200,200,2000,200], [3000,1600,5000,2000], [3000,5400,9000,4000], [10000,7500,40000,12000]] },
+    { id: 'c7', name: 'RESTRO - CHAIN', icon: '/company-restro-chain.png', data: [[150, 300, 1000, 200], [300, 400, 2000, 500], [1200, 1400, 4000, 2000], [12000, 8000, 26000, 15000]] },
+    { id: 'c8', name: 'TRACEABILITY', icon: '/company-traceability.png', data: [[30,30,300,0], [300,200,2000,200], [1200,2000,7500,1000], [10000,8000,38000,5000]] },
+    { id: 'c9', name: 'ROBO - PACKAGING', icon: '/company-robo-packaging.png', data: [[100,150,1500,200], [1200,500,4000,1000], [5000,2500,15000,2000], [4000,9000,45000,8000]] },
   ];
 
   const stages = ["Launch", "Retain", "Grow", "Scale"];
@@ -200,24 +238,89 @@ export default function PlayerMatModal({ onClose, ownedCompanies = [], isHoverOp
             
             {/* Second Chance Tokens */}
             <div className="bg-[#FFF2D8] rounded-xl border-2 border-[#3A141A] p-3 text-center shadow-lg">
-              <h3 className="font-black text-[#4A1720] uppercase tracking-widest mb-2.5 text-xs md:text-sm">Second Chance</h3>
+              <div className="flex items-center justify-between mb-2 px-1">
+                <h3 className="font-black text-[#4A1720] uppercase tracking-widest text-xs md:text-sm">Second Chance</h3>
+                <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shadow-xs ${
+                  currentLifelines === 2 
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                    : currentLifelines === 1 
+                    ? 'bg-amber-100 text-amber-800 border-amber-300' 
+                    : 'bg-red-100 text-red-800 border-red-300'
+                }`}>
+                  {currentLifelines} / 2 Left
+                </span>
+              </div>
               <div className="bg-[#7D3C4A] border border-[#3A141A] rounded-full px-4 py-2 flex justify-center items-center gap-3 relative overflow-hidden">
-                {/* Active Token 1 */}
-                <div className="w-12 h-12 rounded-full overflow-hidden relative group cursor-pointer hover:scale-105 transition-transform shrink-0 drop-shadow-md">
-                  <img src="/mat-icons/second-chance-active.png" alt="Second Chance Active" className="w-full h-full object-contain select-none" />
+                {/* 1st Chance (Circle 1) */}
+                <div 
+                  title={isFirstChanceStricken ? "1st Chance: Used (Stricken)" : "1st Chance: Available"}
+                  className={`w-12 h-12 rounded-full p-[2px] bg-[#FFF2D8] border border-[#3A141A] flex items-center justify-center relative shrink-0 shadow-md transition-all duration-300 ${
+                    !isFirstChanceStricken 
+                      ? 'ring-2 ring-[#55ffb0]/80 shadow-[0_0_10px_rgba(85,255,176,0.5)] cursor-pointer hover:scale-105' 
+                      : 'opacity-70'
+                  }`}
+                >
+                  <div className="w-full h-full rounded-full overflow-hidden relative flex items-center justify-center">
+                    <img 
+                      src={avatarSrc} 
+                      alt="Second Chance 1" 
+                      className={`w-full h-full object-cover select-none rounded-full ${isFirstChanceStricken ? 'filter grayscale opacity-75' : ''}`} 
+                    />
+                    {isFirstChanceStricken && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                        {/* Dark outline for strike contrast */}
+                        <div className="absolute w-[130%] h-[4.5px] bg-black/80 -rotate-45 rounded-full" />
+                        {/* Bold Red Diagonal Strike Line */}
+                        <div className="absolute w-[130%] h-[3px] bg-[#EF4444] -rotate-45 rounded-full shadow-[0_0_6px_rgba(239,68,68,1)]" />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {/* Active Token 2 */}
-                <div className="w-12 h-12 rounded-full overflow-hidden relative group cursor-pointer hover:scale-105 transition-transform shrink-0 drop-shadow-md">
-                  <img src="/mat-icons/second-chance-active.png" alt="Second Chance Active" className="w-full h-full object-contain select-none" />
+
+                {/* 2nd Chance (Circle 2) */}
+                <div 
+                  title={isSecondChanceStricken ? "2nd Chance: Used (Stricken)" : "2nd Chance: Available"}
+                  className={`w-12 h-12 rounded-full p-[2px] bg-[#FFF2D8] border border-[#3A141A] flex items-center justify-center relative shrink-0 shadow-md transition-all duration-300 ${
+                    !isSecondChanceStricken 
+                      ? 'ring-2 ring-[#55ffb0]/80 shadow-[0_0_10px_rgba(85,255,176,0.5)] cursor-pointer hover:scale-105' 
+                      : 'opacity-70'
+                  }`}
+                >
+                  <div className="w-full h-full rounded-full overflow-hidden relative flex items-center justify-center">
+                    <img 
+                      src={avatarSrc} 
+                      alt="Second Chance 2" 
+                      className={`w-full h-full object-cover select-none rounded-full ${isSecondChanceStricken ? 'filter grayscale opacity-75' : ''}`} 
+                    />
+                    {isSecondChanceStricken && (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                        {/* Dark outline for strike contrast */}
+                        <div className="absolute w-[130%] h-[4.5px] bg-black/80 -rotate-45 rounded-full" />
+                        {/* Bold Red Diagonal Strike Line */}
+                        <div className="absolute w-[130%] h-[3px] bg-[#EF4444] -rotate-45 rounded-full shadow-[0_0_6px_rgba(239,68,68,1)]" />
+                      </div>
+                    )}
+                  </div>
                 </div>
+
                 {/* Speed lines separator */}
                 <div className="w-[18px] h-9 flex items-center justify-center opacity-40 select-none">
                   <div className="w-[2px] h-full bg-white rotate-12 mx-0.5"></div>
                   <div className="w-[2px] h-full bg-white rotate-12 mx-0.5"></div>
                 </div>
-                {/* Inactive Token */}
-                <div className="w-12 h-12 rounded-full overflow-hidden relative shrink-0 opacity-80 drop-shadow-md">
-                  <img src="/mat-icons/second-chance-inactive.png" alt="Second Chance Inactive" className="w-full h-full object-contain select-none" />
+
+                {/* Inactive Token / Used Slot */}
+                <div 
+                  title="Used Token Track"
+                  className="w-12 h-12 rounded-full p-[2px] bg-[#FFF2D8] border border-[#3A141A] flex items-center justify-center relative shrink-0 shadow-md opacity-60"
+                >
+                  <div className="w-full h-full rounded-full overflow-hidden relative flex items-center justify-center">
+                    <img 
+                      src={avatarSrc} 
+                      alt="Second Chance Inactive" 
+                      className="w-full h-full object-cover select-none rounded-full filter grayscale opacity-75" 
+                    />
+                  </div>
                 </div>
               </div>
             </div>

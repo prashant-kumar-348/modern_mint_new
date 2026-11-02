@@ -51,21 +51,55 @@ function Borders() {
 }
 
 const getCompanyMatIcon = (name) => {
-  if (!name) return '/mat-icons/mat-icon-quick-commerce.png';
+  if (!name) return '/company-quick-commerce.png';
   const clean = name.toUpperCase().replace(/[^A-Z]/g, '');
-  if (clean.includes("FARM") || clean.includes("CONTRACT")) return '/mat-icons/mat-icon-contract-farming.png';
-  if (clean.includes("IOT") || clean.includes("AGRI")) return '/mat-icons/mat-icon-agri-iot.png';
-  if (clean.includes("WALLET")) return '/mat-icons/mat-icon-wallet.png';
-  if (clean.includes("SNACK")) return '/mat-icons/mat-icon-snacks.png';
-  if (clean.includes("COMM") || clean.includes("QUICK")) return '/mat-icons/mat-icon-quick-commerce.png';
-  if (clean.includes("STOR")) return '/mat-icons/mat-icon-smart-storage.png';
-  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD")) return '/mat-icons/mat-icon-restro-chain.png';
-  if (clean.includes("TRACE")) return '/mat-icons/mat-icon-traceability.png';
-  if (clean.includes("ROBO") || clean.includes("PACK")) return '/mat-icons/mat-icon-robo-packaging.png';
-  return '/mat-icons/mat-icon-quick-commerce.png';
+  if (clean.includes("FARM") || clean.includes("CONTRACT")) return '/company-contract-farming.png';
+  if (clean.includes("IOT") || clean.includes("AGRI")) return '/company-agri-iot.png';
+  if (clean.includes("WALLET")) return '/company-wallet.png';
+  if (clean.includes("SNACK")) return '/company-snacks.png';
+  if (clean.includes("COMM") || clean.includes("QUICK")) return '/company-quick-commerce.png';
+  if (clean.includes("STOR")) return '/company-smart-storage.png';
+  if (clean.includes("RESTRO") || clean.includes("CHAIN") || clean.includes("KHANAA") || clean.includes("FOOD")) return '/company-restro-chain.png';
+  if (clean.includes("TRACE")) return '/company-traceability.png';
+  if (clean.includes("ROBO") || clean.includes("PACK")) return '/company-robo-packaging.png';
+  return '/company-quick-commerce.png';
+};
+
+const AVATAR_IMAGE_BY_ID = {
+  1: '/lobby/join/founder-avatar-1.png',
+  2: '/lobby/join/founder-avatar-4.png',
+  3: '/lobby/join/founder-avatar-3.png',
+  4: '/lobby/join/founder-avatar-2.png',
+  5: '/lobby/join/Ellipse 197.png',
+  6: '/lobby/join/Ellipse 198.png',
+};
+
+const getPlayerAvatarSrc = (player) => {
+  if (player?.avatarId && AVATAR_IMAGE_BY_ID[player.avatarId]) {
+    return AVATAR_IMAGE_BY_ID[player.avatarId];
+  }
+  if (player?.avatar && AVATAR_IMAGE_BY_ID[player.avatar]) {
+    return AVATAR_IMAGE_BY_ID[player.avatar];
+  }
+  if (typeof player?.avatar === 'string' && (player.avatar.startsWith('/') || player.avatar.startsWith('http'))) {
+    return player.avatar;
+  }
+  if (player?.profileImageUrl) {
+    return player.profileImageUrl;
+  }
+  const c = String(player?.color || '').toLowerCase();
+  const n = String(player?.name || '').toLowerCase();
+  if (n.includes('ruthless') || c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) {
+    return '/avatar-ruthless.png';
+  }
+  if (n.includes('robotic') || c.includes('55ffb0') || c.includes('teal') || c.includes('green') || c.includes('gt')) {
+    return '/avatar-robotic.png';
+  }
+  return '/lobby/join/founder-avatar-1.png';
 };
 
 export default function Phase3DiceModal({ onClose, player, sendAction, gameState, roomId }) {
+  const avatarSrc = getPlayerAvatarSrc(player);
   const [isRolling, setIsRolling] = useState(false);
   const [rollResult, setRollResult] = useState(player?.currentPhase3Roll || null);
   const [bestRoll, setBestRoll] = useState(player?.currentPhase3Roll || null);
@@ -637,9 +671,39 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                         <RotateCcw size={20} className={localLifelines > 0 && !isRolling ? "group-hover:-rotate-180 transition-transform duration-500" : ""} />
                         Second Chance
                       </div>
-                      <span className="text-xs font-bold uppercase tracking-wider opacity-80">
-                        {localLifelines} Remaining
-                      </span>
+                      <div className="flex items-center gap-2.5 mt-1">
+                        {/* Token 1 */}
+                        <div className={`w-6 h-6 rounded-full overflow-hidden relative border drop-shadow ${localLifelines < 2 ? 'border-red-900/60 opacity-60' : 'border-[#55ffb0]/80 shadow-[0_0_6px_rgba(85,255,176,0.5)]'}`}>
+                          <img 
+                            src={avatarSrc} 
+                            className={`w-full h-full object-cover select-none rounded-full ${localLifelines < 2 ? 'filter grayscale opacity-75' : ''}`} 
+                            alt="SC1" 
+                          />
+                          {localLifelines < 2 && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                              <div className="absolute w-[130%] h-[3px] bg-black/80 -rotate-45 rounded-full" />
+                              <div className="absolute w-[130%] h-[2px] bg-[#EF4444] -rotate-45 rounded-full shadow-[0_0_4px_#ef4444]" />
+                            </div>
+                          )}
+                        </div>
+                        {/* Token 2 */}
+                        <div className={`w-6 h-6 rounded-full overflow-hidden relative border drop-shadow ${localLifelines < 1 ? 'border-red-900/60 opacity-60' : 'border-[#55ffb0]/80 shadow-[0_0_6px_rgba(85,255,176,0.5)]'}`}>
+                          <img 
+                            src={avatarSrc} 
+                            className={`w-full h-full object-cover select-none rounded-full ${localLifelines < 1 ? 'filter grayscale opacity-75' : ''}`} 
+                            alt="SC2" 
+                          />
+                          {localLifelines < 1 && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                              <div className="absolute w-[130%] h-[3px] bg-black/80 -rotate-45 rounded-full" />
+                              <div className="absolute w-[130%] h-[2px] bg-[#EF4444] -rotate-45 rounded-full shadow-[0_0_4px_#ef4444]" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold uppercase tracking-wider opacity-90 ml-1">
+                          {localLifelines} Remaining
+                        </span>
+                      </div>
                     </button>
 
                     <button 
@@ -681,11 +745,11 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                             
                             {/* Card Header (Cream Pill) */}
                             <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-2 px-3 flex items-center gap-3 shadow-md border border-[#3A141A]/20 -mt-7 mb-3 relative z-10">
-                              <div className="w-8 h-8 rounded-full border border-dashed border-gray-400 bg-white flex items-center justify-center shadow-inner shrink-0 overflow-hidden p-1">
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden">
                                 <img 
                                   src={getCompanyMatIcon(c.name)} 
                                   alt={c.name} 
-                                  className="w-full h-full object-contain" 
+                                  className="w-full h-full object-contain drop-shadow-sm select-none" 
                                 />
                               </div>
                               <h3 className="font-black text-xs md:text-sm text-[#4A1720] uppercase tracking-tight leading-none flex-1 text-center pr-4">
@@ -758,7 +822,7 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                                 <img 
                                   src={getCompanyMatIcon(item.name)} 
                                   alt={item.name} 
-                                  className="w-4 h-4 object-contain rounded-full bg-white/20 p-0.5 shrink-0" 
+                                  className="w-5 h-5 object-contain shrink-0 drop-shadow-sm select-none" 
                                 />
                                 <span>{item.name} ({item.stageName})</span>
                               </span>

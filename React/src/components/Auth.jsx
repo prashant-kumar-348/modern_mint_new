@@ -106,9 +106,7 @@ export default function Auth({ onLoginSuccess }) {
 
       <div className="bg-[#0a1914]/85 border border-[#1c4d3d] p-10 md:p-12 rounded-2xl shadow-[0_0_60px_rgba(85,255,176,0.15)] backdrop-blur-md flex flex-col items-center gap-6 relative z-10 w-[420px] max-w-[90%]">
         <div className="text-center">
-          <h1 className="text-4xl font-black text-[#55ffb0] tracking-widest uppercase drop-shadow-[0_2px_10px_rgba(85,255,176,0.2)] mb-2">
-            Modern Mint
-          </h1>
+          <img src="/modern-mint-title.png" alt="Modern Mint" className="h-10 w-auto object-contain select-none filter drop-shadow-[0_2px_12px_rgba(212,168,67,0.35)] mb-2" />
           <p className="text-xs uppercase tracking-[0.2em] text-[#a4d8c2]/70">
             Strategy Negotiation Arena
           </p>

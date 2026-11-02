@@ -14,8 +14,14 @@ import {
   Send,
   Search,
   FileText,
-  Activity
+  Activity,
+  Rocket,
+  Building2,
+  Handshake,
+  Sparkles,
+  Lightbulb
 } from 'lucide-react';
+import { getRulebookHint } from './utils/rulebookHints';
 
 import BankLoanModal from './components/modals/BankLoanModal';
 import DealSheetModal from './components/modals/DealSheetModal';
@@ -148,15 +154,15 @@ const getLaunchedCompanyForMessage = (message) => {
   if (!msgUpper.includes("LAUNCHED")) return null;
   
   const baseCompanies = [
-    { name: 'Wallet', icon: '/mat-icons/mat-icon-wallet.png', image: '/company-wallet.png' },
-    { name: 'Quick Commerce', icon: '/mat-icons/mat-icon-quick-commerce.png', image: '/company-quick-commerce.png' },
-    { name: 'Snacks', icon: '/mat-icons/mat-icon-snacks.png', image: '/company-snacks.png' },
-    { name: 'Restro - Chain', icon: '/mat-icons/mat-icon-restro-chain.png', image: '/company-restro-chain.png' },
-    { name: 'Contract Farming', icon: '/mat-icons/mat-icon-contract-farming.png', image: '/company-contract-farming.png' }, 
-    { name: 'Agri IoT', icon: '/mat-icons/mat-icon-agri-iot.png', image: '/company-agri-iot.png' }, 
-    { name: 'Smart Storage', icon: '/mat-icons/mat-icon-smart-storage.png', image: '/company-smart-storage.png' }, 
-    { name: 'Robo - Packaging', icon: '/mat-icons/mat-icon-robo-packaging.png', image: '/company-robo-packaging.png' }, 
-    { name: 'Traceability', icon: '/mat-icons/mat-icon-traceability.png', image: '/company-traceability.png' },
+    { name: 'Wallet', icon: '/company-wallet.png', image: '/company-wallet.png' },
+    { name: 'Quick Commerce', icon: '/company-quick-commerce.png', image: '/company-quick-commerce.png' },
+    { name: 'Snacks', icon: '/company-snacks.png', image: '/company-snacks.png' },
+    { name: 'Restro - Chain', icon: '/company-restro-chain.png', image: '/company-restro-chain.png' },
+    { name: 'Contract Farming', icon: '/company-contract-farming.png', image: '/company-contract-farming.png' }, 
+    { name: 'Agri IoT', icon: '/company-agri-iot.png', image: '/company-agri-iot.png' }, 
+    { name: 'Smart Storage', icon: '/company-smart-storage.png', image: '/company-smart-storage.png' }, 
+    { name: 'Robo - Packaging', icon: '/company-robo-packaging.png', image: '/company-robo-packaging.png' }, 
+    { name: 'Traceability', icon: '/company-traceability.png', image: '/company-traceability.png' },
   ];
 
   const match = baseCompanies.find(comp => {
@@ -217,7 +223,7 @@ function App() {
   const [activeModal, setActiveModal] = useState(null); 
   const [isHoverOpenedMat, setIsHoverOpenedMat] = useState(false);
   // 'deal', 'topup', 'mentor', 'team_action', 'pe_fund', 'phaseEnd'
-  const [activeTopPanel, setActiveTopPanel] = useState(null);
+  const [activeTopPanel, setActiveTopPanel] = useState('prompts');
   const [expandedPlayerId, setExpandedPlayerId] = useState(null);
   const [isBankrupt, setIsBankrupt] = useState(false);
   const [royaltyProposal, setRoyaltyProposal] = useState(null);
@@ -245,10 +251,10 @@ function App() {
   const [isActionTrayOpen, setIsActionTrayOpen] = useState(true);
 
   const [launchedCompanies, setLaunchedCompanies] = useState({
-    1: { launched: true, logo: '/mat-icons/mat-icon-contract-farming.png', stage: 'L', teamColor: 'from-gray-300 to-gray-500' },
-    2: { launched: true, logo: '/mat-icons/mat-icon-agri-iot.png', stage: 'G', teamColor: 'from-yellow-600 to-yellow-800' },
-    3: { launched: false, logo: '/mat-icons/mat-icon-smart-storage.png', stage: 'L', teamColor: 'from-[#b87333] to-[#8c5220]' },
-    4: { launched: false, logo: '/mat-icons/mat-icon-quick-commerce.png', stage: 'S', teamColor: 'from-blue-400 to-blue-600' }
+    1: { launched: true, logo: '/company-contract-farming.png', stage: 'L', teamColor: 'from-gray-300 to-gray-500' },
+    2: { launched: true, logo: '/company-agri-iot.png', stage: 'G', teamColor: 'from-yellow-600 to-yellow-800' },
+    3: { launched: false, logo: '/company-smart-storage.png', stage: 'L', teamColor: 'from-[#b87333] to-[#8c5220]' },
+    4: { launched: false, logo: '/company-quick-commerce.png', stage: 'S', teamColor: 'from-blue-400 to-blue-600' }
   });
 
   const [token, setToken] = useState(() => {
@@ -372,6 +378,43 @@ function App() {
     };
   }, [sendAction]);
 
+  const [lastAutoHintKey, setLastAutoHintKey] = useState('');
+  const [isHoveredHint, setIsHoveredHint] = useState(false);
+
+  // Automatically trigger hint popup on game start, round transition, or phase transition
+  useEffect(() => {
+    if (!gameState?.isStarted) return;
+    const key = `R${gameRound}_P${gamePhase}`;
+    if (key !== lastAutoHintKey) {
+      setLastAutoHintKey(key);
+      setActiveTopPanel('prompts');
+    }
+  }, [gameState?.isStarted, gameRound, gamePhase, lastAutoHintKey]);
+
+  // Auto-dismiss hint banner after 7 seconds so it is only visible for some time
+  useEffect(() => {
+    if (activeTopPanel === 'prompts' && !isHoveredHint) {
+      const timer = setTimeout(() => {
+        setActiveTopPanel(null);
+      }, 7000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTopPanel, lastAutoHintKey, isHoveredHint]);
+
+  // Press 'M' to toggle microphone in Phase 1
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(e.target?.tagName)) return;
+      if (e.key === 'm' || e.key === 'M') {
+        if (gamePhase === 1) {
+          setIsTalking(prev => !prev);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [gamePhase]);
+
   // If not authenticated, show Auth screen first
   if (!token) {
     return (
@@ -468,14 +511,20 @@ function App() {
     setActiveModal(null);
   };
 
-  const submitDeal = (dealForm) => {
-    sendAction('offer_deal', { 
-      targetPlayer: dealTarget || 'Random Player',
+  const submitDeal = (dealForm, partnerName) => {
+    const target = partnerName || dealTarget || 'Random Player';
+    sendAction('propose_royalty_deal', { 
+      proposerName: username,
+      partnerName: target,
       cash: Number(dealForm.cash) || 0,
-      loan: Number(dealForm.loan) || 0
+      equity: Number(dealForm.equity) || 0,
+      loan: Number(dealForm.loan) || 0,
+      royalty: Number(dealForm.royalty) || 0,
+      terms: dealForm.terms || ''
     });
     setActiveModal(null);
     setDealTarget(null);
+    showGlobalNotification(`Deal Offer Sent to: ${target}`);
   };
 
   const isMyPhase1Turn = gamePhase === 1 && gameState?.players?.[gameState?.phase1TurnIndex || 0]?.id === socketId;
@@ -495,6 +544,16 @@ function App() {
     true;
 
   const isTurnLocked = isLocked || !isCurrentPlayerTurnActive;
+
+
+
+  const currentHint = getRulebookHint({
+    phase: gamePhase,
+    round: gameRound,
+    role: localPlayer?.role || 'Founder',
+    isLocked: isLocked,
+    isMyTurn: isCurrentPlayerTurnActive
+  });
 
   const activePlayerObj = 
     gamePhase === 1 ? activePhase1Player :
@@ -590,20 +649,38 @@ function App() {
         </button>
 
         {/* TOP NOTIFICATION PROMPTS */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center pointer-events-auto">
-          {isLocked ? (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center pointer-events-auto gap-3">
+          {activeTopPanel === 'prompts' ? (
+            <div 
+              key={`hint-R${gameRound}-P${gamePhase}-${isLocked ? 'locked' : 'active'}`}
+              onMouseEnter={() => setIsHoveredHint(true)}
+              onMouseLeave={() => setIsHoveredHint(false)}
+              className="rounded-xl p-[2px] bg-gradient-to-r from-[#8a6818] via-[#FFE885] to-[#8a6818] shadow-[0_10px_40px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-top-4 duration-300"
+            >
+              <div className="bg-black/95 rounded-[10px] px-24 py-6 text-center min-w-[500px] md:min-w-[650px] flex flex-col items-center justify-center relative">
+                <button
+                  onClick={() => setActiveTopPanel(null)}
+                  title="Close hint (click magnifying glass to reopen)"
+                  className="absolute top-2 right-4 text-[#d4af37]/60 hover:text-[#FFE885] hover:scale-110 text-base font-bold transition-all cursor-pointer select-none"
+                >
+                  ✕
+                </button>
+                <h2 className="text-white text-xl md:text-2xl font-medium tracking-wide mb-1 select-none">
+                  {currentHint.title}
+                </h2>
+                <p className="text-[#d4af37] text-xs md:text-sm tracking-wider select-none">
+                  {currentHint.subtitle || currentHint.tip}
+                </p>
+              </div>
+            </div>
+          ) : isLocked ? (
             <div className="bg-black/80 border border-[#d4af37] text-white px-8 py-3 rounded-lg shadow-[0_0_15px_rgba(212,175,55,0.3)] text-center animate-in slide-in-from-top">
               <h3 className="text-xl font-bold tracking-widest uppercase mb-1">Waiting for Others!</h3>
               <p className="text-xs text-[#d4af37]">Waiting for remaining players to lock their turns...</p>
             </div>
-          ) : activeTopPanel === 'prompts' ? (
-            <div className="rounded-xl p-[2px] bg-gradient-to-r from-[#8a6818] via-[#FFE885] to-[#8a6818] shadow-[0_10px_40px_rgba(0,0,0,0.8)] animate-in fade-in slide-in-from-top-4 duration-300">
-              <div className="bg-black/95 rounded-[10px] px-24 py-6 text-center min-w-[500px] md:min-w-[650px] flex flex-col items-center justify-center">
-                <h2 className="text-white text-xl md:text-2xl font-medium tracking-wide mb-1">Offer Deal</h2>
-                <p className="text-[#d4af37] text-xs md:text-sm tracking-wider">Press 'Offer Deal' to proceed</p>
-              </div>
-            </div>
-          ) : (isTalking && gamePhase === 1) ? (
+          ) : null}
+
+          {isTalking && gamePhase === 1 && activeTopPanel !== 'prompts' && (
             <div 
               onClick={() => setIsTalking(false)}
               title="Click to Mute Microphone"
@@ -712,11 +789,13 @@ function App() {
               {/* Right Column: Action Buttons */}
               <div className="flex flex-col gap-4">
                 <button 
-                  onClick={() => setActiveTopPanel(prev => prev === 'prompts' ? null : 'prompts')}
-                  title="Toggle Prompts"
+                  onClick={() => {
+                    setActiveTopPanel(prev => prev === 'prompts' ? null : 'prompts');
+                  }}
+                  title="Game Rules & Hints (Magnifying Glass)"
                   className={`w-[49px] h-[49px] rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-lg select-none relative overflow-hidden group ${
                     activeTopPanel === 'prompts' 
-                      ? 'scale-105 shadow-[0_0_20px_rgba(255,194,64,0.8)]' 
+                      ? 'scale-105 shadow-[0_0_20px_rgba(255,194,64,0.8)] ring-2 ring-[#FFE885]' 
                       : 'hover:scale-105'
                   }`}
                 >
@@ -1047,6 +1126,7 @@ function App() {
                 <ActionTrackerTray
                   actions={localPlayer?.roundActions || []}
                   onUndo={(actionId) => sendAction('undo_action', { actionId })}
+                  currentRound={gameRound}
                 />
               )}
 
@@ -1332,7 +1412,7 @@ function App() {
                   <button
                     onClick={() => !isTurnLocked && setActiveModal('phase3Dice')}
                     disabled={isTurnLocked}
-                    className={`px-6 py-2 rounded-2xl text-[10px] md:text-xs font-bold transition-all shadow-[0_4px_12px_rgba(0,0,0,0.3)] bg-gradient-to-br from-[#4ade80] to-[#166534] text-white text-center flex flex-col items-center justify-center min-w-[120px] h-[52px] leading-tight border border-[#e5c158] shadow-[0_0_15px_rgba(229,193,88,0.4)] ${isTurnLocked ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:from-[#52ea90] hover:to-[#1b753d] hover:scale-105 active:scale-95'}`}
+                    className={`px-6 py-2 rounded-2xl text-[10px] md:text-xs font-bold transition-all shadow-[0_4px_12px_rgba(0,0,0,0.3)] bg-gradient-to-br from-[#4ade80] to-[#166534] text-white text-center flex flex-col items-center justify-center min-w-[120px] h-[52px] leading-tight border border-[#166534] ${isTurnLocked ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:from-[#52ea90] hover:to-[#1b753d] hover:scale-105 active:scale-95'}`}
                   >
                     <span>Roll</span>
                     <span>the Dice</span>
@@ -1340,10 +1420,18 @@ function App() {
                   <button
                     onClick={() => !isTurnLocked && setActiveModal('loanRepay')}
                     disabled={isTurnLocked}
-                    className={`px-6 py-2 rounded-2xl text-[10px] md:text-xs font-bold transition-all shadow-[0_4px_12px_rgba(0,0,0,0.3)] bg-gradient-to-br from-[#4ade80] to-[#166534] text-white text-center flex flex-col items-center justify-center min-w-[120px] h-[52px] leading-tight border border-[#166534] ${isTurnLocked ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:from-[#52ea90] hover:to-[#1b753d] hover:scale-105 active:scale-95'}`}
+                    className={`relative flex flex-col items-center justify-center min-w-[120px] w-[128px] h-[52px] select-none transition-transform ${
+                      isTurnLocked ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:scale-105 active:scale-95 cursor-pointer'
+                    }`}
                   >
-                    <span>Repay</span>
-                    <span>Loan</span>
+                    <img 
+                      src="/btn-green-pill.png" 
+                      alt="Repay Loan" 
+                      className="absolute inset-0 w-full h-full object-fill pointer-events-none select-none" 
+                    />
+                    <span className="relative z-10 text-white font-bold text-xs md:text-sm leading-tight text-center drop-shadow-[0_1px_2px_rgba(0,0,0,0.7)]">
+                      Repay<br/>Loan
+                    </span>
                   </button>
                 </>
               )}
@@ -1565,6 +1653,8 @@ function App() {
                 onClose={() => setActiveModal(null)}
                 onSubmitDeal={submitDeal}
                 targetName={dealTarget}
+                opponents={gameState?.players?.filter(p => p.name !== username) || []}
+                username={username}
               />
             )}
 
