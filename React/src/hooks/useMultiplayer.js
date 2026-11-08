@@ -7,7 +7,7 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || (
     : typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3001` : 'http://localhost:3001'
 );
 
-export function useMultiplayer(roomId, username, role) {
+export function useMultiplayer(roomId, username, role, avatarId, maxPlayers, isVsAi = false, mode = 'standard', difficulty = 'medium', aiBots = []) {
   const [gameState, setGameState] = useState(null);
   const [notification, setNotification] = useState({ show: false, message: '' });
   const [drawnCard, setDrawnCard] = useState(null);
@@ -23,7 +23,17 @@ export function useMultiplayer(roomId, username, role) {
     socketRef.current.on('connect', () => {
       console.log('Connected to multiplayer server', socketRef.current.id);
       setSocketId(socketRef.current.id);
-      socketRef.current.emit('join_room', { roomId, username, role: role || 'Founder' });
+      socketRef.current.emit('join_room', {
+        roomId,
+        username,
+        role: role || 'Founder',
+        avatarId,
+        maxPlayers,
+        isVsAi: !!isVsAi,
+        mode: mode || 'standard',
+        difficulty: difficulty || 'medium',
+        aiBots: Array.isArray(aiBots) ? aiBots : []
+      });
     });
 
     socketRef.current.on('game_state_update', (newState) => {

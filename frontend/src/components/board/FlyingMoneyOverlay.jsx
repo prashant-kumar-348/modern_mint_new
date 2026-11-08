@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CURRENCY_NOTES, getBestNoteForAmount } from '../../utils/currencyNotes';
 
 export default function FlyingMoneyOverlay() {
   const [batches, setBatches] = useState([]);
+  const recentEventsRef = useRef([]);
 
   const triggerAnimation = useCallback((detail = {}) => {
     const { 
@@ -12,6 +13,33 @@ export default function FlyingMoneyOverlay() {
       fromElId,
       toElId
     } = detail;
+
+    const absAmount = Math.abs(Number(amount) || 0);
+    if (absAmount <= 0) return;
+
+    const now = Date.now();
+    // Clean events older than 1800ms
+    recentEventsRef.current = recentEventsRef.current.filter(e => now - e.timestamp < 1800);
+
+    // Deduplicate: check if an event for the same amount and type was triggered recently
+    const duplicateEvent = recentEventsRef.current.find(
+      e => Math.abs(e.amount) === absAmount && e.type === type && (now - e.timestamp < 1500)
+    );
+
+    if (duplicateEvent) {
+      // If the incoming event has rich descriptive text (e.g. company name or loan info), upgrade existing batch text
+      if (text && (text.includes(' on ') || text.includes('Loan') || text.includes('Test') || text.length > 8)) {
+        setBatches(prev => prev.map(b => {
+          if (b.amount === absAmount && b.type === type) {
+            return { ...b, text };
+          }
+          return b;
+        }));
+      }
+      return; // Skip spawning duplicate overlapping batch
+    }
+
+    recentEventsRef.current.push({ amount: absAmount, type, timestamp: now });
 
     // Resolve start coordinates
     let startX = window.innerWidth - 120;
@@ -63,8 +91,8 @@ export default function FlyingMoneyOverlay() {
       }
     }
 
-    const noteCount = amount >= 10000 ? 7 : amount >= 2000 ? 5 : 4;
-    const bestNote = getBestNoteForAmount(amount);
+    const noteCount = absAmount >= 10000 ? 7 : absAmount >= 2000 ? 5 : 4;
+    const bestNote = getBestNoteForAmount(absAmount);
 
     const notes = Array.from({ length: noteCount }, (_, i) => {
       // Pick note image (blend between best matching note and adjacent notes)
@@ -86,6 +114,7 @@ export default function FlyingMoneyOverlay() {
 
     const newBatch = {
       id: `batch-${Date.now()}-${Math.random()}`,
+      amount: absAmount,
       startX,
       startY,
       dx: endX - startX,
@@ -93,11 +122,15 @@ export default function FlyingMoneyOverlay() {
       endX,
       endY,
       notes,
-      text: text || (type === 'gain' ? `+$${amount}K` : `-$${amount}K`),
+      text: text || (type === 'gain' ? `+$${absAmount}K` : `-$${absAmount}K`),
       type
     };
 
-    setBatches(prev => [...prev, newBatch]);
+    setBatches(prev => {
+      // Calculate vertical offset so concurrent badges stack neatly without overlapping
+      const offsetIndex = prev.filter(b => Math.abs(b.endX - endX) < 100 && Math.abs(b.endY - endY) < 100).length;
+      return [...prev, { ...newBatch, offsetIndex }];
+    });
 
     // Cleanup batch after animation completes
     setTimeout(() => {
@@ -148,14 +181,14 @@ export default function FlyingMoneyOverlay() {
           {/* Floating Amount Badge on Landing */}
           {batch.text && (
             <div 
-              className={`absolute font-black font-mono text-sm md:text-base px-3 py-1 rounded-full shadow-lg border uppercase tracking-wider animate-in fade-in zoom-in-75 ${
+              className={`absolute font-black font-mono text-xs md:text-sm px-4 py-1.5 rounded-full shadow-2xl border-2 uppercase tracking-wider whitespace-nowrap animate-in fade-in zoom-in-75 z-50 pointer-events-none select-none ${
                 batch.type === 'gain'
-                  ? 'bg-emerald-950/90 text-[#55ffb0] border-[#55ffb0]/40 shadow-[0_0_20px_rgba(85,255,176,0.4)]'
-                  : 'bg-rose-950/90 text-[#ff6b6b] border-[#ff6b6b]/40 shadow-[0_0_20px_rgba(255,107,107,0.4)]'
+                  ? 'bg-[#031d12]/98 text-[#55ffb0] border-[#55ffb0]/70 shadow-[0_0_30px_rgba(85,255,176,0.6)]'
+                  : 'bg-[#29050b]/98 text-[#ff6b6b] border-[#ff6b6b]/70 shadow-[0_0_30px_rgba(255,107,107,0.6)]'
               }`}
               style={{
                 left: `${batch.endX}px`,
-                top: `${batch.endY - 30}px`,
+                top: `${batch.endY - 30 - (batch.offsetIndex || 0) * 44}px`,
                 transform: 'translate(-50%, -100%)',
                 animation: 'fadeFloatUp 1.8s ease-out 400ms forwards'
               }}

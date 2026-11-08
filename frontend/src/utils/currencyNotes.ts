@@ -1,5 +1,5 @@
 // Modern Mint Bank & Reserve Currency Notes Configuration
-// Complete suite of all 9 official Modern Reserve Note denominations
+// Complete suite of all 10 official Modern Reserve Note denominations
 
 export interface CurrencyNote {
   id: string;
@@ -102,6 +102,16 @@ export const CURRENCY_NOTES: CurrencyNote[] = [
     bgGradient: 'from-orange-200 to-rose-300',
     image: '/notes/note-10k.png',
     description: 'Base denomination cash note featured on the physical wallet for bank loan interest and fee payments.'
+  },
+  {
+    id: 'note-5k',
+    value: 5,
+    label: '$5K',
+    title: 'Five Thousand Dollars',
+    color: '#E09F67',
+    bgGradient: 'from-amber-200 to-orange-400',
+    image: '/notes/note-5k.png',
+    description: 'Fractional reserve note issued by The Modern Mint Bank for precise micro-adjustments, interest increments, and startup stipends.'
   }
 ];
 

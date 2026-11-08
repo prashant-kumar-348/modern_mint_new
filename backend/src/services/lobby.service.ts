@@ -214,7 +214,7 @@ export async function createRoom(
 
     // Insert AI bots if requested (e.g., VS AI mode or filled AI slots)
     if (ai_founders && ai_founders > 0) {
-      const aiFounderNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
+      const aiFounderNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Beta Bot"];
       const effectiveAiFounders = Math.min(ai_founders, max_founders - 1);
       const allFounderAvatars = [1, 2, 3, 4];
       const availableFounderAvatars = allFounderAvatars.filter(id => id !== avatar_id);

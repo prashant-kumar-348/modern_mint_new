@@ -304,29 +304,29 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
     let display_name = "";
     let is_ai = false;
 
-    if (norm.includes("NULL,'FOUNDER',1,$2,TRUE")) {
+    if (norm.includes("NULL,'FOUNDER',$2,$3,TRUE") || norm.includes("NULL,'FOUNDER',1,$2,TRUE")) {
       user_id = null;
       role = "founder";
-      avatar_id = 1;
-      display_name = params[1];
+      avatar_id = norm.includes("NULL,'FOUNDER',$2,$3,TRUE") ? (Number(params[1]) || 2) : 1;
+      display_name = norm.includes("NULL,'FOUNDER',$2,$3,TRUE") ? params[2] : params[1];
       is_ai = true;
-    } else if (norm.includes("NULL,'INVESTOR',1,$2,TRUE")) {
+    } else if (norm.includes("NULL,'INVESTOR',$2,$3,TRUE") || norm.includes("NULL,'INVESTOR',1,$2,TRUE")) {
       user_id = null;
       role = "investor";
-      avatar_id = 1;
-      display_name = params[1];
+      avatar_id = norm.includes("NULL,'INVESTOR',$2,$3,TRUE") ? (Number(params[1]) || 5) : 1;
+      display_name = norm.includes("NULL,'INVESTOR',$2,$3,TRUE") ? params[2] : params[1];
       is_ai = true;
     } else if (norm.includes("'FOUNDER',$3,$4,FALSE")) {
       user_id = params[1];
       role = "founder";
-      avatar_id = params[2];
+      avatar_id = Number(params[2]) || 1;
       display_name = params[3];
       is_ai = false;
     } else {
       // General match: (room_id, user_id, role, avatar_id, display_name, is_ai) VALUES ($1,$2,$3,$4,$5,false)
       user_id = params[1];
       role = params[2];
-      avatar_id = params[3];
+      avatar_id = Number(params[3]) || 1;
       display_name = params[4];
       is_ai = false;
     }
@@ -342,7 +342,7 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
       joined_at: new Date()
     };
     roomPlayers.push(newPlayer);
-    return { rows: [], rowCount: 0 };
+    return { rows: [newPlayer], rowCount: 1 };
   }
 
   // Update room player (e.g. host or re-joining player changing avatar or role)
@@ -410,6 +410,19 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
       p => p.room_id === roomId && p.role === role && (!checkHumanOnly || !p.is_ai)
     ).length;
     return { rows: [{ count: String(count) }], rowCount: 1 };
+  }
+
+  // Query room players by room_id (supports filtering by is_ai)
+  if (norm.includes("FROM ROOM_PLAYERS WHERE ROOM_ID=$1")) {
+    const roomId = params[0];
+    let list = roomPlayers.filter(p => p.room_id === roomId);
+    if (norm.includes("IS_AI=TRUE")) {
+      list = list.filter(p => p.is_ai);
+    } else if (norm.includes("IS_AI=FALSE")) {
+      list = list.filter(p => !p.is_ai);
+    }
+    list.sort((a, b) => a.joined_at.getTime() - b.joined_at.getTime());
+    return { rows: list, rowCount: list.length };
   }
 
   // Check password hash and privacy

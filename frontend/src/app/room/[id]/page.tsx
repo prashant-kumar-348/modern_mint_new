@@ -31,6 +31,7 @@ export default function GameRoomPage({
     maxPlayers: number;
     isVsAi?: boolean;
     difficulty?: string;
+    aiBots?: any[];
   } | null>(null);
 
   useEffect(() => {
@@ -53,6 +54,23 @@ export default function GameRoomPage({
           (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("vsAi") === "true") ||
           (rawRoom.privacy === "closed" && (rawRoom.founders?.filter((f: any) => f.kind === "ai").length || 0) >= 2);
 
+        const configuredAiBots = [
+          ...(rawRoom.founders || [])
+            .filter((f: any) => f.kind === "ai" || f.is_ai)
+            .map((f: any) => ({
+              name: f.name,
+              avatarId: f.avatarId,
+              role: "Founder",
+            })),
+          ...(rawRoom.investors || [])
+            .filter((i: any) => i.kind === "ai" || i.is_ai)
+            .map((i: any) => ({
+              name: i.name,
+              avatarId: i.avatarId,
+              role: "Investor",
+            })),
+        ];
+
         setRoomInfo({
           name: rawRoom.name,
           mode: rawRoom.mode,
@@ -61,6 +79,7 @@ export default function GameRoomPage({
           maxPlayers,
           isVsAi,
           difficulty: rawRoom.ai_difficulty || 'medium',
+          aiBots: configuredAiBots,
         });
 
         // Search for user in founders or investors

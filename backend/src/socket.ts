@@ -991,6 +991,91 @@ const io = new SocketServer(server, {
     }
   };
 
+  const ensureRoomAIBots = async (roomState: any, roomId: string, passedAiBots?: any[]) => {
+    // 1. Add any AI bots passed directly from client
+    if (Array.isArray(passedAiBots) && passedAiBots.length > 0) {
+      for (const bot of passedAiBots) {
+        if (!bot || !bot.name) continue;
+        const alreadyExists = roomState.players.some(
+          (p: any) => p.name === bot.name || (p.avatarId === bot.avatarId && p.is_ai)
+        );
+        if (!alreadyExists) {
+          const aiRole = bot.role ? (bot.role.charAt(0).toUpperCase() + bot.role.slice(1).toLowerCase()) : 'Founder';
+          const aiStartCash = aiRole === 'Investor' ? 5000 : 500;
+          const aiAvId = bot.avatarId || (aiRole === 'Investor' ? 5 : 2);
+          console.log(`[Socket] Adding client-passed AI player "${bot.name}" (${aiRole}, avatar ${aiAvId}) to room ${roomId}`);
+          roomState.players.push({
+            id: `ai_${aiRole.toLowerCase()}_${aiAvId}_${Math.random().toString(36).substring(2, 9)}`,
+            name: bot.name,
+            color: AVATAR_COLORS[aiAvId] || (aiRole === 'Investor' ? '#00e1ff' : '#55ffb0'),
+            isLocked: false,
+            ownedCompanies: [],
+            capital: aiStartCash / 1000,
+            loan: 0,
+            survivalLoan: 0,
+            lastRevenueClaimed: 0,
+            cash: aiStartCash,
+            valuation: 0,
+            actionCount: 0,
+            avatarId: aiAvId,
+            mentorCards: [],
+            boughtMentorRound: 0,
+            lifelines: 2,
+            currentPhase3Roll: null,
+            roundActions: [],
+            role: aiRole,
+            is_ai: true
+          });
+        }
+      }
+    }
+
+    // 2. Query database for any AI players saved in room_players
+    try {
+      const dbAiRes = await pool.query(
+        "SELECT * FROM room_players WHERE room_id = $1 AND is_ai = true ORDER BY joined_at ASC",
+        [roomId]
+      );
+      if (dbAiRes.rows && dbAiRes.rows.length > 0) {
+        for (const aiRow of dbAiRes.rows) {
+          const alreadyExists = roomState.players.some(
+            (p: any) => p.name === aiRow.display_name || p.id === `ai_db_${aiRow.id}` || (p.avatarId === aiRow.avatar_id && p.is_ai)
+          );
+          if (!alreadyExists) {
+            const aiRole = aiRow.role ? (aiRow.role.charAt(0).toUpperCase() + aiRow.role.slice(1).toLowerCase()) : 'Founder';
+            const aiStartCash = aiRole === 'Investor' ? 5000 : 500;
+            const aiAvId = aiRow.avatar_id || (aiRole === 'Investor' ? 5 : 2);
+            console.log(`[Socket] Adding DB-stored AI player "${aiRow.display_name}" (${aiRole}, avatar ${aiAvId}) to room ${roomId}`);
+            roomState.players.push({
+              id: `ai_db_${aiRow.id}`,
+              name: aiRow.display_name,
+              color: AVATAR_COLORS[aiAvId] || (aiRole === 'Investor' ? '#00e1ff' : '#55ffb0'),
+              isLocked: false,
+              ownedCompanies: [],
+              capital: aiStartCash / 1000,
+              loan: 0,
+              survivalLoan: 0,
+              lastRevenueClaimed: 0,
+              cash: aiStartCash,
+              valuation: 0,
+              actionCount: 0,
+              avatarId: aiAvId,
+              mentorCards: [],
+              boughtMentorRound: 0,
+              lifelines: 2,
+              currentPhase3Roll: null,
+              roundActions: [],
+              role: aiRole,
+              is_ai: true
+            });
+          }
+        }
+      }
+    } catch (dbErr) {
+      console.warn(`[Socket] Could not query AI players for room ${roomId}:`, dbErr);
+    }
+  };
+
   const addAIPlayers = (room: any) => {
     const humanPlayer = room.players[0];
     if (!humanPlayer) return;
@@ -998,7 +1083,7 @@ const io = new SocketServer(server, {
     // Guard: never add duplicates if AI players already exist in the room
     if (room.players.some((p: any) => p.is_ai)) return;
 
-    const founderNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Sigma Bot"];
+    const founderNames = ["Alpha Bot", "Delta Bot", "Omega Bot", "Beta Bot"];
     const allFounderAvatars = [1, 2, 3, 4];
     const takenAvatarIds = new Set(room.players.map((p: any) => p.avatarId));
     const availableFounderAvatars = allFounderAvatars.filter(id => !takenAvatarIds.has(id));
@@ -1764,7 +1849,7 @@ const io = new SocketServer(server, {
   io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
-    socket.on('join_room', ({ roomId, username, role, avatarId, maxPlayers, isVsAi, mode, difficulty }) => {
+    socket.on('join_room', async ({ roomId, username, role, avatarId, maxPlayers, isVsAi, mode, difficulty, aiBots }: any) => {
       console.log(`Socket ${socket.id} is attempting to join room ${roomId} as username: "${username}" with role: "${role}" and avatarId: ${avatarId}`);
       if (!rooms[roomId]) {
         rooms[roomId] = createEmptyRoom(maxPlayers || 4, mode || 'standard', difficulty || 'medium');
@@ -1852,18 +1937,21 @@ const io = new SocketServer(server, {
           role: finalRole,
           is_ai: false
         });
-        
-        // Singleplayer / VS AI mode only
-        if (isVsAi) {
-          roomState.isVsAi = true;
-          if (roomState.players.filter((p: any) => p.is_ai).length === 0) {
-            addAIPlayers(roomState);
-          }
-          roomState.isStarted = true;
-          if (!roomState.teamTokenPoolModified) {
-            roomState.teamTokenPool = getStartingTeamTokenPool(roomState.players.length);
-          }
+      }
+
+      // Singleplayer / VS AI mode only
+      if (isVsAi) {
+        roomState.isVsAi = true;
+        if (roomState.players.filter((p: any) => p.is_ai).length === 0) {
+          addAIPlayers(roomState);
         }
+        roomState.isStarted = true;
+        if (!roomState.teamTokenPoolModified) {
+          roomState.teamTokenPool = getStartingTeamTokenPool(roomState.players.length);
+        }
+      } else {
+        // Multiplayer: Ensure client-passed and DB-stored AI bots are loaded into the room
+        await ensureRoomAIBots(roomState, roomId, aiBots);
 
         // Multiplayer: Start game automatically ONLY when all player slots are full
         if (!roomState.isStarted && roomState.players.length >= (roomState.maxPlayers || 6)) {
@@ -1889,59 +1977,62 @@ const io = new SocketServer(server, {
       }
     });
 
-    socket.on('start_game', ({ roomId }) => {
+    socket.on('start_game', async ({ roomId }) => {
       const room = rooms[roomId];
-      if (room && !room.isStarted && room.players.length >= 2) {
+      if (room && !room.isStarted) {
+        await ensureRoomAIBots(room, roomId);
         ensureAIInvestors(room);
-        room.isStarted = true;
-        const realPlayers = room.players.filter((p: any) => !p.isDummy);
-        if (!room.teamTokenPoolModified) {
-          room.teamTokenPool = getStartingTeamTokenPool(realPlayers.length);
-        }
-        
-        // Dummy Investor fallback (only if no investors exist)
-        const totalInvestors = room.players.filter((p: any) => p.role?.toLowerCase() === 'investor');
-        if (totalInvestors.length === 0) {
-          const selected = DUMMY_INVESTORS[Math.floor(Math.random() * DUMMY_INVESTORS.length)];
-          room.dummyInvestor = { ...selected };
-          
-          const dummyPlayer = {
-            id: 'dummy_investor',
-            name: `${selected.name} (Dummy)`,
-            role: 'Investor',
-            isDummy: true,
-            cash: 10000,
-            capital: 10,
-            loan: 0,
-            survivalLoan: 0,
-            valuation: 0,
-            ownedCompanies: [],
-            color: '#00e1ff',
-            avatarId: 5,
-            isLocked: true
-          };
-          
-          if (!room.players.some((p: any) => p.id === 'dummy_investor')) {
-            room.players.push(dummyPlayer);
+        if (room.players.length >= 2) {
+          room.isStarted = true;
+          const realPlayers = room.players.filter((p: any) => !p.isDummy);
+          if (!room.teamTokenPoolModified) {
+            room.teamTokenPool = getStartingTeamTokenPool(realPlayers.length);
           }
-          io.to(roomId).emit('notification', `DUMMY INVESTOR SETUP: ${selected.name} active for 2–3 player game.`);
-        }
+          
+          // Dummy Investor fallback (only if no investors exist)
+          const totalInvestors = room.players.filter((p: any) => p.role?.toLowerCase() === 'investor');
+          if (totalInvestors.length === 0) {
+            const selected = DUMMY_INVESTORS[Math.floor(Math.random() * DUMMY_INVESTORS.length)];
+            room.dummyInvestor = { ...selected };
+            
+            const dummyPlayer = {
+              id: 'dummy_investor',
+              name: `${selected.name} (Dummy)`,
+              role: 'Investor',
+              isDummy: true,
+              cash: 10000,
+              capital: 10,
+              loan: 0,
+              survivalLoan: 0,
+              valuation: 0,
+              ownedCompanies: [],
+              color: '#00e1ff',
+              avatarId: 5,
+              isLocked: true
+            };
+            
+            if (!room.players.some((p: any) => p.id === 'dummy_investor')) {
+              room.players.push(dummyPlayer);
+            }
+            io.to(roomId).emit('notification', `DUMMY INVESTOR SETUP: ${selected.name} active for 2–3 player game.`);
+          }
 
-        // Section J.1 & K.3: Round 1 order is random for Founders in Standard Mode. In Quick Mode, players keep clockwise seating order.
-        const founders = (room.players || []).filter((p: any) => p.role?.toLowerCase() === 'founder');
-        const investors = (room.players || []).filter((p: any) => p.role?.toLowerCase() !== 'founder');
-        if (room.mode !== 'quick' && room.mode !== 'short') {
-          shuffle(founders);
+          // Section J.1 & K.3: Round 1 order is random for Founders in Standard Mode. In Quick Mode, players keep clockwise seating order.
+          const founders = (room.players || []).filter((p: any) => p.role?.toLowerCase() === 'founder');
+          const investors = (room.players || []).filter((p: any) => p.role?.toLowerCase() !== 'founder');
+          if (room.mode !== 'quick' && room.mode !== 'short') {
+            shuffle(founders);
+          }
+          room.players = [...founders, ...investors];
+          io.to(roomId).emit('game_state_update', room);
+          io.to(roomId).emit('notification', 'Game started by host!');
+          if (room.round === 1) {
+            setTimeout(() => {
+              io.to(roomId).emit('notification', 'ROUND 1: SKIPPING INVESTMENT PHASE. START BUILDING YOUR EMPIRE!');
+            }, 1000);
+          }
+          triggerAIIfNeeded(room, io, roomId);
         }
-        room.players = [...founders, ...investors];
-        io.to(roomId).emit('game_state_update', room);
-        io.to(roomId).emit('notification', 'Game started by host!');
-        if (room.round === 1) {
-          setTimeout(() => {
-            io.to(roomId).emit('notification', 'ROUND 1: SKIPPING INVESTMENT PHASE. START BUILDING YOUR EMPIRE!');
-          }, 1000);
-        }
-        triggerAIIfNeeded(room, io, roomId);
       }
     });
 

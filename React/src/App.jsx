@@ -398,7 +398,8 @@ function App() {
           detail: {
             amount: diff,
             text: `+$${diff}K`,
-            type: 'gain'
+            type: 'gain',
+            source: 'cash_sync'
           }
         }));
       } else if (diff < 0) {
@@ -406,7 +407,8 @@ function App() {
           detail: {
             amount: Math.abs(diff),
             text: `-$${Math.abs(diff)}K`,
-            type: 'spend'
+            type: 'spend',
+            source: 'cash_sync'
           }
         }));
       }
@@ -1595,8 +1597,9 @@ function App() {
               {/* Peeking Modern Reserve Notes from wallet top */}
               <div className="relative">
                 <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 flex items-center -space-x-1 z-0 pointer-events-none">
-                  <img src="/notes/note-10k.png" alt="10K" className="w-4 h-2 object-cover rounded-t-xs transform -rotate-12 shadow-sm" />
-                  <img src="/notes/note-50k.png" alt="50K" className="w-5 h-2.5 object-cover rounded-t-xs transform -rotate-3 shadow-sm z-10" />
+                  <img src="/notes/note-5k.png" alt="5K" className="w-3.5 h-2 object-cover rounded-t-xs transform -rotate-18 shadow-sm" />
+                  <img src="/notes/note-10k.png" alt="10K" className="w-4 h-2 object-cover rounded-t-xs transform -rotate-10 shadow-sm" />
+                  <img src="/notes/note-50k.png" alt="50K" className="w-5 h-2.5 object-cover rounded-t-xs transform -rotate-2 shadow-sm z-10" />
                   <img src="/notes/note-1000k.png" alt="1000K" className="w-5 h-2.5 object-cover rounded-t-xs transform rotate-6 shadow-sm z-20" />
                   <img src="/notes/note-100000k.png" alt="100000K" className="w-4 h-2 object-cover rounded-t-xs transform rotate-16 shadow-sm" />
                 </div>

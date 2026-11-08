@@ -248,8 +248,8 @@ export default function CreateGamePage() {
     setError(null);
     setStarting(true);
 
-    const aiFounders = isVsAi ? 3 : 0;
-    const aiInvestors = isVsAi ? 2 : 0;
+    const aiFounders = isVsAi ? 3 : founderSlots.filter((s, i) => i > 0 && s.dropdown === "AI").length;
+    const aiInvestors = isVsAi ? 2 : investorSlots.filter((s) => s.dropdown === "AI").length;
     const isAiGame = isVsAi;
 
     try {

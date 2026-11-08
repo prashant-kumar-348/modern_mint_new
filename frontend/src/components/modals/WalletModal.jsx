@@ -29,28 +29,28 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
     <div className="fixed inset-0 z-[600] flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-6 font-sans select-none animate-in fade-in zoom-in-95 duration-200">
       
       {/* MODAL CONTAINER */}
-      <div className="bg-[#0c1f19] text-white border-2 border-[#d4af37] w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.95)] flex flex-col relative hide-scrollbar">
+      <div className="bg-[#0c1f19] text-white border-2 border-[#d4af37] w-full max-w-5xl max-h-[90vh] rounded-3xl shadow-[0_25px_80px_rgba(0,0,0,0.95)] flex flex-col relative overflow-hidden">
         
-        {/* TOP GLOW HEADER */}
-        <div className="bg-gradient-to-r from-[#143d2b] via-[#1b5038] to-[#143d2b] border-b border-[#d4af37]/40 px-6 py-4 flex items-center justify-between relative overflow-hidden">
+        {/* TOP GLOW HEADER - PINNED & VISIBLE */}
+        <div className="shrink-0 bg-gradient-to-r from-[#143d2b] via-[#1b5038] to-[#143d2b] border-b border-[#d4af37]/40 px-6 py-5 flex items-center justify-between relative z-20">
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#d4af37]/20 via-transparent to-transparent pointer-events-none"></div>
 
-          <div className="flex items-center gap-3 relative z-10">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#d4af37] to-[#8a6818] p-0.5 shadow-md flex items-center justify-center text-black">
-              <Wallet size={22} className="stroke-[2.5]" />
+          <div className="flex items-center gap-3.5 relative z-10">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#d4af37] to-[#8a6818] p-0.5 shadow-md flex items-center justify-center text-black shrink-0">
+              <Wallet size={24} className="stroke-[2.5]" />
             </div>
             <div>
-              <span className="text-[10px] font-mono font-black uppercase tracking-[0.25em] text-[#FFE885] block">
-                The Modern Mint Bank & Reserve
+              <span className="text-[11px] sm:text-xs font-mono font-black uppercase tracking-[0.22em] text-[#FFE885] block leading-snug">
+                The Modern Mint Bank &amp; Reserve
               </span>
-              <h2 className="text-lg sm:text-xl font-black uppercase tracking-wide text-white flex items-center gap-2">
-                <span>Player Wallet & Reserve Vault</span>
+              <h2 className="text-lg sm:text-xl font-black uppercase tracking-wide text-white flex items-center gap-2 mt-0.5">
+                <span>Player Wallet &amp; Reserve Vault</span>
                 <Sparkles size={16} className="text-[#FFE885] animate-pulse" />
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 relative z-10">
+          <div className="flex items-center gap-2.5 relative z-10">
             <button
               type="button"
               onClick={() => handleTestFlight(cash > 0 ? Math.min(cash, 10000) : 2000)}
@@ -71,8 +71,8 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
           </div>
         </div>
 
-        {/* BODY CONTENT */}
-        <div className="p-5 sm:p-7 space-y-6">
+        {/* BODY CONTENT - SCROLLABLE */}
+        <div className="p-5 sm:p-7 space-y-6 overflow-y-auto flex-1 hide-scrollbar">
 
           {/* PLAYER WALLET SUMMARY STRIP */}
           <div className="bg-[#112a22] border border-[#d4af37]/30 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-inner">
@@ -122,7 +122,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
               <div className="flex items-center gap-2">
                 <Building2 size={16} className="text-[#d4af37]" />
                 <h3 className="text-sm font-black uppercase tracking-wider text-white">
-                  Official Reserve Notes (All 9 Denominations)
+                  Official Reserve Notes (All 10 Denominations)
                 </h3>
               </div>
 
@@ -137,7 +137,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
                       : 'text-white/70 hover:text-white'
                   }`}
                 >
-                  All (9)
+                  All (10)
                 </button>
                 <button
                   type="button"
@@ -159,7 +159,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
                       : 'text-white/70 hover:text-white'
                   }`}
                 >
-                  $10K–$500K (5)
+                  $5K–$500K (6)
                 </button>
               </div>
             </div>
@@ -179,18 +179,18 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
                     }`}
                   >
                     {/* Top note header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span 
-                          className="w-2.5 h-2.5 rounded-full"
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
                           style={{ backgroundColor: note.color }}
                         ></span>
-                        <span className="text-xs font-black uppercase tracking-wide text-white truncate max-w-[140px]">
+                        <span className="text-xs font-black uppercase tracking-wide text-white truncate" title={note.title}>
                           {note.title}
                         </span>
                       </div>
                       <span 
-                        className="font-mono font-black text-xs px-2.5 py-0.5 rounded-md bg-black/40 border border-white/10"
+                        className="font-mono font-black text-xs px-2.5 py-0.5 rounded-md bg-black/40 border border-white/10 shrink-0"
                         style={{ color: note.color }}
                       >
                         {note.label}
@@ -268,17 +268,10 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
             </div>
           )}
 
-          {/* BOTTOM NOTICE */}
-          <div className="bg-[#14352b]/60 border border-[#d4af37]/20 rounded-xl p-3 text-center">
-            <span className="text-[11px] text-white/70">
-              💵 <strong className="text-[#FFE885]">The Modern Mint Bank:</strong> All 9 official reserve note denominations are fully integrated. When taking a bank loan, closing investment deals, or funding company operations, currency notes fly automatically across the screen in real-time!
-            </span>
-          </div>
-
         </div>
 
-        {/* FOOTER */}
-        <div className="bg-[#081511] border-t border-white/10 px-6 py-3.5 flex items-center justify-between">
+        {/* FOOTER - PINNED */}
+        <div className="shrink-0 bg-[#081511] border-t border-white/10 px-6 py-3.5 flex items-center justify-between">
           <span className="text-[10px] text-white/40 font-mono">
             WALLET POSITION: UNDER 'LOCK THE DEAL'
           </span>
