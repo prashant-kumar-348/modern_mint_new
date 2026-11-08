@@ -90,7 +90,7 @@ function DifficultyToggle({
       <img
         src={img}
         alt={label}
-        className="h-4.5 max-h-[19px] w-auto object-contain pointer-events-none drop-shadow"
+        className="h-5 max-h-[20px] w-auto object-contain pointer-events-none drop-shadow"
       />
     </div>
   );

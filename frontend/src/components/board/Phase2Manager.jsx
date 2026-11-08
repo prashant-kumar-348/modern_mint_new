@@ -6,13 +6,24 @@ const Phase2Manager = ({ activeModal, setActiveModal, sendAction, localPlayer, c
     setActiveModal(null);
   };
 
-  const handlePaymentComplete = (companyName, amount) => {
+  const handlePaymentComplete = (companyName, amount, roll) => {
     // 1. Send Action to Server
     sendAction('phase2_action', {
       actionType: activeModal, // 'launch', 'stage_up', 'buy_pr'
       companyName: companyName,
-      amount: Number(amount)
+      amount: Number(amount),
+      roll: roll || null
     });
+
+    if (amount && Number(amount) > 0) {
+      window.dispatchEvent(new CustomEvent('fly_money', {
+        detail: {
+          amount: Number(amount),
+          text: `-$${amount}K on ${companyName || 'Company'}`,
+          type: 'spend'
+        }
+      }));
+    }
 
     // 2. Close the mat modal
     setActiveModal(null);

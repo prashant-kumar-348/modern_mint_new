@@ -6,6 +6,7 @@ import { Environment, PerspectiveCamera } from '@react-three/drei';
 import D10 from '../3d/D10';
 import MentorInventoryModal from './MentorInventoryModal';
 import soundEffects from '../../utils/soundEffects';
+import { getPlayerMatTheme } from '../../utils/playerMatThemes';
 
 const multiplierTable = {
   1:  [-2, -2, -1,  0],
@@ -737,14 +738,21 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                     ) : (
                       player.ownedCompanies.map((c, idx) => {
                         const stages = ["Launch", "Retain", "Grow", "Scale"];
-                        
+                        const companyTheme = getPlayerMatTheme(player);
                         const companyDataRows = getCompanyData(c.name);
 
                         return (
-                          <div key={idx} className="bg-[#7D3C4A] rounded-xl p-3 border border-[#3A141A] flex flex-col relative shadow-lg mt-5">
+                          <div 
+                            key={idx} 
+                            className="rounded-xl p-3 border flex flex-col relative shadow-lg mt-5"
+                            style={{ backgroundColor: companyTheme.cardBg, borderColor: companyTheme.cardBorder }}
+                          >
                             
                             {/* Card Header (Cream Pill) */}
-                            <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-2 px-3 flex items-center gap-3 shadow-md border border-[#3A141A]/20 -mt-7 mb-3 relative z-10">
+                            <div 
+                              className="w-[95%] mx-auto rounded-full py-2 px-3 flex items-center gap-3 shadow-md border -mt-7 mb-3 relative z-10"
+                              style={{ backgroundColor: companyTheme.pillBg, borderColor: companyTheme.cardBorder }}
+                            >
                               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 overflow-hidden">
                                 <img 
                                   src={getCompanyMatIcon(c.name)} 
@@ -752,7 +760,10 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                                   className="w-full h-full object-contain drop-shadow-sm select-none" 
                                 />
                               </div>
-                              <h3 className="font-black text-xs md:text-sm text-[#4A1720] uppercase tracking-tight leading-none flex-1 text-center pr-4">
+                              <h3 
+                                className="font-black text-xs md:text-sm uppercase tracking-tight leading-none flex-1 text-center pr-4"
+                                style={{ color: companyTheme.pillText }}
+                              >
                                 {c.customName || c.name}
                               </h3>
                             </div>
@@ -774,19 +785,21 @@ export default function Phase3DiceModal({ onClose, player, sendAction, gameState
                                 {stages.map((stage, i) => {
                                   const currentStageIdx = (c.stage === 'L' || c.stage === 0) ? 0 : (c.stage === 'R' || c.stage === 1) ? 1 : (c.stage === 'G' || c.stage === 2) ? 2 : 3;
                                   const isActiveStage = i === currentStageIdx;
-                                  const teamLevel = c.team || 1;
-                                  const isTeamUnlocked = i < teamLevel;
+                                  const isPastStage = i < currentStageIdx;
+                                  const teamLevel = Math.min(4, Math.max(1, Number(c.teamLevel || c.team) || 1));
                                   const rowData = companyDataRows[i] || [0,0,0,0];
 
                                   return (
                                     <div key={i} className={`grid grid-cols-[28px_1.1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-[10px] text-white text-center ${isActiveStage ? 'bg-[#FFC240]/20 rounded border border-[#FFC240]/50 shadow-sm py-1' : 'text-white/90 py-0.5'}`}>
                                       <div className="flex justify-center">
                                         <div className={`w-5 h-5 rounded border flex items-center justify-center text-[9px] font-black transition-all ${
-                                          isTeamUnlocked 
-                                            ? 'bg-[#55ffb0] border-[#55ffb0] text-black shadow-[0_0_8px_rgba(85,255,176,0.5)]' 
-                                            : 'bg-gray-500/50 border-white/10 text-transparent'
+                                          isActiveStage 
+                                            ? 'bg-[#55ffb0] border-[#55ffb0] text-black shadow-[0_0_8px_rgba(85,255,176,0.6)] scale-105' 
+                                            : isPastStage
+                                            ? 'bg-emerald-900/40 border-emerald-500/30 text-emerald-400'
+                                            : 'bg-white/5 border-white/10 text-transparent'
                                         }`}>
-                                          {i + 1}
+                                          {isActiveStage ? teamLevel : (isPastStage ? '✓' : '')}
                                         </div>
                                       </div>
                                       <div className={`text-left font-bold text-[10px] pl-0.5 ${isActiveStage ? 'text-[#FFC240]' : ''}`}>{stage}</div>

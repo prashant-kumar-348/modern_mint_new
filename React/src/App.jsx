@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ref, set } from "firebase/database";
 import { db } from './firebase';
 import {
@@ -19,16 +19,20 @@ import {
   Building2,
   Handshake,
   Sparkles,
-  Lightbulb
+  Lightbulb,
+  Wallet
 } from 'lucide-react';
 import { getRulebookHint } from './utils/rulebookHints';
 
 import BankLoanModal from './components/modals/BankLoanModal';
 import DealSheetModal from './components/modals/DealSheetModal';
+import WalletModal from './components/modals/WalletModal';
+import FlyingMoneyOverlay from './components/board/FlyingMoneyOverlay';
 import MentorCardModal from './components/modals/MentorCardModal';
 import MentorInventoryModal from './components/modals/MentorInventoryModal';
 import PersonaSelectModal from './components/modals/PersonaSelectModal';
 import PlayerMatModal from './components/modals/PlayerMatModal';
+import { getPlayerMatTheme, getPlayerPillStyle, getPlayerDropdownStyle, getPlayerStageBadgeStyle } from './utils/playerMatThemes';
 import SelfPortfolioModal from './components/modals/SelfPortfolioModal';
 import TransferCashModal from './components/modals/TransferCashModal';
 import MiddleBoard from './components/board/MiddleBoard';
@@ -80,42 +84,6 @@ const getPlayerGradient = (color) => {
   if (color === '#d4af37') return 'from-[#2d2006] to-[#5e481b]';
   if (color === '#00e1ff') return 'from-[#072430] to-[#0e4e68]';
   return 'from-gray-800 to-gray-700';
-};
-
-const getPlayerPillStyle = (color, name = '') => {
-  const c = String(color || '').toLowerCase();
-  const n = String(name || '').toLowerCase();
-  if (n.includes('ruthless') || c.includes('ef4444') || c.includes('843040') || c.includes('red') || c.includes('rn')) {
-    return {
-      backgroundImage: "url('/Rectangle-24.png')",
-      backgroundSize: '100% 100%',
-      backgroundRepeat: 'no-repeat'
-    };
-  }
-  if (n.includes('robotic') || c.includes('55ffb0') || c.includes('teal') || c.includes('green') || c.includes('gt')) {
-    return {
-      backgroundImage: "url('/Rectangle-508.png')",
-      backgroundSize: '100% 100%',
-      backgroundRepeat: 'no-repeat'
-    };
-  }
-  if (c.includes('d4af37') || c.includes('ffc240') || c.includes('gold') || c.includes('gd') || c.includes('yellow')) {
-    return {
-      background: 'linear-gradient(to right, #4a3412, #291c07)',
-      border: '1px solid rgba(212, 175, 55, 0.4)'
-    };
-  }
-  if (c.includes('00e1ff') || c.includes('blue') || c.includes('bl')) {
-    return {
-      background: 'linear-gradient(to right, #0d3446, #071d28)',
-      border: '1px solid rgba(0, 225, 255, 0.4)'
-    };
-  }
-  return {
-    backgroundImage: "url('/Rectangle-508.png')",
-    backgroundSize: '100% 100%',
-    backgroundRepeat: 'no-repeat'
-  };
 };
 
 const getPlayerAvatarSrc = (player, idx = 0) => {
@@ -415,6 +383,37 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [gamePhase]);
 
+  // Safely derive player cash at the top level for hook consistency
+  const activeTopPlayers = gameState?.players || [];
+  const rawTopPlayer = (socketId ? activeTopPlayers.find(p => p.id === socketId) : null) || activeTopPlayers.find(p => p.name === username) || activeTopPlayers[0];
+  const playerCash = rawTopPlayer?.cash ?? 0;
+
+  // Track cash changes to automatically trigger flying money notes (Must be called before any early returns)
+  const prevCashRef = useRef(playerCash);
+  useEffect(() => {
+    if (gameState?.isStarted && prevCashRef.current !== undefined && prevCashRef.current !== playerCash) {
+      const diff = playerCash - prevCashRef.current;
+      if (diff > 0) {
+        window.dispatchEvent(new CustomEvent('fly_money', {
+          detail: {
+            amount: diff,
+            text: `+$${diff}K`,
+            type: 'gain'
+          }
+        }));
+      } else if (diff < 0) {
+        window.dispatchEvent(new CustomEvent('fly_money', {
+          detail: {
+            amount: Math.abs(diff),
+            text: `-$${Math.abs(diff)}K`,
+            type: 'spend'
+          }
+        }));
+      }
+    }
+    prevCashRef.current = playerCash;
+  }, [playerCash, gameState?.isStarted]);
+
   // If not authenticated, show Auth screen first
   if (!token) {
     return (
@@ -475,8 +474,13 @@ function App() {
   };
 
   const { players, deals, phase } = gameState;
-  const localPlayer = (socketId ? players.find(p => p.id === socketId) : null) || players.find(p => p.name === username) || players[0];
+  const rawLocalPlayer = (socketId ? players.find(p => p.id === socketId) : null) || players.find(p => p.name === username) || players[0];
+  const localPlayer = rawLocalPlayer ? {
+    ...rawLocalPlayer,
+    avatarId: rawLocalPlayer.avatarId || (rawLocalPlayer.role?.toLowerCase() === 'investor' ? 5 : 1)
+  } : null;
   const localPlayerName = localPlayer?.name || username;
+  const localPlayerMatTheme = getPlayerMatTheme(localPlayer);
   
   const capital = localPlayer?.capital ?? 0;
   const globalLoan = localPlayer?.loan ?? 0;
@@ -485,10 +489,15 @@ function App() {
   const isLocked = localPlayer?.isLocked || false;
 
   // Player-specific metrics
-  const localPlayerDeals = (deals || []).filter(d => 
-    d.proposer?.toLowerCase() === localPlayerName.toLowerCase() || 
-    d.partner?.toLowerCase() === localPlayerName.toLowerCase()
-  );
+  const localPlayerDeals = (deals || []).filter(d => {
+    const pName = (localPlayerName || '').toLowerCase();
+    const isProposer = (d.proposer || d.proposerName || '').toLowerCase() === pName;
+    const isPartner = (d.partner || d.partnerName || '').toLowerCase() === pName;
+    const isFounder = (d.founderName || '').toLowerCase() === pName;
+    const isInvestor = (d.investorName || '').toLowerCase() === pName;
+    const isIdMatch = Boolean(socketId && (d.proposerId === socketId || d.partnerId === socketId || d.founderId === socketId || d.investorId === socketId));
+    return isProposer || isPartner || isFounder || isInvestor || isIdMatch;
+  });
   const localDealCount = localPlayerDeals.length;
   const localActionCount = localPlayer?.actionCount ?? 0;
 
@@ -507,6 +516,13 @@ function App() {
   const handleFinalizeLoan = (totalNewLoans, activeCompanies, loanBreakdown) => {
     if (totalNewLoans > 0) {
       sendAction('take_loan', { amount: totalNewLoans, loanBreakdown: loanBreakdown, companiesString: activeCompanies || 'YOUR COMPANIES' });
+      window.dispatchEvent(new CustomEvent('fly_money', {
+        detail: {
+          amount: totalNewLoans,
+          text: `+$${totalNewLoans}K Loan`,
+          type: 'gain'
+        }
+      }));
     }
     setActiveModal(null);
   };
@@ -516,6 +532,7 @@ function App() {
     sendAction('propose_royalty_deal', { 
       proposerName: username,
       partnerName: target,
+      companyName: dealForm.companyName || '',
       cash: Number(dealForm.cash) || 0,
       equity: Number(dealForm.equity) || 0,
       loan: Number(dealForm.loan) || 0,
@@ -527,18 +544,20 @@ function App() {
     showGlobalNotification(`Deal Offer Sent to: ${target}`);
   };
 
-  const isMyPhase1Turn = gamePhase === 1 && gameState?.players?.[gameState?.phase1TurnIndex || 0]?.id === socketId;
-  const activePhase1Player = gamePhase === 1 ? gameState?.players?.[gameState?.phase1TurnIndex || 0] : null;
+  const foundersList = (gameState?.players || []).filter(p => (p.role || '').toLowerCase() === 'founder');
+  const turnFounders = foundersList.length > 0 ? foundersList : (gameState?.players || []);
 
-  const isMyPhase2Turn = gamePhase === 2 && gameState?.players?.[gameState?.phase2TurnIndex || 0]?.id === socketId;
-  const activePhase2Player = gamePhase === 2 ? gameState?.players?.[gameState?.phase2TurnIndex || 0] : null;
+  const isMyPhase1Turn = gamePhase === 1 && !isLocked;
+  const activePhase1Player = null;
 
-  const phase3Founders = (gameState?.players || []).filter(p => p.role === 'Founder');
-  const isMyPhase3Turn = gamePhase === 3 && phase3Founders[gameState?.phase3TurnIndex || 0]?.id === socketId;
-  const activePhase3Player = gamePhase === 3 ? phase3Founders[gameState?.phase3TurnIndex || 0] : null;
+  const isMyPhase2Turn = gamePhase === 2 && turnFounders[gameState?.phase2TurnIndex || 0]?.id === socketId;
+  const activePhase2Player = gamePhase === 2 ? turnFounders[gameState?.phase2TurnIndex || 0] : null;
+
+  const isMyPhase3Turn = gamePhase === 3 && turnFounders[gameState?.phase3TurnIndex || 0]?.id === socketId;
+  const activePhase3Player = gamePhase === 3 ? turnFounders[gameState?.phase3TurnIndex || 0] : null;
 
   const isCurrentPlayerTurnActive = 
-    gamePhase === 1 ? isMyPhase1Turn : 
+    gamePhase === 1 ? !isLocked : 
     gamePhase === 2 ? isMyPhase2Turn : 
     gamePhase === 3 ? isMyPhase3Turn : 
     true;
@@ -556,7 +575,7 @@ function App() {
   });
 
   const activePlayerObj = 
-    gamePhase === 1 ? activePhase1Player :
+    gamePhase === 1 ? null :
     gamePhase === 2 ? activePhase2Player :
     gamePhase === 3 ? activePhase3Player :
     null;
@@ -566,7 +585,7 @@ function App() {
   const handleLockDeal = () => {
     if (!isLocked) {
       if (gamePhase === 1) {
-        sendAction('lock_phase1', {});
+        sendAction('lock_phase1', { username, role: localPlayer?.role || role, playerId: localPlayer?.id });
       } else if (gamePhase === 2) {
         sendAction('end_phase2_turn', {});
       } else {
@@ -626,6 +645,9 @@ function App() {
             sendAction={sendAction}
           />
         )}
+
+        {/* Global Flying Money Notes Overlay */}
+        <FlyingMoneyOverlay />
 
         <div className="relative w-screen h-screen overflow-hidden bg-[#030806] flex items-center justify-center font-sans">
         
@@ -707,7 +729,7 @@ function App() {
                 </div>
               </div>
             </div>
-          ) : null}
+          )}
         </div>
 
         {/* MASSIVE GOLDEN NOTIFICATION BANNER */}
@@ -913,12 +935,8 @@ function App() {
                     >
                       {expandedPlayerId === player.id && !player.isLocal ? (
                         <div 
-                          style={{
-                            backgroundImage: "url('/Rectangle-608.png')",
-                            backgroundSize: '100% 100%',
-                            backgroundRepeat: 'no-repeat'
-                          }}
-                          className="w-[220px] min-h-[115px] rounded-[6px] p-3 shadow-[0_6px_20px_rgba(0,0,0,0.6)] flex flex-col items-center font-sans animate-in fade-in zoom-in-[0.98] duration-200 border border-white/10"
+                          style={getPlayerDropdownStyle(player)}
+                          className="w-[220px] min-h-[115px] rounded-[6px] p-3 shadow-[0_6px_20px_rgba(0,0,0,0.6)] flex flex-col items-center font-sans animate-in fade-in zoom-in-[0.98] duration-200"
                         >
                           <div className="text-white text-[14px] md:text-[15px] mb-2.5 font-bold tracking-wide drop-shadow-md text-center flex items-center justify-between w-full px-1">
                             <span className="truncate">
@@ -936,19 +954,27 @@ function App() {
                                     <img src={getCompanyLogoImage(c.name)} alt={c.name} className="w-full h-full object-contain filter drop-shadow-md select-none" />
                                   </div>
                                   {/* Stage Level Badge using Rectangle 549 */}
-                                  <div className="w-[32px] h-[32px] relative flex items-center justify-center shrink-0 select-none">
-                                    <img src="/stage-badge-bg.png" alt="Stage" className="absolute inset-0 w-full h-full object-contain" />
-                                    <span className="relative z-10 text-white text-[13px] font-bold leading-none select-none drop-shadow-sm">
-                                      {c.stage}
-                                    </span>
+                                  <div className="w-[32px] h-[32px] relative shrink-0 select-none">
+                                    <img src="/stage-badge-bg.png" alt="Stage" className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
+                                    <div className="absolute inset-x-0 top-0 h-[24px] flex items-center justify-center">
+                                      <span className="relative z-10 text-white text-[13px] font-bold leading-none select-none drop-shadow-sm -translate-y-[1px]">
+                                        {c.stage}
+                                      </span>
+                                    </div>
                                   </div>
                                   {/* Team Token Coin using team-token-2.png */}
                                   <div className="w-[32px] h-[32px] flex items-center justify-center shrink-0 select-none">
-                                    <img 
-                                      src="/team-token-2.png" 
-                                      alt="Team Token" 
-                                      className="w-full h-full object-contain drop-shadow-md select-none" 
-                                    />
+                                    {getTeamTokenCoinImage(c.teamLevel || c.team) ? (
+                                      <img 
+                                        src={getTeamTokenCoinImage(c.teamLevel || c.team)} 
+                                        alt="Team Token" 
+                                        className="w-full h-full object-contain drop-shadow-md select-none" 
+                                      />
+                                    ) : (
+                                      <div className="w-[26px] h-[26px] rounded-full border border-white/20 bg-black/40 flex items-center justify-center text-[10px] text-white/70 font-bold" title="Team Level 1 (Solo Founder)">
+                                        1
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               ))
@@ -959,7 +985,7 @@ function App() {
                         </div>
                       ) : (
                         <div 
-                          style={getPlayerPillStyle(player.color, player.name)}
+                          style={getPlayerPillStyle(player)}
                           className="w-[230px] h-[38px] rounded-[6px] flex items-center justify-between px-3.5 shadow-lg border border-white/10 select-none"
                         >
                           <span className="text-[14px] md:text-[15px] font-bold text-white tracking-wide truncate drop-shadow-sm">
@@ -1235,7 +1261,11 @@ function App() {
                 setActiveModal('playerMat');
                 setIsHoverOpenedMat(false);
               }}
-              className="pointer-events-auto cursor-pointer transition-all duration-300 scale-[0.65] translate-y-2 hover:scale-[0.95] hover:-translate-y-6 relative z-10 hover:z-50 shadow-[0_10px_30px_rgba(0,0,0,0.8)] rounded-lg bg-[#4A1720] border-2 border-[#2A0D12] p-2 flex gap-2 origin-bottom mb-6"
+              className="pointer-events-auto cursor-pointer transition-all duration-300 scale-[0.65] translate-y-2 hover:scale-[0.95] hover:-translate-y-6 relative z-10 hover:z-50 shadow-[0_10px_30px_rgba(0,0,0,0.8)] rounded-lg border-2 p-2 flex gap-2 origin-bottom mb-6"
+              style={{
+                backgroundColor: localPlayerMatTheme.bgOuter,
+                borderColor: localPlayerMatTheme.deskBorder
+              }}
             >
               <div className="grid grid-cols-3 gap-1.5">
                 {[
@@ -1243,9 +1273,24 @@ function App() {
                   "SNACKS", "QUICK COMM", "SMART STOR",
                   "RESTRO CHAIN", "TRACEABILITY", "ROBO-PACK"
                 ].map((name, i) => (
-                  <div key={i} className="w-[75px] h-[95px] bg-[#7D3C4A] border border-[#3A141A] rounded flex flex-col items-center p-1 overflow-hidden">
-                    <div className="w-full bg-[#FFF2D8] rounded-md flex items-center justify-center mb-1 p-1 min-h-[24px]">
-                      <span className="text-[9px] font-black text-[#4A1720] leading-tight text-center break-words w-full">{name}</span>
+                  <div 
+                    key={i} 
+                    className="w-[75px] h-[95px] border rounded flex flex-col items-center p-1 overflow-hidden"
+                    style={{
+                      backgroundColor: localPlayerMatTheme.cardBg,
+                      borderColor: localPlayerMatTheme.cardBorder
+                    }}
+                  >
+                    <div 
+                      className="w-full rounded-md flex items-center justify-center mb-1 p-1 min-h-[24px]"
+                      style={{ backgroundColor: localPlayerMatTheme.pillBg }}
+                    >
+                      <span 
+                        className="text-[9px] font-black leading-tight text-center break-words w-full"
+                        style={{ color: localPlayerMatTheme.pillText }}
+                      >
+                        {name}
+                      </span>
                     </div>
                     <div className="w-full flex-1 border-t border-white/20 mt-1 flex flex-col justify-evenly">
                       <div className="w-full h-[2px] bg-white/20 rounded"></div>
@@ -1256,9 +1301,36 @@ function App() {
                 ))}
               </div>
               <div className="flex flex-col gap-1.5 w-[75px]">
-                <div className="h-[40px] bg-[#FFF2D8] rounded flex items-center justify-center p-1 text-center"><span className="text-[10px] font-black text-[#4A1720] leading-tight">2ND<br/>CHANCE</span></div>
-                <div className="h-[70px] bg-[#FFF2D8] rounded flex items-center justify-center p-1 text-center"><span className="text-[10px] font-black text-[#4A1720] leading-tight">MULTIPLIER</span></div>
-                <div className="flex-1 bg-[#FFF2D8] rounded flex items-center justify-center p-1 text-center"><span className="text-[10px] font-black text-[#4A1720] leading-tight">NOTES</span></div>
+                {!localPlayerMatTheme.isInvestor && (
+                <div 
+                  className="h-[40px] rounded flex flex-col items-center justify-center p-1 text-center"
+                  style={{ backgroundColor: localPlayerMatTheme.pillBg }}
+                >
+                  <span className="text-[9px] font-black leading-none mb-1" style={{ color: localPlayerMatTheme.pillText }}>
+                    2ND CHANCE
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className={`w-2 h-2 rounded-full border border-black/20 ${(localPlayer?.lifelines ?? 2) < 2 ? 'bg-red-500 opacity-60' : 'bg-emerald-500 shadow-[0_0_4px_#10b981]'}`} />
+                    <span className={`w-2 h-2 rounded-full border border-black/20 ${(localPlayer?.lifelines ?? 2) < 1 ? 'bg-red-500 opacity-60' : 'bg-emerald-500 shadow-[0_0_4px_#10b981]'}`} />
+                  </div>
+                </div>
+                )}
+                <div 
+                  className="h-[70px] rounded flex items-center justify-center p-1 text-center"
+                  style={{ backgroundColor: localPlayerMatTheme.pillBg }}
+                >
+                  <span className="text-[10px] font-black leading-tight" style={{ color: localPlayerMatTheme.pillText }}>
+                    MULTIPLIER
+                  </span>
+                </div>
+                <div 
+                  className="flex-1 rounded flex items-center justify-center p-1 text-center"
+                  style={{ backgroundColor: localPlayerMatTheme.pillBg }}
+                >
+                  <span className="text-[10px] font-black leading-tight" style={{ color: localPlayerMatTheme.pillText }}>
+                    NOTES
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -1348,9 +1420,9 @@ function App() {
               <div className="flex flex-col items-center justify-center min-w-[60px]">
                 <span className="text-[8px] md:text-[10px] text-white/70 uppercase tracking-widest leading-none mb-1">Turn</span>
                 <div className="flex items-center gap-2 h-9 select-none">
-                  {/* Left side: column of small inactive tokens */}
+                  {/* Left side: column of small inactive tokens (founders only) */}
                   <div className="flex flex-col gap-0.5 justify-center">
-                    {(gameState?.players || []).map((p) => {
+                    {turnFounders.map((p) => {
                       const isActive = activePlayerObj && p.id === activePlayerObj.id;
                       if (isActive) return null;
                       const color = p.color || '#55ffb0';
@@ -1391,7 +1463,18 @@ function App() {
               {gamePhase === 1 ? (
                 <>
                   <button
-                    onClick={() => !isTurnLocked && setActiveModal('loan')}
+                    onClick={() => {
+                      if (isTurnLocked) return;
+                      if (localPlayer?.role?.toLowerCase() === 'investor') {
+                        setNotification({
+                          show: true,
+                          message: 'Investors cannot take Bank Loans. Bank loans are secured against founder companies.'
+                        });
+                        setTimeout(() => setNotification({ show: false, message: '' }), 2500);
+                        return;
+                      }
+                      setActiveModal('loan');
+                    }}
                     disabled={isTurnLocked}
                     className={`px-6 py-2.5 rounded-xl bg-gradient-to-br from-[#2e8b57] to-[#1c5435] border border-[#55ffb0]/20 text-white font-semibold tracking-wide select-none cursor-pointer transition-all ${isTurnLocked ? 'opacity-50 cursor-not-allowed grayscale' : 'hover:from-[#3cb371] hover:to-[#228b22] hover:scale-105 active:scale-95 shadow-[0_4px_20px_rgba(46,139,87,0.4)]'}`}
                   >
@@ -1455,7 +1538,7 @@ function App() {
                  ) : (
                    <span className="drop-shadow-[0_2px_3px_rgba(0,0,0,0.8)] leading-tight">
                      {gamePhase === 1 ? (
-                       <>END<br/>PHASE 1</>
+                       <>LOCK THE<br/>DEAL</>
                      ) : gamePhase === 2 ? (
                        <>END<br/>ACTIONS</>
                      ) : (
@@ -1487,7 +1570,7 @@ function App() {
               
               <div className="flex items-center gap-3">
                 <span className="text-white uppercase font-bold tracking-widest text-[10px] md:text-xs text-right leading-tight">Cash in<br/>Hand</span>
-                <div className="bg-[#2A7553] text-[#55ffb0] font-mono font-bold px-4 py-2 rounded-lg shadow-md text-xs md:text-sm">${cash}K</div>
+                <div id="player-cash-in-hand" className="bg-[#2A7553] text-[#55ffb0] font-mono font-bold px-4 py-2 rounded-lg shadow-md text-xs md:text-sm transition-transform duration-200">${cash}K</div>
               </div>
               
               <div className="flex items-center gap-3">
@@ -1497,26 +1580,46 @@ function App() {
 
             </div>
 
-            {/* Blue Cash Deck Visual */}
-            <div className="absolute right-12 md:right-20 bottom-1 flex flex-col items-center pointer-events-auto cursor-pointer hover:-translate-y-1 transition-transform z-50">
-              <div className="w-16 h-12 bg-[#8ba4c9] rounded-sm border border-[#506a8f] shadow-[0_5px_15px_rgba(0,0,0,0.5)] transform -rotate-2 relative flex items-start justify-between p-1 overflow-hidden">
-                 <span className="text-[5px] font-black text-[#506a8f]">50K</span>
-                 <div className="w-full h-[1px] bg-[#506a8f]/30 absolute top-3 left-0"></div>
-                 <div className="w-full h-[1px] bg-[#506a8f]/30 absolute bottom-3 left-0"></div>
-                 <div className="absolute w-16 h-12 bg-[#a3bcdc] rounded-sm border border-[#506a8f] shadow-[0_2px_5px_rgba(0,0,0,0.4)] transform rotate-2 -top-1 left-1 flex flex-col justify-between p-1">
-                    <div className="flex justify-between w-full">
-                       <span className="text-[5px] font-black text-[#506a8f] leading-none">50K</span>
-                       <div className="w-1 h-3 bg-[#e8e4c9] border border-[#506a8f]"></div>
-                    </div>
-                    <div className="flex justify-center w-full">
-                       <div className="w-3 h-3 border border-[#506a8f]/50 rounded-full flex items-center justify-center">
-                          <span className="text-[4px] text-[#506a8f]">✦</span>
-                       </div>
-                    </div>
-                    <div className="flex justify-between w-full">
-                       <span className="text-[5px] font-black text-[#506a8f] leading-none transform rotate-180">50K</span>
-                    </div>
-                 </div>
+            {/* Blue Cash Deck Visual / Interactive Wallet */}
+            <div 
+              id="game-wallet-deck"
+              onClick={() => setActiveModal('wallet')}
+              className="absolute right-12 md:right-20 bottom-1 flex flex-col items-center pointer-events-auto cursor-pointer hover:-translate-y-1.5 transition-all group z-50 select-none"
+              title="Modern Mint Wallet & Reserve Notes (Click to Open)"
+            >
+              {/* Floating Tooltip Label */}
+              <span className="text-[9px] font-black uppercase tracking-wider text-[#FFE885] bg-black/85 px-2 py-0.5 rounded-full border border-[#d4af37]/60 mb-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none">
+                Wallet
+              </span>
+
+              {/* Peeking Modern Reserve Notes from wallet top */}
+              <div className="relative">
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 flex items-center -space-x-1 z-0 pointer-events-none">
+                  <img src="/notes/note-10k.png" alt="10K" className="w-4 h-2 object-cover rounded-t-xs transform -rotate-12 shadow-sm" />
+                  <img src="/notes/note-50k.png" alt="50K" className="w-5 h-2.5 object-cover rounded-t-xs transform -rotate-3 shadow-sm z-10" />
+                  <img src="/notes/note-1000k.png" alt="1000K" className="w-5 h-2.5 object-cover rounded-t-xs transform rotate-6 shadow-sm z-20" />
+                  <img src="/notes/note-100000k.png" alt="100000K" className="w-4 h-2 object-cover rounded-t-xs transform rotate-16 shadow-sm" />
+                </div>
+
+                <div className="w-16 h-12 bg-[#8ba4c9] rounded-sm border border-[#506a8f] shadow-[0_5px_15px_rgba(0,0,0,0.5)] transform -rotate-2 relative flex items-start justify-between p-1 overflow-hidden group-hover:border-[#d4af37] group-hover:shadow-[0_0_20px_rgba(212,175,55,0.6)] transition-all">
+                   <span className="text-[5px] font-black text-[#506a8f]">50K</span>
+                   <div className="w-full h-[1px] bg-[#506a8f]/30 absolute top-3 left-0"></div>
+                   <div className="w-full h-[1px] bg-[#506a8f]/30 absolute bottom-3 left-0"></div>
+                   <div className="absolute w-16 h-12 bg-[#a3bcdc] rounded-sm border border-[#506a8f] shadow-[0_2px_5px_rgba(0,0,0,0.4)] transform rotate-2 -top-1 left-1 flex flex-col justify-between p-1">
+                      <div className="flex justify-between w-full">
+                         <span className="text-[5px] font-black text-[#506a8f] leading-none">50K</span>
+                         <div className="w-1 h-3 bg-[#e8e4c9] border border-[#506a8f]"></div>
+                      </div>
+                      <div className="flex justify-center w-full">
+                         <div className="w-3 h-3 border border-[#506a8f]/50 rounded-full flex items-center justify-center">
+                            <span className="text-[4px] text-[#506a8f]">✦</span>
+                         </div>
+                      </div>
+                      <div className="flex justify-between w-full">
+                         <span className="text-[5px] font-black text-[#506a8f] leading-none transform rotate-180">50K</span>
+                      </div>
+                   </div>
+                </div>
               </div>
             </div>
 
@@ -1559,56 +1662,25 @@ function App() {
               : 'p-4 bg-black/75 backdrop-blur-sm'
           }`}>
             
-            {/* DEAL SHEETS MODAL */}
+            {/* DEAL SHEETS MODAL (READ-ONLY COMPANY SHEET BROWSER) */}
             {activeModal === 'dealSheets' && (
-              <div className="relative w-full max-w-4xl h-[70vh] flex items-center justify-center animate-in fade-in zoom-in-95 duration-200">
-                {/* Close Button */}
-                <button 
-                  onClick={() => setActiveModal(null)}
-                  className="absolute -top-12 right-0 p-2 rounded-full bg-black/50 text-white hover:bg-white hover:text-black transition-colors cursor-pointer border border-white/20"
-                >
-                  <X size={24} />
-                </button>
-                
-                {/* Stacked Cards */}
-                <div className="relative w-[450px] h-[550px]">
-                  {/* Back Card */}
-                  <div className="absolute inset-0 bg-gray-200 rounded-xl shadow-2xl transform rotate-3 translate-x-4 border border-gray-300"></div>
-                  {/* Middle Card */}
-                  <div className="absolute inset-0 bg-gray-100 rounded-xl shadow-2xl transform -rotate-2 -translate-x-2 border border-gray-300"></div>
-                  {/* Front Card */}
-                  <div className="absolute inset-0 bg-white rounded-xl shadow-2xl p-6 border-t-8 border-[#d4af37] flex flex-col items-center z-10 overflow-y-auto">
-                    <div className="text-[10px] uppercase tracking-[0.3em] text-[#d4af37] font-extrabold font-mono mb-2">Modern Mint Strategy Co.</div>
-                    <h3 className="text-3xl font-black tracking-tight text-gray-900 uppercase">Deal Sheet</h3>
-                    <div className="w-16 h-1 bg-[#d4af37] mx-auto mt-4 mb-6"></div>
-                    
-                    <div className="w-full flex-1 flex flex-col gap-4 text-left">
-                      {localPlayerDeals.length > 0 ? localPlayerDeals.map((deal, idx) => (
-                        <div key={idx} className="bg-gray-50 border border-gray-200 p-4 rounded-lg">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs font-bold text-gray-500 uppercase">{deal.id}</span>
-                            <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold uppercase">{deal.status}</span>
-                          </div>
-                          <p className="text-sm text-gray-800 font-medium">
-                            Offered ${deal.cash}M for {deal.equity}% equity.
-                          </p>
-                          <p className="text-[10px] text-gray-500 italic mt-1">"{deal.terms}"</p>
-                          <div className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-wider">Partner: {deal.partner}</div>
-                        </div>
-                      )) : (
-                        <div className="text-gray-400 font-mono text-sm uppercase tracking-widest text-center mt-12">
-                          No Deals Executed Yet
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="mt-6 w-full flex justify-between border-t border-gray-200 pt-4 shrink-0">
-                       <div className="text-xs font-bold text-gray-400">Total Deals: {localDealCount}</div>
-                       <div className="text-xs font-bold text-[#d4af37] cursor-pointer hover:text-[#b08d29]">View All History</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <DealSheetModal
+                onClose={() => setActiveModal(null)}
+                readOnly={true}
+                deals={localPlayerDeals}
+                username={username}
+                ownedCompanies={localPlayer?.ownedCompanies || []}
+                localPlayer={localPlayer}
+              />
+            )}
+
+            {/* WALLET & CURRENCY NOTES MODAL */}
+            {activeModal === 'wallet' && (
+              <WalletModal
+                onClose={() => setActiveModal(null)}
+                cash={cash}
+                player={localPlayer}
+              />
             )}
 
 
@@ -1655,6 +1727,9 @@ function App() {
                 targetName={dealTarget}
                 opponents={gameState?.players?.filter(p => p.name !== username) || []}
                 username={username}
+                ownedCompanies={localPlayer?.ownedCompanies || []}
+                targetPlayer={gameState?.players?.find(p => p.name === dealTarget)}
+                localPlayer={localPlayer}
               />
             )}
 
@@ -1665,6 +1740,9 @@ function App() {
                   setIsHoverOpenedMat(false);
                 }} 
                 ownedCompanies={localPlayer?.ownedCompanies || []}
+                player={localPlayer}
+                allPlayers={gameState?.players || []}
+                deals={gameState?.deals || []}
                 isHoverOpened={isHoverOpenedMat}
                 onPin={() => setIsHoverOpenedMat(false)}
               />

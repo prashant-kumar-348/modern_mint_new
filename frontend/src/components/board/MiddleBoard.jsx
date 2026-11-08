@@ -318,7 +318,6 @@ export default function MiddleBoard({
             {(() => {
               const founderPlayers = players.filter(p => (p.role || '').toLowerCase() === 'founder');
               const turnOrderPlayers = founderPlayers.length > 0 ? founderPlayers : players;
-              const investorPlayers = players.filter(p => (p.role || '').toLowerCase() === 'investor');
 
               // Sort by actionCount ascending (least actions = goes first)
               const sortedFounders = [...turnOrderPlayers].sort((a, b) => {
@@ -342,62 +341,36 @@ export default function MiddleBoard({
               };
 
               return (
-                <>
-                  <div className={`flex flex-col items-center ${gapClass} w-full`}>
-                    {sortedFounders.map((p, rankIdx) => {
-                      const originalIdx = players.findIndex(pl => pl.id === p.id);
-                      const avatarColor = (p.avatarId && AVATAR_COLORS[p.avatarId]) || p.color || '#55ffb0';
-                      const avatarSrc = p.avatarId && AVATAR_IMAGE_BY_ID[p.avatarId]
-                        ? AVATAR_IMAGE_BY_ID[p.avatarId]
-                        : `/player-avatar-${(originalIdx !== -1 ? originalIdx : rankIdx) % 4 + 1}.png`;
+                <div className={`flex flex-col items-center ${gapClass} w-full`}>
+                  {sortedFounders.map((p, rankIdx) => {
+                    const originalIdx = players.findIndex(pl => pl.id === p.id);
+                    const avatarColor = (p.avatarId && AVATAR_COLORS[p.avatarId]) || p.color || '#55ffb0';
+                    const avatarSrc = p.avatarId && AVATAR_IMAGE_BY_ID[p.avatarId]
+                      ? AVATAR_IMAGE_BY_ID[p.avatarId]
+                      : `/player-avatar-${(originalIdx !== -1 ? originalIdx : rankIdx) % 4 + 1}.png`;
 
-                      return (
-                        <div key={p.id} className="flex items-center gap-3.5 group cursor-pointer">
-                          <span className="text-xs font-black text-[#55ffb0]/80 w-4 text-right select-none drop-shadow">
-                            {rankIdx + 1}
-                          </span>
-                          <div 
-                            className={`${avatarSize} rounded-full flex items-center justify-center hover:scale-110 transition-transform relative select-none`}
-                            style={{ 
-                              filter: `drop-shadow(0 0 10px ${avatarColor}95) drop-shadow(0 4px 10px rgba(0,0,0,0.85))`
-                            }}
-                            title={`${p.name} (Actions: ${p.actionCount || 0})`}
-                          >
-                            <img 
-                              src={avatarSrc} 
-                              alt={p.name} 
-                              className="w-full h-full object-contain pointer-events-none drop-shadow" 
-                            />
-                          </div>
+                    return (
+                      <div key={p.id} className="flex items-center gap-3.5 group cursor-pointer">
+                        <span className="text-xs font-black text-[#55ffb0]/80 w-4 text-right select-none drop-shadow">
+                          {rankIdx + 1}
+                        </span>
+                        <div 
+                          className={`${avatarSize} rounded-full flex items-center justify-center hover:scale-110 transition-transform relative select-none`}
+                          style={{ 
+                            filter: `drop-shadow(0 0 10px ${avatarColor}95) drop-shadow(0 4px 10px rgba(0,0,0,0.85))`
+                          }}
+                          title={`${p.name} (Actions: ${p.actionCount || 0})`}
+                        >
+                          <img 
+                            src={avatarSrc} 
+                            alt={p.name} 
+                            className="w-full h-full object-contain pointer-events-none drop-shadow" 
+                          />
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Dedicated Investors Row */}
-                  {investorPlayers.length > 0 && (
-                    <div className="flex items-center justify-center gap-3 mt-4 pt-3 border-t border-[#1d6b56]/60 w-[85%]">
-                      <span className="text-[9.5px] uppercase tracking-widest font-black text-[#FFC240] select-none drop-shadow">INVESTORS:</span>
-                      <div className="flex items-center gap-3">
-                        {investorPlayers.map(inv => {
-                          const avatarSrc = inv.avatarId && AVATAR_IMAGE_BY_ID[inv.avatarId]
-                            ? AVATAR_IMAGE_BY_ID[inv.avatarId]
-                            : `/lobby/join/Ellipse 197.png`;
-                          return (
-                            <div 
-                              key={inv.id}
-                              className="w-8 h-8 rounded-full flex items-center justify-center hover:scale-110 transition-transform relative cursor-pointer"
-                              title={`${inv.name} (Investor)`}
-                              style={{ filter: 'drop-shadow(0 0 8px rgba(255,194,64,0.7))' }}
-                            >
-                              <img src={avatarSrc} alt={inv.name} className="w-full h-full object-contain pointer-events-none" />
-                            </div>
-                          );
-                        })}
                       </div>
-                    </div>
-                  )}
-                </>
+                    );
+                  })}
+                </div>
               );
             })()}
           </div>

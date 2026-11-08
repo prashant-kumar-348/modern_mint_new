@@ -1,5 +1,6 @@
 import React from 'react';
 import { X, Rocket, AlertCircle, Lock } from 'lucide-react';
+import { getPlayerMatTheme } from '../../utils/playerMatThemes';
 
 const MAT_ICONS = {
   'CONTRACT FARMING': '/company-contract-farming.png',
@@ -54,6 +55,7 @@ export default function LaunchCompanyModal({
 }) {
   if (!company) return null;
 
+  const theme = getPlayerMatTheme(localPlayer);
   const canonicalKey = getCanonicalMatKey(company.name);
   const companyIcon = MAT_ICONS[canonicalKey] || company.icon || company.image || '/company-quick-commerce.png';
   const stageData = company.data || COMPANY_STAGE_DATA[canonicalKey] || [[10, 100, 500, 0], [100, 200, 1000, 20], [1000, 1000, 2500, 200], [2000, 2000, 10000, 400]];
@@ -86,33 +88,52 @@ export default function LaunchCompanyModal({
 
   return (
     <div 
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200 font-sans"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4 animate-in fade-in duration-200 font-sans"
       onClick={onClose}
     >
-      {/* Outer Mat Desk Container styled like Player Mat */}
+      {/* Outer Mat Desk Container styled to match the Player's Mat */}
       <div 
-        className="relative w-full max-w-[460px] bg-[#501625] rounded-2xl border-4 border-[#2A0D12] shadow-[0_0_50px_rgba(0,0,0,0.85)] p-4 sm:p-5 flex flex-col items-center animate-in zoom-in-95 duration-200 select-none"
+        className="relative w-full max-w-[460px] rounded-2xl border-4 shadow-[0_0_50px_rgba(0,0,0,0.85)] p-4 sm:p-5 flex flex-col items-center animate-in zoom-in-95 duration-200 select-none"
         onClick={e => e.stopPropagation()}
+        style={{
+          backgroundColor: theme.bgOuter,
+          borderColor: theme.deskBorder
+        }}
       >
         {/* Close Button */}
         <button 
           onClick={onClose}
-          className="absolute top-3 right-3 text-[#FFE8D6]/60 hover:text-white bg-black/40 rounded-full p-1.5 transition-colors cursor-pointer z-50"
+          className="absolute top-3 right-3 bg-black/40 hover:text-white rounded-full p-1.5 transition-colors cursor-pointer z-50 hover:bg-black/60"
+          style={{ color: theme.textLight }}
         >
           <X size={20} />
         </button>
 
-        {/* Company Card matching Player Mat (Exact Burgundy + Cream Pill Design) */}
-        <div className="w-full bg-[#7D3C4A] rounded-xl pt-3 px-3.5 pb-3 border border-[#3A141A] flex flex-col justify-between relative shadow-lg mt-3">
-          
+        {/* Company Card matching Player Mat (Exact Character Theme Pill & Colors) */}
+        <div 
+          className="w-full rounded-xl pt-3 px-3.5 pb-3 border flex flex-col justify-between relative shadow-lg mt-3"
+          style={{
+            backgroundColor: theme.cardBg,
+            borderColor: theme.cardBorder
+          }}
+        >
           {/* Card Header (Cream Pill) */}
-          <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-1.5 px-3 flex items-center gap-2.5 shadow-md border-2 border-[#3A141A] -mt-6 mb-2.5 relative z-10 shrink-0">
+          <div 
+            className="w-[95%] mx-auto rounded-full py-1.5 px-3 flex items-center gap-2.5 shadow-md border-2 -mt-6 mb-2.5 relative z-10 shrink-0"
+            style={{
+              backgroundColor: theme.pillBg,
+              borderColor: theme.cardBorder
+            }}
+          >
             <img 
               src={companyIcon} 
               alt={canonicalKey} 
               className="w-8 h-8 rounded-full object-contain select-none shrink-0" 
             />
-            <h3 className="font-black text-xs sm:text-sm text-[#4A1720] uppercase tracking-wide leading-none flex-1 text-center pr-3 select-none">
+            <h3 
+              className="font-black text-xs sm:text-sm uppercase tracking-wide leading-none flex-1 text-center pr-3 select-none"
+              style={{ color: theme.pillText }}
+            >
               {canonicalKey}
             </h3>
           </div>
@@ -120,7 +141,10 @@ export default function LaunchCompanyModal({
           {/* Data Table */}
           <div className="w-full flex flex-col justify-center">
             {/* Headers */}
-            <div className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[10px] text-[#FFE8D6] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight">
+            <div 
+              className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[10px] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight"
+              style={{ color: theme.textLight }}
+            >
               <div className="text-left pr-1">TEAM</div>
               <div className="text-left">STAGE</div>
               <div>INVEST<br/>($K)</div>
@@ -142,22 +166,22 @@ export default function LaunchCompanyModal({
                   </div>
 
                   {/* Stage Name */}
-                  <div className="text-left font-bold text-[12px] text-[#FFE8D6] tracking-wide">
+                  <div className="text-left font-bold text-[12px] tracking-wide" style={{ color: theme.textLight }}>
                     {stage}
                   </div>
 
                   {/* Financial Figures */}
                   <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">
-                    {stageData[i]?.[0] ?? 0}
+                    {stageData[i][0]}
                   </div>
                   <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">
-                    {stageData[i]?.[1] ?? 0}
+                    {stageData[i][1]}
                   </div>
                   <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">
-                    {stageData[i]?.[2] ?? 0}
+                    {stageData[i][2]}
                   </div>
                   <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">
-                    {stageData[i]?.[3] ?? 0}
+                    {stageData[i][3]}
                   </div>
                 </div>
               ))}
@@ -165,8 +189,8 @@ export default function LaunchCompanyModal({
           </div>
 
           {/* Equity Slider Ruler */}
-          <div className="mt-2.5 pt-2 border-t border-white/15 flex items-end gap-2 px-1 shrink-0">
-            <div className="text-[8px] text-[#FFE8D6] uppercase font-bold leading-tight w-8 text-right shrink-0">
+          <div className="mt-2 pt-2 border-t border-white/15 flex items-end gap-2 px-1 shrink-0">
+            <div className="text-[8px] uppercase font-bold leading-tight w-8 text-right shrink-0" style={{ color: theme.textLight }}>
               EQUITY<br/>GIVEN
             </div>
             <div className="flex-1">
@@ -186,17 +210,23 @@ export default function LaunchCompanyModal({
         </div>
 
         {/* Cash Balance Strip in Player Mat Theme */}
-        <div className="w-full bg-[#3D141C] border border-[#2A0D12] rounded-xl p-3 mt-4 flex items-center justify-between text-xs">
+        <div 
+          className="w-full border rounded-xl p-3 mt-4 flex items-center justify-between text-xs"
+          style={{
+            backgroundColor: theme.bannerBg,
+            borderColor: theme.deskBorder
+          }}
+        >
           <div className="flex flex-col text-left">
-            <span className="text-[#FFE8D6]/70 font-bold uppercase text-[9px] tracking-wider">Your Cash</span>
+            <span className="font-bold uppercase text-[9px] tracking-wider opacity-80" style={{ color: theme.textLight }}>Your Cash</span>
             <span className="text-white font-mono font-black text-sm">${playerCash}K</span>
           </div>
           <div className="flex flex-col text-center">
-            <span className="text-[#FFE8D6]/70 font-bold uppercase text-[9px] tracking-wider">Launch Cost</span>
-            <span className="text-[#FFF2D8] font-mono font-black text-sm">${investCost}K</span>
+            <span className="font-bold uppercase text-[9px] tracking-wider opacity-80" style={{ color: theme.textLight }}>Launch Cost</span>
+            <span className="font-mono font-black text-sm" style={{ color: theme.pillBg }}>${investCost}K</span>
           </div>
           <div className="flex flex-col text-right">
-            <span className="text-[#FFE8D6]/70 font-bold uppercase text-[9px] tracking-wider">
+            <span className="font-bold uppercase text-[9px] tracking-wider opacity-80" style={{ color: theme.textLight }}>
               {hasEnoughCash ? 'After Launch' : 'Shortfall'}
             </span>
             <span className={`font-mono font-black text-sm ${hasEnoughCash ? 'text-[#55ffb0]' : 'text-red-400'}`}>
@@ -207,17 +237,28 @@ export default function LaunchCompanyModal({
 
         {/* Warning Banner if Cannot Launch */}
         {!canLaunch && lockReason && (
-          <div className="w-full bg-[#3D141C] border border-amber-400/40 rounded-xl p-2.5 mt-3 flex items-center justify-center gap-2 text-[#FFE8D6] text-xs font-semibold text-center">
+          <div 
+            className="w-full border border-amber-400/40 rounded-xl p-2.5 mt-3 flex items-center justify-center gap-2 text-xs font-semibold text-center"
+            style={{
+              backgroundColor: theme.bannerBg,
+              color: theme.textLight
+            }}
+          >
             <AlertCircle size={15} className="text-amber-400 shrink-0" />
             <span>{lockReason}</span>
           </div>
         )}
 
-        {/* Action Button: Cream Pill Button with Maroon Text matching Player Mat */}
+        {/* Action Button: Cream Pill Button with Character Mat Colors */}
         {canLaunch ? (
           <button 
             onClick={() => onConfirmLaunch(canonicalKey, investCost)}
-            className="w-full bg-[#FFF2D8] text-[#4A1720] border-2 border-[#4A1720] py-3 px-6 rounded-full font-black uppercase tracking-widest text-xs sm:text-sm hover:bg-[#EAE4D3] hover:scale-105 active:scale-95 transition-all shadow-xl cursor-pointer flex items-center justify-center gap-2 mt-4"
+            className="w-full py-3 px-6 rounded-full font-black uppercase tracking-widest text-xs sm:text-sm hover:scale-105 active:scale-95 transition-all shadow-xl cursor-pointer flex items-center justify-center gap-2 mt-4 border-2"
+            style={{
+              backgroundColor: theme.pillBg,
+              color: theme.pillText,
+              borderColor: theme.cardBorder
+            }}
           >
             <Rocket size={16} />
             <span>LAUNCH COMPANY (${investCost}K)</span>
@@ -225,7 +266,8 @@ export default function LaunchCompanyModal({
         ) : (
           <button 
             disabled
-            className="w-full bg-[#2A0D12] text-white/30 border border-white/10 py-3 px-6 rounded-full font-black uppercase tracking-widest text-xs sm:text-sm mt-4 cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full text-white/30 border border-white/10 py-3 px-6 rounded-full font-black uppercase tracking-widest text-xs sm:text-sm mt-4 cursor-not-allowed flex items-center justify-center gap-2"
+            style={{ backgroundColor: theme.deskBorder }}
           >
             <Lock size={15} />
             <span>
@@ -241,7 +283,8 @@ export default function LaunchCompanyModal({
         {/* Cancel Button */}
         <button 
           onClick={onClose}
-          className="text-[#FFE8D6]/60 hover:text-white uppercase font-bold text-xs mt-3 transition-colors cursor-pointer"
+          className="uppercase font-bold text-xs mt-3 transition-colors cursor-pointer hover:underline"
+          style={{ color: theme.textLight }}
         >
           Cancel
         </button>

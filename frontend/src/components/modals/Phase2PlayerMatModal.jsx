@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { X, Lock, Rocket, TrendingUp, Award, DollarSign } from 'lucide-react';
+import { X, Lock, Rocket, TrendingUp, Award, DollarSign, Dices } from 'lucide-react';
+import soundEffects from '../../utils/soundEffects';
+import { getPlayerMatTheme } from '../../utils/playerMatThemes';
 
 export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, ownedCompanies = [], actionType, currentRound, activeEvent, teamTokenPool, localPlayer }) {
+  const theme = getPlayerMatTheme(localPlayer);
+
   const companies = [
     { id: 'c1', name: 'CONTRACT FARMING', icon: '/mat-icons/mat-icon-contract-farming.png', data: [[10,100,500,0], [100,200,1000,20], [1000,1000,2500,200], [2000,2000,10000,400]] },
     { id: 'c2', name: 'AGRI IoT', icon: '/mat-icons/mat-icon-agri-iot.png', data: [[100,10,1000,0], [500,300,3000,300], [1500,1500,6000,2000], [8000,8000,36000,7000]] },
@@ -20,18 +24,74 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
     4: 200
   };
 
+  const MULTIPLIER_TABLE = [
+    { roll: 1,  multipliers: [-2, -2, -1,  0] },
+    { roll: 2,  multipliers: [-2, -1,  0,  1] },
+    { roll: 3,  multipliers: [-1, -1,  0,  1] },
+    { roll: 4,  multipliers: [-1,  0,  1,  2] },
+    { roll: 5,  multipliers: [ 0,  0,  1,  2] },
+    { roll: 6,  multipliers: [ 0,  1,  2,  3] },
+    { roll: 7,  multipliers: [ 1,  1,  2,  3] },
+    { roll: 8,  multipliers: [ 1,  2,  3,  4] },
+    { roll: 9,  multipliers: [ 2,  2,  3,  4] },
+    { roll: 10, multipliers: [ 2,  3,  4,  5] }
+  ];
+
   const stages = ["Launch", "Retain", "Grow", "Scale"];
 
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [cinematicStep, setCinematicStep] = useState(0);
 
+  // Workforce Dice Roll State
+  const [workforceRollState, setWorkforceRollState] = useState('idle'); // 'idle' | 'rolling' | 'rolled'
+  const [workforceRollResult, setWorkforceRollResult] = useState(null);
+  const [workforceRollingNum, setWorkforceRollingNum] = useState(1);
+
+  const resetSelection = () => {
+    setSelectedCompany(null);
+    setCinematicStep(0);
+    setWorkforceRollState('idle');
+    setWorkforceRollResult(null);
+    setWorkforceRollingNum(1);
+  };
+
   const handleCompanyClick = (company) => {
     setSelectedCompany(company);
+    setWorkforceRollState('idle');
+    setWorkforceRollResult(null);
+    setWorkforceRollingNum(1);
     if (actionType === 'stage_up') {
       setCinematicStep(1);
     } else {
       setCinematicStep(2);
     }
+  };
+
+  const handleRollWorkforceDice = () => {
+    if (workforceRollState === 'rolling' || playerCash < requiredCost) return;
+    setWorkforceRollState('rolling');
+    setWorkforceRollResult(null);
+    try {
+      soundEffects.play('dice');
+    } catch (e) {
+      console.warn('Sound effect error', e);
+    }
+
+    const interval = setInterval(() => {
+      setWorkforceRollingNum(Math.floor(Math.random() * 10) + 1);
+    }, 60);
+
+    setTimeout(() => {
+      clearInterval(interval);
+      const finalRoll = Math.floor(Math.random() * 10) + 1;
+      setWorkforceRollResult(finalRoll);
+      setWorkforceRollState('rolled');
+      try {
+        soundEffects.play('coins');
+      } catch (e) {
+        console.warn('Sound effect error', e);
+      }
+    }, 1200);
   };
 
   useEffect(() => {
@@ -61,76 +121,100 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
   if (selectedCompany) {
     if (actionType === 'buy_pr') {
        const ownedData = findOwnedCompany(selectedCompany.name);
-       const prCosts = [100, 300, 500, 700];
-       let baseCost = prCosts[ownedData ? (ownedData.team || 1) - 1 : 0] || 100;
-       if (Number(ownedData?.freePRRound) === Number(currentRound) || Number(localPlayer?.freePRRound) === Number(currentRound)) {
-         baseCost = 0;
-       } else {
-         if (Number(localPlayer?.taxDiscountRound) === Number(currentRound)) {
-           baseCost = Math.round(baseCost / 2);
-         }
-         if (activeEvent?.effect === 'pr_discount_100') {
-           baseCost = Math.max(0, baseCost - 100);
-         }
+       const currentStageIdx = ownedData ? getStageIndex(ownedData.stage) : 0;
+       requiredCost = Math.round(selectedCompany.data[currentStageIdx][1] * 0.1);
+    } else if (actionType === 'launch') {
+       requiredCost = selectedCompany.data[0][0];
+    } else if (actionType === 'stage_up') {
+       const ownedData = findOwnedCompany(selectedCompany.name);
+       const targetIdx = ownedData ? Math.min(getStageIndex(ownedData.stage) + 1, 3) : 0;
+       requiredCost = selectedCompany.data[targetIdx][0];
+       // Mentor Card half cost effect
+       if (localPlayer?.hasHalfCostStageUp || Number(ownedData?.halfCostAllStagesRound) === Number(currentRound) || localPlayer?.halfCostAllStagesCompany === selectedCompany.name) {
+          requiredCost = Math.round(requiredCost / 2);
        }
-       requiredCost = baseCost;
     } else if (actionType === 'upgrade_workforce') {
        const ownedData = findOwnedCompany(selectedCompany.name);
-       if (ownedData) {
-         const currentLvl = Math.min(4, Math.max(1, Number(ownedData.teamLevel || ownedData.team) || 1));
-         const nextLvl = currentLvl + 1;
-         let baseCost = TEAM_UPGRADE_COSTS[nextLvl] || 50;
-         if (Number(ownedData?.freeWorkforceRound) === Number(currentRound) || Number(localPlayer?.freeWorkforceRound) === Number(currentRound)) {
-           baseCost = 0;
-         } else if (activeEvent?.effect === 'workforce_discount_half') {
-           baseCost = Math.round(baseCost / 2);
-         }
-         requiredCost = baseCost;
-       }
-    } else {
-      const ownedData = findOwnedCompany(selectedCompany.name);
-      let targetStageIdx = 0;
-      if (actionType === 'stage_up' && ownedData) {
-         targetStageIdx = Math.min(getStageIndex(ownedData.stage) + 1, 3);
-      }
-      let baseCost = selectedCompany.data[targetStageIdx][0];
-      if (actionType === 'stage_up' && (localPlayer?.hasHalfCostStageUp || Number(ownedData?.halfCostAllStagesRound) === Number(currentRound) || localPlayer?.halfCostAllStagesCompany === selectedCompany.name)) {
-         baseCost = Math.round(baseCost / 2);
-      }
-      requiredCost = baseCost;
+       const currentLvl = ownedData ? Math.min(4, Math.max(1, Number(ownedData.teamLevel || ownedData.team) || 1)) : 1;
+       const nextLvl = currentLvl + 1;
+       requiredCost = TEAM_UPGRADE_COSTS[nextLvl] || 50;
     }
   }
 
   const playerCash = Number(localPlayer?.cash || 0);
 
+  // Workforce helpers for selected company
+  const selectedOwnedData = selectedCompany ? findOwnedCompany(selectedCompany.name) : null;
+  const currentLvl = selectedOwnedData ? Math.min(4, Math.max(1, Number(selectedOwnedData.teamLevel || selectedOwnedData.team) || 1)) : 1;
+  const nextLvl = currentLvl + 1;
+  const achievedMult = (actionType === 'upgrade_workforce' && workforceRollResult)
+    ? MULTIPLIER_TABLE.find(m => m.roll === workforceRollResult)?.multipliers[nextLvl - 1]
+    : null;
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4 font-sans animate-in fade-in duration-300">
       
       {/* Outer Desk Container - Exact Player Mat Aesthetic */}
-      <div className="relative w-full max-w-[1400px] h-[95vh] bg-[#501625] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border-4 border-[#2A0D12] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 scale-[0.95] xl:scale-100 origin-center select-none">
+      <div 
+        className="relative w-full max-w-[1400px] h-[95vh] rounded-xl shadow-[0_0_50px_rgba(0,0,0,0.8)] border-4 flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 scale-[0.95] xl:scale-100 origin-center select-none"
+        style={{
+          backgroundColor: theme.bgOuter,
+          borderColor: theme.deskBorder
+        }}
+      >
         
         {/* Header Action Mode Banner */}
-        <div className="bg-[#3D141C] border-b border-[#2A0D12] px-6 py-2.5 flex items-center justify-between shrink-0">
+        <div 
+          className="border-b px-6 py-2.5 flex items-center justify-between shrink-0"
+          style={{
+            backgroundColor: theme.bannerBg,
+            borderColor: theme.deskBorder
+          }}
+        >
           <div className="flex items-center gap-3">
-            <span className="text-[11px] text-[#FFE8D6] font-bold tracking-widest uppercase">Phase 2 Operations</span>
+            <div 
+              className="w-7 h-7 rounded-full border-2 overflow-hidden shadow-md shrink-0 flex items-center justify-center"
+              style={{ borderColor: theme.pillBg, backgroundColor: theme.cardBg }}
+            >
+              <img src={theme.avatarSrc} alt={theme.character} className="w-full h-full object-cover select-none" />
+            </div>
+            <span className="text-[11px] font-bold tracking-widest uppercase" style={{ color: theme.textLight }}>
+              Phase 2 Operations
+            </span>
             <span className="text-white/40">•</span>
-            <span className="bg-[#FFF2D8] text-[#4A1720] px-3.5 py-0.5 rounded-full font-black text-xs uppercase tracking-wider">
+            <span 
+              className="px-3.5 py-0.5 rounded-full font-black text-xs uppercase tracking-wider shadow-sm"
+              style={{
+                backgroundColor: theme.pillBg,
+                color: theme.pillText
+              }}
+            >
               {actionType === 'launch' ? 'SELECT COMPANY TO LAUNCH' :
                actionType === 'stage_up' ? 'SELECT COMPANY TO STAGE UP' :
                actionType === 'upgrade_workforce' ? 'SELECT COMPANY TO UPGRADE WORKFORCE' :
                'SELECT COMPANY FOR PR SERVICES'}
             </span>
+            <span 
+              className="text-[10px] px-2.5 py-0.5 rounded-full font-black uppercase tracking-wider border shadow-xs"
+              style={{
+                backgroundColor: theme.pillBg,
+                color: theme.pillText,
+                borderColor: theme.cardBorder
+              }}
+            >
+              Founder {theme.id} ({theme.name})
+            </span>
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="text-xs text-[#FFE8D6]">
+            <div className="text-xs" style={{ color: theme.textLight }}>
               Your Cash: <span className="font-mono font-black text-white text-sm">${playerCash}K</span>
             </div>
-            <div className="text-xs text-[#FFE8D6]">
+            <div className="text-xs" style={{ color: theme.textLight }}>
               Portfolio: <span className="font-mono font-black text-white text-sm">{ownedCompanies.length}/4</span>
             </div>
             {/* Close Button */}
-            <button onClick={onClose} className="text-white/50 hover:text-white transition-colors bg-black/40 rounded-full p-1.5 cursor-pointer ml-2">
+            <button onClick={onClose} className="text-white/50 hover:text-white transition-colors bg-black/40 rounded-full p-1.5 cursor-pointer ml-2 hover:bg-black/60">
               <X size={22} />
             </button>
           </div>
@@ -142,6 +226,7 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
             const ownedData = ownedCompanies.find(c => (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === company.name.replace(/[^a-zA-Z0-9]/g, '').toLowerCase());
             const isLaunched = !!ownedData;
             const currentStageIdx = ownedData ? getStageIndex(ownedData.stage) : -1;
+            const currentLvlComp = ownedData ? Math.min(4, Math.max(1, Number(ownedData.teamLevel || ownedData.team) || 1)) : 1;
             
             let isLockedForAction = false;
             let lockMessage = "";
@@ -192,20 +277,19 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                 lockMessage = "MAX 1 PR/ROUND";
               }
             } else if (actionType === 'upgrade_workforce') {
-              const currentLvl = ownedData ? Math.min(4, Math.max(1, Number(ownedData.teamLevel || ownedData.team) || 1)) : 1;
-              const nextLvl = currentLvl + 1;
+              const nextLvlComp = currentLvlComp + 1;
               if (!isLaunched) {
                 isLockedForAction = true;
                 lockMessage = "NOT LAUNCHED YET";
-              } else if (currentLvl >= 4) {
+              } else if (currentLvlComp >= 4) {
                 isLockedForAction = true;
                 lockMessage = "MAX WORKFORCE (LVL 4)";
               } else if (Number(ownedData.workforceUpgradedRound) === Number(currentRound)) {
                 isLockedForAction = true;
                 lockMessage = "MAX 1 UPGRADE/ROUND";
-              } else if (teamTokenPool && (teamTokenPool[nextLvl] ?? teamTokenPool[String(nextLvl)] ?? 0) <= 0) {
+              } else if (teamTokenPool && (teamTokenPool[nextLvlComp] ?? teamTokenPool[String(nextLvlComp)] ?? 0) <= 0) {
                 isLockedForAction = true;
-                lockMessage = `NO LVL ${nextLvl} TOKENS LEFT`;
+                lockMessage = `NO LVL ${nextLvlComp} TOKENS LEFT`;
               }
             } else {
               isLockedForAction = !isLaunched;
@@ -216,20 +300,33 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
               <div 
                 key={company.id} 
                 onClick={() => !isLockedForAction && handleCompanyClick(company)}
-                className={`bg-[#7D3C4A] rounded-xl pt-2.5 px-3.5 pb-3 border border-[#3A141A] flex flex-col justify-between relative shadow-lg min-h-[315px] transition-all duration-200 ${
+                className={`rounded-xl pt-2.5 px-3.5 pb-3 border flex flex-col justify-between relative shadow-lg min-h-[315px] transition-all duration-200 ${
                   isLockedForAction 
                     ? 'cursor-not-allowed opacity-75' 
-                    : 'cursor-pointer hover:scale-[1.02] hover:shadow-[0_10px_30px_rgba(0,0,0,0.6)] hover:border-[#FFF2D8]/60'
+                    : 'cursor-pointer hover:scale-[1.02] hover:shadow-[0_10px_30px_rgba(0,0,0,0.6)]'
                 }`}
+                style={{
+                  backgroundColor: theme.cardBg,
+                  borderColor: theme.cardBorder
+                }}
               >
                 {/* Card Header (Cream Pill) - EXACT Player Mat styling */}
-                <div className="bg-[#FFF2D8] w-[95%] mx-auto rounded-full py-1.5 px-2.5 flex items-center gap-2.5 shadow-md border-2 border-[#3A141A] -mt-5 mb-2.5 relative z-10 shrink-0">
+                <div 
+                  className="w-[95%] mx-auto rounded-full py-1.5 px-2.5 flex items-center gap-2.5 shadow-md border-2 -mt-5 mb-2.5 relative z-10 shrink-0"
+                  style={{
+                    backgroundColor: theme.pillBg,
+                    borderColor: theme.cardBorder
+                  }}
+                >
                   <img 
                     src={company.icon} 
                     alt={company.name} 
                     className="w-8 h-8 rounded-full object-contain select-none shrink-0" 
                   />
-                  <h3 className="font-black text-xs md:text-sm text-[#4A1720] uppercase tracking-wide leading-none flex-1 text-center pr-3 select-none">
+                  <h3 
+                    className="font-black text-xs md:text-sm uppercase tracking-wide leading-none flex-1 text-center pr-3 select-none"
+                    style={{ color: theme.pillText }}
+                  >
                     {company.name}
                   </h3>
                 </div>
@@ -237,7 +334,14 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                 {/* Status Badges */}
                 {isLaunched && (
                   <div className="absolute top-2.5 right-3 flex items-center gap-1.5 z-10">
-                    <span className="bg-[#FFF2D8] text-[#4A1720] text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-[#4A1720]/40 shadow-sm">
+                    <span 
+                      className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border shadow-sm"
+                      style={{
+                        backgroundColor: theme.pillBg,
+                        color: theme.pillText,
+                        borderColor: theme.cardBorder
+                      }}
+                    >
                       Stage {stages[currentStageIdx] || 'L'}
                     </span>
                     <span className="bg-[#55ffb0] text-black text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-black/20 shadow-sm">
@@ -247,18 +351,31 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                 )}
 
                 {isLockedForAction && (
-                  <div className="absolute inset-0 top-6 z-20 flex flex-col items-center justify-center bg-[#501625]/85 backdrop-blur-[1px] rounded-b-xl pointer-events-none p-4 text-center">
-                    <Lock size={28} className="text-[#FFE8D6]/80 mb-2 drop-shadow-md" />
-                    <span className="bg-[#3D141C] text-[#FFE8D6] border border-white/20 px-3 py-1 rounded-full font-black text-[10px] tracking-widest uppercase shadow-md">
+                  <div 
+                    className="absolute inset-0 top-6 z-20 flex flex-col items-center justify-center backdrop-blur-[1px] rounded-b-xl pointer-events-none p-4 text-center"
+                    style={{ backgroundColor: theme.lockOverlayBg }}
+                  >
+                    <Lock size={28} className="mb-2 drop-shadow-md" style={{ color: theme.textLight }} />
+                    <span 
+                      className="border px-3 py-1 rounded-full font-black text-[10px] tracking-widest uppercase shadow-md"
+                      style={{
+                        backgroundColor: theme.lockBadgeBg,
+                        color: theme.textLight,
+                        borderColor: 'rgba(255,255,255,0.2)'
+                      }}
+                    >
                       {lockMessage}
                     </span>
                   </div>
                 )}
                 
-                {/* Data Table - EXACT Player Mat Colors & Typography (100% full opacity, crisp white & cream) */}
+                {/* Data Table - EXACT Player Mat Colors & Typography */}
                 <div className="w-full flex-1 flex flex-col justify-center">
                   {/* Column Headers */}
-                  <div className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[10px] text-[#FFE8D6] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight">
+                  <div 
+                    className="grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 text-[10px] uppercase font-black mb-2 pb-1 border-b border-white/20 text-center items-end leading-tight"
+                    style={{ color: theme.textLight }}
+                  >
                     <div className="text-left pr-1">TEAM</div>
                     <div className="text-left">STAGE</div>
                     <div>INVEST<br/>($K)</div>
@@ -273,61 +390,77 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                       const rowData = company.data[idx];
                       const isActiveStage = idx === currentStageIdx;
                       const isPastStage = isLaunched && idx < currentStageIdx;
-                      const teamLevel = isLaunched ? Math.min(4, Math.max(1, Number(ownedData?.teamLevel || ownedData?.team) || 1)) : 0;
+                      const isNextStage = isLaunched && idx === currentStageIdx + 1;
+                      const isTargetForStageUp = actionType === 'stage_up' && isNextStage;
 
                       return (
                         <div 
                           key={idx} 
-                          className={`grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-[12px] text-center font-bold px-1 py-1 ${
-                            isActiveStage 
-                              ? 'bg-[#FFF2D8]/15 rounded'
-                              : 'text-white'
+                          className={`grid grid-cols-[30px_1fr_1fr_1fr_1fr_1fr] gap-1 items-center text-[12px] text-center font-bold px-1 py-1 rounded transition-colors ${
+                            isTargetForStageUp 
+                              ? 'bg-amber-400/20 border border-amber-300 ring-2 ring-amber-400/50' 
+                              : isActiveStage 
+                              ? 'bg-emerald-500/20 border border-emerald-400/40' 
+                              : isPastStage 
+                              ? 'opacity-40' 
+                              : ''
                           }`}
                         >
-                          {/* Team Checkbox Slot - Displays current team level on active stage row only */}
-                          <div className="flex justify-center">
-                            {isActiveStage && isLaunched ? (
-                              <div className="w-5 h-5 rounded-sm bg-[#55ffb0] border-2 border-[#55ffb0] text-black font-black text-[10px] flex items-center justify-center shadow-[0_0_8px_rgba(85,255,176,0.6)]">
-                                {teamLevel}
-                              </div>
-                            ) : isPastStage ? (
-                              <div className="w-5 h-5 rounded-sm bg-white/20 border border-white/40 text-[#FFE8D6] font-bold text-[10px] flex items-center justify-center">
-                                ✓
-                              </div>
-                            ) : (
-                              <div className="w-5 h-5 bg-transparent border-2 border-white/40 rounded-sm"></div>
-                            )}
+                          <div className="flex justify-center items-center">
+                            <div className={`w-5 h-5 rounded-sm border flex items-center justify-center font-mono text-[10px] font-bold ${
+                              isActiveStage 
+                                ? 'bg-[#55ffb0] border-[#55ffb0] text-black shadow-[0_0_8px_rgba(85,255,176,0.5)]' 
+                                : isPastStage 
+                                ? 'bg-emerald-900/40 border-emerald-500/40 text-emerald-400' 
+                                : 'border-white/20 text-transparent'
+                            }`}>
+                              {isActiveStage ? currentLvlComp : (isPastStage ? '✓' : '')}
+                            </div>
                           </div>
-
-                          {/* Stage Name */}
-                          <div className="text-left font-bold text-[12px] text-[#FFE8D6] tracking-wide">
+                          
+                          <div className="text-left font-bold text-[12px] tracking-wide" style={{ color: theme.textLight }}>
                             {stage}
                           </div>
 
-                          {/* Financial Values (Crisp, High-Contrast White Font) */}
-                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{rowData[0]}</div>
-                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{rowData[1]}</div>
-                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{rowData[2]}</div>
-                          <div className="font-mono font-bold text-[12px] text-white drop-shadow-sm">{rowData[3]}</div>
+                          <div className={`font-mono font-bold text-[12px] ${isTargetForStageUp ? 'text-amber-300 font-black' : 'text-white'}`}>
+                            {rowData[0]}
+                          </div>
+
+                          <div className="font-mono font-bold text-[12px] text-white">
+                            {rowData[1]}
+                          </div>
+
+                          <div className="font-mono font-bold text-[12px] text-white">
+                            {rowData[2]}
+                          </div>
+
+                          <div className="font-mono font-bold text-[12px] text-white">
+                            {rowData[3]}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Action Trigger Button on the card if actionable */}
+                {/* Interactive Action Button inside the card when applicable */}
                 {!isLockedForAction && (
-                  <div className="mt-2.5 flex justify-center">
+                  <div className="mt-3 flex justify-center">
                     {actionType === 'launch' && !isLaunched && (
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCompanyClick(company);
                         }}
-                        className="bg-[#FFF2D8] text-[#4A1720] px-5 py-2 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest text-xs shadow-xl hover:bg-[#EAE4D3] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-4 py-1.5 rounded-full border-2 font-black uppercase tracking-widest text-[11px] shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: theme.pillBg,
+                          color: theme.pillText,
+                          borderColor: theme.pillText
+                        }}
                       >
-                        <Rocket size={14} />
-                        <span>LAUNCH (${company.data[0][0]}K)</span>
+                        <Rocket size={13} />
+                        <span>LAUNCH THIS COMPANY</span>
                       </button>
                     )}
                     {actionType === 'stage_up' && isLaunched && (
@@ -336,10 +469,15 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                           e.stopPropagation();
                           handleCompanyClick(company);
                         }}
-                        className="bg-[#FFF2D8] text-[#4A1720] px-4 py-1.5 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest text-[11px] shadow-md hover:bg-[#EAE4D3] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-4 py-1.5 rounded-full border-2 font-black uppercase tracking-widest text-[11px] shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: theme.pillBg,
+                          color: theme.pillText,
+                          borderColor: theme.pillText
+                        }}
                       >
                         <TrendingUp size={13} />
-                        <span>STAGE UP (${company.data[Math.min(currentStageIdx + 1, 3)][0]}K)</span>
+                        <span>UPGRADE TO STAGE {stages[currentStageIdx + 1] || 'NEXT'}</span>
                       </button>
                     )}
                     {actionType === 'upgrade_workforce' && isLaunched && (
@@ -348,10 +486,15 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                           e.stopPropagation();
                           handleCompanyClick(company);
                         }}
-                        className="bg-[#FFF2D8] text-[#4A1720] px-4 py-1.5 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest text-[11px] shadow-md hover:bg-[#EAE4D3] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-4 py-1.5 rounded-full border-2 font-black uppercase tracking-widest text-[11px] shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: theme.pillBg,
+                          color: theme.pillText,
+                          borderColor: theme.pillText
+                        }}
                       >
-                        <Award size={13} />
-                        <span>UPGRADE WORKFORCE</span>
+                        <Dices size={14} />
+                        <span>UPGRADE WORKFORCE (ROLL DICE)</span>
                       </button>
                     )}
                     {actionType === 'buy_pr' && isLaunched && (
@@ -360,7 +503,12 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                           e.stopPropagation();
                           handleCompanyClick(company);
                         }}
-                        className="bg-[#FFF2D8] text-[#4A1720] px-4 py-1.5 rounded-full border-2 border-[#4A1720] font-black uppercase tracking-widest text-[11px] shadow-md hover:bg-[#EAE4D3] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        className="px-4 py-1.5 rounded-full border-2 font-black uppercase tracking-widest text-[11px] shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+                        style={{
+                          backgroundColor: theme.pillBg,
+                          color: theme.pillText,
+                          borderColor: theme.pillText
+                        }}
                       >
                         <DollarSign size={13} />
                         <span>BUY PR SERVICES</span>
@@ -369,9 +517,9 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                   </div>
                 )}
 
-                {/* Equity Slider Ruler - EXACT Player Mat styling */}
+                {/* Equity Slider Ruler */}
                 <div className="mt-2.5 pt-2 border-t border-white/15 flex items-end gap-2 px-1 shrink-0">
-                  <div className="text-[8px] text-[#FFE8D6] uppercase font-bold leading-tight w-8 text-right shrink-0">
+                  <div className="text-[8px] uppercase font-bold leading-tight w-8 text-right shrink-0" style={{ color: theme.textLight }}>
                     EQUITY<br/>GIVEN
                   </div>
                   <div className="flex-1">
@@ -392,16 +540,29 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
             );
           })}
         </div>
-        
+
         {/* PAYMENT & CONFIRMATION OVERLAY IN EXACT PLAYER MAT PALETTE */}
         {selectedCompany && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6" onClick={() => { setSelectedCompany(null); setCinematicStep(0); }}>
-            <div className="bg-[#501625] border-4 border-[#2A0D12] rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.9)] flex flex-col md:flex-row w-full max-w-4xl max-h-[90vh] overflow-hidden relative animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 sm:p-6" onClick={resetSelection}>
+            <div 
+              className="border-4 rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.9)] flex flex-col md:flex-row w-full max-w-4xl max-h-[90vh] overflow-hidden relative animate-in zoom-in-95 duration-200" 
+              onClick={e => e.stopPropagation()}
+              style={{
+                backgroundColor: theme.bgOuter,
+                borderColor: theme.deskBorder
+              }}
+            >
               
               {/* Close Button */}
-              <button onClick={() => { setSelectedCompany(null); setCinematicStep(0); }} className="absolute top-4 right-4 text-[#FFE8D6]/60 hover:text-white transition-colors z-50 bg-black/40 rounded-full p-2 cursor-pointer">
-                 <X size={22} />
-              </button>
+              {workforceRollState !== 'rolling' && (
+                <button 
+                  onClick={resetSelection} 
+                  className="absolute top-4 right-4 hover:text-white transition-colors z-50 bg-black/40 rounded-full p-2 cursor-pointer"
+                  style={{ color: theme.textLight }}
+                >
+                   <X size={22} />
+                </button>
+              )}
 
               {/* SCREEN 2: Cinematic Step for Stage Up */}
               {cinematicStep === 1 && (
@@ -412,12 +573,19 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                      const currentStageIdx = currentStage !== undefined ? getStageIndex(currentStage) : 0;
                      return (
                        <>
-                         <h2 className="text-[#FFE8D6] font-black text-2xl md:text-3xl uppercase tracking-widest mb-6">Current Stage</h2>
-                         <div className="text-[#FFF2D8] text-5xl md:text-6xl font-black uppercase mb-6 drop-shadow-md">
+                         <h2 className="font-black text-2xl md:text-3xl uppercase tracking-widest mb-6" style={{ color: theme.textLight }}>
+                           Current Stage
+                         </h2>
+                         <div className="text-5xl md:text-6xl font-black uppercase mb-6 drop-shadow-md" style={{ color: theme.pillBg }}>
                             {stages[currentStageIdx]}
                          </div>
-                         <div className="bg-[#3D141C] p-6 rounded-xl border border-white/20 text-center">
-                           <p className="text-[#FFE8D6]/70 text-xs font-bold uppercase tracking-widest mb-1">Projected Revenue</p>
+                         <div 
+                           className="p-6 rounded-xl border border-white/20 text-center shadow-lg"
+                           style={{ backgroundColor: theme.bannerBg }}
+                         >
+                           <p className="text-xs font-bold uppercase tracking-widest mb-1 opacity-80" style={{ color: theme.textLight }}>
+                             Projected Revenue
+                           </p>
                            <p className="text-3xl text-white font-mono font-black">${selectedCompany.data[currentStageIdx][1]}K</p>
                          </div>
                        </>
@@ -428,28 +596,51 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
 
               {/* SCREEN 3: Confirmation / Payment UI in Player Mat Theme */}
               {cinematicStep === 2 && (
-                <div className="flex-1 p-6 md:p-10 flex flex-col items-center justify-center relative animate-in fade-in duration-300 text-center">
+                <div className="flex-1 p-6 md:p-8 flex flex-col items-center justify-center relative animate-in fade-in duration-300 text-center overflow-y-auto">
                   
                   {/* Company Pill Header */}
-                  <div className="bg-[#FFF2D8] rounded-full py-2 px-5 flex items-center gap-3 shadow-md border-2 border-[#3A141A] mb-4">
+                  <div 
+                    className="rounded-full py-2 px-5 flex items-center gap-3 shadow-md border-2 mb-3"
+                    style={{
+                      backgroundColor: theme.pillBg,
+                      borderColor: theme.cardBorder
+                    }}
+                  >
                     <img src={selectedCompany.icon} alt={selectedCompany.name} className="w-8 h-8 rounded-full object-contain shrink-0" />
-                    <h3 className="font-black text-sm md:text-base text-[#4A1720] uppercase tracking-wide">
+                    <h3 className="font-black text-sm md:text-base uppercase tracking-wide" style={{ color: theme.pillText }}>
                       {selectedCompany.name}
                     </h3>
                   </div>
 
-                  <p className="text-[#FFE8D6] font-black tracking-widest text-xs md:text-sm uppercase mb-6">
+                  <p className="font-black tracking-widest text-xs md:text-sm uppercase mb-2" style={{ color: theme.textLight }}>
                     {actionType === 'launch' ? 'CONFIRM COMPANY LAUNCH' : 
                      actionType === 'stage_up' ? 'CONFIRM STAGE UPGRADE' : 
-                     actionType === 'upgrade_workforce' ? 'CONFIRM WORKFORCE UPGRADE' : 
+                     actionType === 'upgrade_workforce' ? 'UPGRADE WORKFORCE • ROLL THE DICE' : 
                      'CONFIRM PR SERVICES'}
                   </p>
 
+                  {/* Level Transition Pill for Workforce */}
+                  {actionType === 'upgrade_workforce' && (
+                    <div className="bg-[#55ffb0]/20 border border-[#55ffb0]/40 text-[#55ffb0] px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider mb-4 shadow-sm flex items-center gap-2">
+                      <span>Team Level {currentLvl}</span>
+                      <span>➔</span>
+                      <span className="text-white underline">Team Level {nextLvl}</span>
+                    </div>
+                  )}
+
                   {/* Cost Display in Player Mat Style */}
-                  <div className="bg-[#3D141C] border border-[#2A0D12] rounded-xl p-4 w-full max-w-xs mb-6 flex flex-col items-center shadow-inner">
-                    <span className="text-[#FFE8D6]/70 text-[10px] font-bold uppercase tracking-wider mb-1">Total Required Cost</span>
-                    <span className="text-3xl font-mono font-black text-white">${requiredCost}K</span>
-                    <div className="w-full flex justify-between text-[11px] text-[#FFE8D6] mt-3 pt-2 border-t border-white/10">
+                  <div 
+                    className="border rounded-xl p-3.5 w-full max-w-xs mb-4 flex flex-col items-center shadow-inner"
+                    style={{
+                      backgroundColor: theme.bannerBg,
+                      borderColor: theme.deskBorder
+                    }}
+                  >
+                    <span className="text-[10px] font-bold uppercase tracking-wider mb-0.5 opacity-80" style={{ color: theme.textLight }}>
+                      Total Required Cost
+                    </span>
+                    <span className="text-2xl font-mono font-black text-white">${requiredCost}K</span>
+                    <div className="w-full flex justify-between text-[11px] mt-2.5 pt-2 border-t border-white/10" style={{ color: theme.textLight }}>
                       <span>Your Cash: ${playerCash}K</span>
                       <span className={playerCash >= requiredCost ? 'text-[#55ffb0]' : 'text-red-400'}>
                         {playerCash >= requiredCost ? `Remaining: $${playerCash - requiredCost}K` : `Shortfall: -$${requiredCost - playerCash}K`}
@@ -457,77 +648,218 @@ export default function Phase2PlayerMatModal({ onClose, onPaymentComplete, owned
                     </div>
                   </div>
                   
-                  {/* Action Button: Cream Pill Button with Maroon Text */}
-                  {playerCash >= requiredCost ? (
-                    <button 
-                      onClick={() => onPaymentComplete(selectedCompany.name, requiredCost)}
-                      className="w-full max-w-xs bg-[#FFF2D8] text-[#4A1720] font-black text-sm md:text-base py-3.5 px-6 rounded-full shadow-xl hover:bg-[#EAE4D3] hover:scale-105 active:scale-95 transition-all tracking-wider uppercase border-2 border-[#4A1720] cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <Rocket size={16} />
-                      <span>CONFIRM PAYMENT (${requiredCost}K)</span>
-                    </button>
+                  {/* WORKFORCE SPECIFIC DICE ROLL FLOW */}
+                  {actionType === 'upgrade_workforce' ? (
+                    playerCash < requiredCost ? (
+                      <button 
+                        disabled
+                        className="w-full max-w-xs text-white/30 font-black text-xs py-3.5 px-6 rounded-full border border-white/10 tracking-wider uppercase cursor-not-allowed"
+                        style={{ backgroundColor: theme.deskBorder }}
+                      >
+                        INSUFFICIENT CASH (${requiredCost}K REQUIRED)
+                      </button>
+                    ) : workforceRollState === 'idle' ? (
+                      <div className="flex flex-col items-center gap-2 w-full max-w-xs">
+                        <button 
+                          onClick={handleRollWorkforceDice}
+                          className="w-full bg-gradient-to-br from-[#4ade80] to-[#166534] text-white font-black text-sm md:text-base py-3.5 px-6 rounded-2xl shadow-[0_4px_16px_rgba(74,222,128,0.4)] hover:from-[#52ea90] hover:to-[#1b753d] hover:scale-105 active:scale-95 transition-all tracking-wider uppercase border border-[#166534] cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <Dices size={20} className="text-white" />
+                          <span>Roll the Dice (${requiredCost}K)</span>
+                        </button>
+                        <p className="text-[11px] font-bold uppercase tracking-wider opacity-85" style={{ color: theme.textLight }}>
+                          🎲 Roll the D10 die to upgrade workforce
+                        </p>
+                      </div>
+                    ) : workforceRollState === 'rolling' ? (
+                      <div className="flex flex-col items-center justify-center w-full max-w-xs my-1">
+                        <div className="animate-[spin_0.35s_linear_infinite] drop-shadow-[0_0_25px_rgba(85,255,176,0.7)] my-1">
+                          <svg width="105" height="105" viewBox="0 0 200 200">
+                            <polygon points="100,20 25,95 60,130" fill="#0f766e" />
+                            <polygon points="100,20 175,95 140,130" fill="#0f766e" />
+                            <polygon points="25,95 100,180 60,130" fill="#115e59" />
+                            <polygon points="175,95 100,180 140,130" fill="#115e59" />
+                            <polygon points="60,130 140,130 100,180" fill="#115e59" />
+                            <polygon points="100,20 60,130 140,130" fill="#0d9488" />
+                            <text x="100" y="106" textAnchor="middle" fill="#ffffff" fontSize="48" fontWeight="900" fontFamily="sans-serif">
+                              {workforceRollingNum}
+                            </text>
+                          </svg>
+                        </div>
+                        <button 
+                          disabled
+                          className="w-full mt-2 bg-gradient-to-br from-[#4ade80] to-[#166534] text-white font-black text-sm md:text-base py-3 px-6 rounded-2xl shadow-[0_4px_16px_rgba(74,222,128,0.4)] animate-pulse tracking-wider uppercase border border-[#166534] flex items-center justify-center gap-2 cursor-wait"
+                        >
+                          <Dices size={20} className="animate-spin text-white" />
+                          <span>Rolling the Dice...</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center w-full max-w-xs animate-in zoom-in-75 duration-300">
+                        <div className="relative my-1 flex flex-col items-center justify-center">
+                          <svg width="105" height="105" viewBox="0 0 200 200" className="drop-shadow-[0_12px_30px_rgba(85,255,176,0.6)]">
+                            <polygon points="100,20 25,95 60,130" fill="#0f766e" />
+                            <polygon points="100,20 175,95 140,130" fill="#0f766e" />
+                            <polygon points="25,95 100,180 60,130" fill="#115e59" />
+                            <polygon points="175,95 100,180 140,130" fill="#115e59" />
+                            <polygon points="60,130 140,130 100,180" fill="#115e59" />
+                            <polygon points="100,20 60,130 140,130" fill="#0d9488" />
+                            <text x="100" y="106" textAnchor="middle" fill="#ffffff" fontSize="48" fontWeight="900" fontFamily="sans-serif">
+                              {workforceRollResult}
+                            </text>
+                          </svg>
+                          <div className="mt-2 bg-[#55ffb0]/25 border border-[#55ffb0] text-[#55ffb0] px-4 py-1 rounded-full text-xs font-black uppercase tracking-wider shadow-[0_0_12px_rgba(85,255,176,0.4)]">
+                            Rolled {workforceRollResult} • Team {nextLvl} Multiplier: {achievedMult !== null && achievedMult !== undefined && achievedMult > 0 ? `+${achievedMult}` : achievedMult}x
+                          </div>
+                        </div>
+
+                        <button 
+                          onClick={() => onPaymentComplete(selectedCompany.name, requiredCost, workforceRollResult)}
+                          className="w-full mt-3 font-black text-sm md:text-base py-3.5 px-6 rounded-full shadow-xl hover:scale-105 active:scale-95 transition-all tracking-wider uppercase border-2 cursor-pointer flex items-center justify-center gap-2"
+                          style={{
+                            backgroundColor: theme.pillBg,
+                            color: theme.pillText,
+                            borderColor: theme.pillText
+                          }}
+                        >
+                          <Award size={18} />
+                          <span>CONFIRM UPGRADE (TEAM {nextLvl})</span>
+                        </button>
+                      </div>
+                    )
                   ) : (
-                    <button 
-                      disabled
-                      className="w-full max-w-xs bg-[#2A0D12] text-white/30 font-black text-xs py-3.5 px-6 rounded-full border border-white/10 tracking-wider uppercase cursor-not-allowed"
-                    >
-                      INSUFFICIENT CASH (${requiredCost}K REQUIRED)
-                    </button>
+                    /* Standard Confirmation Button for Launch, Stage Up, PR */
+                    playerCash >= requiredCost ? (
+                      <button 
+                        onClick={() => onPaymentComplete(selectedCompany.name, requiredCost)}
+                        className="w-full max-w-xs font-black text-sm md:text-base py-3.5 px-6 rounded-full shadow-xl hover:scale-105 active:scale-95 transition-all tracking-wider uppercase border-2 cursor-pointer flex items-center justify-center gap-2"
+                        style={{
+                          backgroundColor: theme.pillBg,
+                          color: theme.pillText,
+                          borderColor: theme.pillText
+                        }}
+                      >
+                        <Rocket size={16} />
+                        <span>CONFIRM PAYMENT (${requiredCost}K)</span>
+                      </button>
+                    ) : (
+                      <button 
+                        disabled
+                        className="w-full max-w-xs text-white/30 font-black text-xs py-3.5 px-6 rounded-full border border-white/10 tracking-wider uppercase cursor-not-allowed"
+                        style={{ backgroundColor: theme.deskBorder }}
+                      >
+                        INSUFFICIENT CASH (${requiredCost}K REQUIRED)
+                      </button>
+                    )
                   )}
 
-                  <button 
-                    onClick={() => { setSelectedCompany(null); setCinematicStep(0); }}
-                    className="text-[#FFE8D6]/60 hover:text-white uppercase font-bold text-xs mt-3 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
+                  {workforceRollState !== 'rolling' && (
+                    <button 
+                      onClick={resetSelection}
+                      className="uppercase font-bold text-xs mt-3 transition-colors cursor-pointer hover:underline"
+                      style={{ color: theme.textLight }}
+                    >
+                      Cancel
+                    </button>
+                  )}
                 </div>
               )}
 
               {/* Right Side: Multiplier Table (for stage_up and upgrade_workforce on Screen 3) */}
               {(actionType === 'stage_up' || actionType === 'upgrade_workforce') && cinematicStep === 2 && (
-                <div className="flex-1 bg-[#3D141C] border-t md:border-t-0 md:border-l border-[#2A0D12] p-6 flex flex-col">
-                  <div className="mb-4">
-                    <h4 className="text-[#FFF2D8] font-black text-xl uppercase tracking-wider mb-1">
+                <div 
+                  className="flex-1 border-t md:border-t-0 md:border-l p-5 flex flex-col"
+                  style={{
+                    backgroundColor: theme.bannerBg,
+                    borderColor: theme.deskBorder
+                  }}
+                >
+                  <div className="mb-3">
+                    <h4 className="font-black text-xl uppercase tracking-wider mb-0.5" style={{ color: theme.pillBg }}>
                       Multiplier Table
                     </h4>
-                    <p className="text-[#FFE8D6]/70 text-[10px] uppercase tracking-widest font-bold">
+                    <p className="text-[10px] uppercase tracking-widest font-bold opacity-80" style={{ color: theme.textLight }}>
                       Actual Revenue = Projected Revenue x Multiplier
                     </p>
                   </div>
                   
-                  <div className="flex-1 w-full bg-[#501625] rounded-xl border border-white/10 overflow-hidden flex flex-col shadow-inner">
+                  <div 
+                    className="flex-1 w-full rounded-xl border-2 overflow-hidden flex flex-col shadow-lg"
+                    style={{ 
+                      backgroundColor: theme.pillBg, 
+                      borderColor: theme.cardBorder 
+                    }}
+                  >
                     {/* Table Header */}
-                    <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr] bg-[#3D141C] border-b border-white/20 text-[#FFE8D6] text-[10px] uppercase font-black py-2.5 px-2 text-center items-center">
-                      <div className="text-left pl-2">Dice Roll</div>
-                      <div>Team 1</div>
-                      <div>Team 2</div>
-                      <div>Team 3</div>
-                      <div>Team 4</div>
+                    <div 
+                      className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr] border-b text-[10px] uppercase font-black py-2.5 px-2 text-center items-center shrink-0"
+                      style={{
+                        backgroundColor: theme.tableHeaderBg,
+                        borderColor: theme.tableBorder,
+                        color: theme.pillText
+                      }}
+                    >
+                      <div className="text-left pl-3 font-black">DICE ROLL</div>
+                      {[1, 2, 3, 4].map(lvl => {
+                        const isTarget = actionType === 'upgrade_workforce' && nextLvl === lvl;
+                        return (
+                          <div key={lvl} className="flex justify-center">
+                            {isTarget ? (
+                              <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-full text-[9px] font-black shadow-sm tracking-wider">
+                                TEAM {lvl}
+                              </span>
+                            ) : (
+                              <span className="font-bold opacity-80">
+                                TEAM {lvl}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                     {/* Table Body (10 rows for D10 rolls 1-10) */}
-                    <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col">
-                      {[
-                        { roll: 1,  multipliers: [-2, -2, -1,  0] },
-                        { roll: 2,  multipliers: [-2, -1,  0,  1] },
-                        { roll: 3,  multipliers: [-1, -1,  0,  1] },
-                        { roll: 4,  multipliers: [-1,  0,  1,  2] },
-                        { roll: 5,  multipliers: [ 0,  0,  1,  2] },
-                        { roll: 6,  multipliers: [ 0,  1,  2,  3] },
-                        { roll: 7,  multipliers: [ 1,  1,  2,  3] },
-                        { roll: 8,  multipliers: [ 1,  2,  3,  4] },
-                        { roll: 9,  multipliers: [ 2,  2,  3,  4] },
-                        { roll: 10, multipliers: [ 2,  3,  4,  5] }
-                      ].map((item) => (
-                        <div key={item.roll} className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr] border-b border-white/5 text-white text-xs font-mono py-1.5 px-2 text-center hover:bg-white/5 transition-colors">
-                          <div className="font-black text-[#FFE8D6] text-left pl-3">{item.roll}</div>
-                          {item.multipliers.map((m, mIdx) => (
-                            <div key={mIdx} className={m < 0 ? 'text-red-400 font-bold' : m === 0 ? 'text-gray-400' : 'text-[#55ffb0] font-bold'}>
-                              {m > 0 ? `+${m}` : m}
+                    <div className="flex-1 overflow-y-auto hide-scrollbar flex flex-col font-mono">
+                      {MULTIPLIER_TABLE.map((item) => {
+                        const isRolledRow = actionType === 'upgrade_workforce' && workforceRollResult === item.roll;
+                        const isRollingRow = actionType === 'upgrade_workforce' && workforceRollState === 'rolling' && workforceRollingNum === item.roll;
+                        return (
+                          <div 
+                            key={item.roll} 
+                            className={`grid grid-cols-[1fr_1fr_1fr_1fr_1fr] border-b text-xs font-bold py-1.5 px-2 text-center items-center transition-all duration-150 ${
+                              isRolledRow 
+                                ? 'bg-emerald-500/30 font-black shadow-[0_0_15px_rgba(5,150,105,0.4)] scale-[1.01] rounded border-2 border-emerald-600' 
+                                : isRollingRow
+                                ? 'bg-black/10'
+                                : 'hover:bg-black/5'
+                            }`}
+                            style={{ borderColor: theme.tableBorder }}
+                          >
+                            <div className="font-black text-left pl-3 flex items-center gap-1.5" style={{ color: theme.pillText }}>
+                              <span>{item.roll}</span>
+                              {isRolledRow && <span className="text-[10px]">🎲</span>}
                             </div>
-                          ))}
-                        </div>
-                      ))}
+                            {item.multipliers.map((m, mIdx) => {
+                              const isTargetCol = actionType === 'upgrade_workforce' && mIdx === (nextLvl - 1);
+                              const textColor = m < 0 ? '#DC2626' : m === 0 ? '#4B5563' : '#047857';
+                              return (
+                                <div 
+                                  key={mIdx} 
+                                  className={`text-xs ${
+                                    isTargetCol 
+                                      ? 'font-black bg-emerald-500/20 rounded py-0.5 shadow-xs' 
+                                      : 'font-bold'
+                                  }`}
+                                  style={{
+                                    color: isTargetCol && isRolledRow ? '#047857' : textColor
+                                  }}
+                                >
+                                  {m > 0 ? `+${m}` : m}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

@@ -385,6 +385,11 @@ const createEmptyRoom = (maxPlayers = 6, mode = 'standard', difficulty = 'medium
   };
 };
 
+const getTurnFounders = (room: any) => {
+  const founders = (room?.players || []).filter((p: any) => p.role?.toLowerCase() === 'founder');
+  return founders.length > 0 ? founders : (room?.players || []);
+};
+
 export function setupSocket(server: HttpServer): SocketServer {
 
   const allowedOrigins = (process.env.FRONTEND_URL ?? "")
@@ -1120,44 +1125,33 @@ const io = new SocketServer(server, {
        io.to(roomId).emit('notification', `LOAN SUCCESS: ${player.name} borrowed $${actualLoanGranted}K against ${companiesString}.`);
     }
 
-    if (player.isDummy) {
-      player.isLocked = true;
-      room.phase1TurnIndex = (room.phase1TurnIndex || 0) + 1;
-      if (room.phase1TurnIndex >= room.players.length) {
-         room.phase = 2;
-         room.phase2TurnIndex = 0;
-         room.players.forEach((p: any) => { p.isLocked = false; });
-         const firstP = room.players[0];
-         io.to(roomId).emit('notification', `PHASE 2 BEGINS: It is ${firstP ? firstP.name : 'Unknown'}'s turn.`);
-      } else {
-         const nextP = room.players[room.phase1TurnIndex];
-         if (nextP) {
-            io.to(roomId).emit('notification', `IT IS NOW ${nextP.name.toUpperCase()}'S TURN.`);
-         }
-      }
-      io.to(roomId).emit('game_state_update', room);
-      triggerAIIfNeeded(room, io, roomId);
-      return;
-    }
-
     player.isLocked = true;
     io.to(roomId).emit('notification', `${player.name.toUpperCase()} FINISHED ACTIONS IN PHASE 1.`);
-    
-    room.phase1TurnIndex = (room.phase1TurnIndex || 0) + 1;
-    if (room.phase1TurnIndex >= room.players.length) {
-       room.phase = 2;
-       room.phase2TurnIndex = 0;
-       room.players.forEach((p: any) => { p.isLocked = false; });
-       const firstP = room.players[0];
-       io.to(roomId).emit('notification', `PHASE 2 BEGINS: It is ${firstP ? firstP.name : 'Unknown'}'s turn.`);
-    } else {
-       const nextP = room.players[room.phase1TurnIndex];
-       if (nextP) {
-          io.to(roomId).emit('notification', `IT IS NOW ${nextP.name.toUpperCase()}'S TURN.`);
-       }
+  };
+
+  const checkAndAdvancePhase1 = (room: any, io: any, roomId: string) => {
+    if (room.phase !== 1) return false;
+
+    const activePlayers = (room.players || []).filter((p: any) => !p.isBankrupt && !p.isDummy);
+    const allLocked = activePlayers.length > 0 && activePlayers.every((p: any) => p.isLocked);
+
+    if (allLocked) {
+      room.phase = 2;
+      room.phase1TurnIndex = 0;
+      room.phase2TurnIndex = 0;
+      
+      room.players.forEach((p: any) => {
+        p.isLocked = false;
+      });
+
+      const activeFounders = getTurnFounders(room);
+      const firstP = activeFounders[0];
+      io.to(roomId).emit('notification', `PHASE 2 BEGINS: It is ${firstP ? firstP.name : 'Unknown'}'s turn.`);
+      io.to(roomId).emit('game_state_update', room);
+      triggerAIIfNeeded(room, io, roomId);
+      return true;
     }
-    io.to(roomId).emit('game_state_update', room);
-    triggerAIIfNeeded(room, io, roomId);
+    return false;
   };
 
   const playAIPhase2 = (room: any, player: any, io: any, roomId: string) => {
@@ -1332,12 +1326,14 @@ const io = new SocketServer(server, {
               player.cash -= wfCost;
               room.teamTokenPool[nextLvl] -= 1;
               room.teamTokenPoolModified = true;
+              const diceRoll = Math.floor(Math.random() * 10) + 1;
               compForWorkforce.teamLevel = nextLvl;
               compForWorkforce.team = nextLvl;
+              compForWorkforce.workforceRoll = diceRoll;
               compForWorkforce.workforceUpgradedRound = room.round;
               player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
 
-              io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED WORKFORCE FOR ${compForWorkforce.name.toUpperCase()} TO LEVEL ${nextLvl}`);
+              io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED WORKFORCE FOR ${compForWorkforce.name.toUpperCase()} TO LEVEL ${nextLvl} (ROLLED ${diceRoll})`);
               io.to(roomId).emit('game_state_update', room);
             }
           }
@@ -1391,8 +1387,9 @@ const io = new SocketServer(server, {
 
     player.isLocked = true;
     room.phase2TurnIndex = (room.phase2TurnIndex || 0) + 1;
+    const activeFounders = getTurnFounders(room);
     
-    if (room.phase2TurnIndex >= room.players.length) {
+    if (room.phase2TurnIndex >= activeFounders.length) {
        room.phase = 3;
        room.phase3TurnIndex = 0;
        room.players.forEach((p: any) => {
@@ -1449,7 +1446,7 @@ const io = new SocketServer(server, {
        });
        io.to(roomId).emit('notification', 'PHASE 3: REVENUE GENERATION PHASE. IT IS TIME TO ROLL THE DICE!');
     } else {
-       const nextP = room.players[room.phase2TurnIndex];
+       const nextP = activeFounders[room.phase2TurnIndex];
        if (nextP) {
           io.to(roomId).emit('notification', `IT IS NOW ${nextP.name.toUpperCase()}'S TURN.`);
        }
@@ -1587,14 +1584,17 @@ const io = new SocketServer(server, {
   };
 
   const triggerAIIfNeeded = (room: any, io: any, roomId: string) => {
-    let activePlayer: any = null;
     if (room.phase === 1) {
-      activePlayer = room.players[room.phase1TurnIndex || 0];
-    } else if (room.phase === 2) {
-      activePlayer = room.players[room.phase2TurnIndex || 0];
+      checkAndAdvancePhase1(room, io, roomId);
+      return;
+    }
+
+    let activePlayer: any = null;
+    const activeFounders = getTurnFounders(room);
+    if (room.phase === 2) {
+      activePlayer = activeFounders[room.phase2TurnIndex || 0];
     } else if (room.phase === 3) {
-      const phase3Founders = room.players.filter((p: any) => p.role?.toLowerCase() === 'founder');
-      activePlayer = phase3Founders[room.phase3TurnIndex || 0];
+      activePlayer = activeFounders[room.phase3TurnIndex || 0];
     }
 
     if (activePlayer && (activePlayer.is_ai || activePlayer.isDummy)) {
@@ -1607,13 +1607,13 @@ const io = new SocketServer(server, {
         const currentRoom = rooms[roomId];
         if (!currentRoom) return;
         let currentActive: any = null;
+        const currentActiveFounders = getTurnFounders(currentRoom);
         if (currentRoom.phase === 1) {
-          currentActive = currentRoom.players[currentRoom.phase1TurnIndex || 0];
+          currentActive = currentActiveFounders[currentRoom.phase1TurnIndex || 0];
         } else if (currentRoom.phase === 2) {
-          currentActive = currentRoom.players[currentRoom.phase2TurnIndex || 0];
+          currentActive = currentActiveFounders[currentRoom.phase2TurnIndex || 0];
         } else if (currentRoom.phase === 3) {
-          const currentPhase3Founders = currentRoom.players.filter((p: any) => p.role?.toLowerCase() === 'founder');
-          currentActive = currentPhase3Founders[currentRoom.phase3TurnIndex || 0];
+          currentActive = currentActiveFounders[currentRoom.phase3TurnIndex || 0];
         }
         
         if (currentActive && currentActive.is_ai) {
@@ -1664,7 +1664,7 @@ const io = new SocketServer(server, {
         return (a._prevOrder || 0) - (b._prevOrder || 0);
       });
       founders.forEach((f: any) => { delete f._prevOrder; });
-      room.players = [...realInvestors, ...founders, ...dummyInvestors];
+      room.players = [...founders, ...realInvestors, ...dummyInvestors];
     }
 
     room.players.forEach((p: any) => {
@@ -1692,8 +1692,7 @@ const io = new SocketServer(server, {
       });
     });
 
-    const firstPlayer = room.players[0];
-    io.to(roomId).emit('notification', `PHASE 1 BEGINS: It is ${firstPlayer ? firstPlayer.name : 'Unknown'}'s turn.`);
+    room.turn = 'All';
 
     if (room.round === 4 || (room.round === 7 && room.mode !== 'quick' && room.mode !== 'short')) {
       room.activeEvent = room.eventDeck.shift();
@@ -1744,8 +1743,22 @@ const io = new SocketServer(server, {
          }
       });
     }
-    io.to(roomId).emit('game_state_update', room);
-    triggerAIIfNeeded(room, io, roomId);
+    // In Phase 1, evaluate AI actions and lock AI players so human players can act
+    room.players.forEach((p: any) => {
+      if (p.is_ai || p.isDummy) {
+        if (p.role?.toLowerCase() === 'founder') {
+          playAIPhase1(room, p, io, roomId);
+        } else {
+          p.isLocked = true;
+        }
+      }
+    });
+
+    const advanced = checkAndAdvancePhase1(room, io, roomId);
+    if (!advanced) {
+      io.to(roomId).emit('notification', `PHASE 1 BEGINS: Pitch deals & take bank loans. Click LOCK THE DEAL when ready.`);
+      io.to(roomId).emit('game_state_update', room);
+    }
   };
 
   io.on('connection', (socket) => {
@@ -1914,10 +1927,13 @@ const io = new SocketServer(server, {
           io.to(roomId).emit('notification', `DUMMY INVESTOR SETUP: ${selected.name} active for 2–3 player game.`);
         }
 
-        // Section J.1 & K.3: Round 1 order is random in Standard Mode. In Quick Mode, players keep clockwise seating order.
+        // Section J.1 & K.3: Round 1 order is random for Founders in Standard Mode. In Quick Mode, players keep clockwise seating order.
+        const founders = (room.players || []).filter((p: any) => p.role?.toLowerCase() === 'founder');
+        const investors = (room.players || []).filter((p: any) => p.role?.toLowerCase() !== 'founder');
         if (room.mode !== 'quick' && room.mode !== 'short') {
-          shuffle(room.players);
+          shuffle(founders);
         }
+        room.players = [...founders, ...investors];
         io.to(roomId).emit('game_state_update', room);
         io.to(roomId).emit('notification', 'Game started by host!');
         if (room.round === 1) {
@@ -1938,9 +1954,8 @@ const io = new SocketServer(server, {
              socket.emit('notification', 'ACTION REJECTED: You are blocked from taking loans this round.');
              return;
           }
-          const activePlayer = room.players[room.phase1TurnIndex || 0];
-          if (room.phase === 1 && (!activePlayer || activePlayer.id !== socket.id)) {
-             socket.emit('notification', 'ACTION REJECTED: It is not your turn!');
+          if (room.phase === 1 && player.isLocked) {
+             socket.emit('notification', 'ACTION REJECTED: You have already locked your turn in Phase 1!');
              return;
           }
 
@@ -2077,11 +2092,24 @@ const io = new SocketServer(server, {
         room.phase = currentPhase < 3 ? currentPhase + 1 : 1;
         room.players.forEach((p: any) => p.isLocked = false);
         
-        io.to(roomId).emit('notification', `ADMIN FORCED TRANSITION TO PHASE ${room.phase}`);
-        io.to(roomId).emit('game_state_update', room);
-        if (room.phase === 3) {
-          triggerAIIfNeeded(room, io, roomId);
+        if (room.phase === 1) {
+          room.players.forEach((p: any) => {
+            if (p.is_ai || p.isDummy) {
+              if (p.role?.toLowerCase() === 'founder') {
+                playAIPhase1(room, p, io, roomId);
+              } else {
+                p.isLocked = true;
+              }
+            }
+          });
+          const advanced = checkAndAdvancePhase1(room, io, roomId);
+          if (!advanced) {
+            io.to(roomId).emit('notification', `ADMIN FORCED TRANSITION TO PHASE 1`);
+            io.to(roomId).emit('game_state_update', room);
+          }
         } else {
+          io.to(roomId).emit('notification', `ADMIN FORCED TRANSITION TO PHASE ${room.phase}`);
+          io.to(roomId).emit('game_state_update', room);
           triggerAIIfNeeded(room, io, roomId);
         }
       }
@@ -2121,8 +2149,16 @@ const io = new SocketServer(server, {
         }
       }
 
+      const notifySocket = (msg: string) => {
+        if (socket && typeof socket.emit === 'function') {
+          socket.emit('notification', msg);
+        } else {
+          io.to(roomId).emit('notification', msg);
+        }
+      };
+
       if (!founder || !investor) {
-        socket.emit('notification', 'DEAL REJECTED: Parties to the deal could not be resolved.');
+        notifySocket('DEAL REJECTED: Parties to the deal could not be resolved.');
         return;
       }
 
@@ -2137,12 +2173,13 @@ const io = new SocketServer(server, {
       const terms = String(proposalData.terms || '');
       let companyName = proposalData.companyName || '';
 
+      const normCompName = (companyName || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
       let targetComp = (founder.ownedCompanies || []).find((c: any) => 
-        companyName && c.name?.toUpperCase().trim() === companyName.toUpperCase().trim()
+        normCompName && (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === normCompName
       );
       if (!targetComp && terms && founder.ownedCompanies?.length) {
         targetComp = founder.ownedCompanies.find((c: any) => 
-          terms.toUpperCase().includes(c.name?.toUpperCase().trim())
+          terms.toUpperCase().includes((c.name || '').toUpperCase().trim())
         );
       }
       if (!targetComp && founder.ownedCompanies?.length === 1) {
@@ -2155,12 +2192,12 @@ const io = new SocketServer(server, {
       // Equity limit check (Rule D.5)
       if (equityPct > 0) {
         if (!targetComp) {
-          socket.emit('notification', 'DEAL REJECTED: Founder must have launched a company to sell equity.');
+          notifySocket('DEAL REJECTED: Founder must have launched a company to sell equity.');
           return;
         }
         const currentEquityGiven = targetComp.equityGiven || 0;
         if (currentEquityGiven + equityPct > 100) {
-          socket.emit('notification', `DEAL REJECTED: Equity limit exceeded! Only ${100 - currentEquityGiven}% remaining in ${targetComp.name}.`);
+          notifySocket(`DEAL REJECTED: Equity limit exceeded! Only ${100 - currentEquityGiven}% remaining in ${targetComp.name}.`);
           return;
         }
       }
@@ -2168,7 +2205,7 @@ const io = new SocketServer(server, {
       // Cash check (Rule D.2)
       if (cashAmount > 0) {
         if (investor.cash < cashAmount) {
-          socket.emit('notification', `INSUFFICIENT FUNDS: ${investor.name} does not have $${cashAmount}K to complete this deal!`);
+          notifySocket(`INSUFFICIENT FUNDS: ${investor.name} does not have $${cashAmount}K to complete this deal!`);
           return;
         }
         investor.cash -= cashAmount;
@@ -2211,11 +2248,36 @@ const io = new SocketServer(server, {
       if (!room.royaltyAgreements) room.royaltyAgreements = [];
       room.royaltyAgreements.push(agreementRecord);
 
-      if (room.deals) {
-        const existingDeal = room.deals.find((d: any) => d.id === proposalData.id);
-        if (existingDeal) {
-          existingDeal.status = 'accepted';
-        }
+      if (!room.deals) room.deals = [];
+      const existingDeal = room.deals.find((d: any) => d.id === proposalData.id);
+      if (existingDeal) {
+        existingDeal.status = 'accepted';
+        if (companyName) existingDeal.companyName = companyName;
+        if (equityPct) existingDeal.equity = equityPct;
+        if (cashAmount) existingDeal.cash = cashAmount;
+        if (loanAmount) existingDeal.loan = loanAmount;
+        if (royaltyPct) existingDeal.royalty = royaltyPct;
+        existingDeal.founderName = founder.name;
+        existingDeal.investorName = investor.name;
+        existingDeal.founderId = founder.id;
+        existingDeal.investorId = investor.id;
+      } else {
+        room.deals.push({
+          id: proposalData.id || `deal_${Date.now()}`,
+          proposer: proposer.name,
+          partner: partner.name,
+          founderName: founder.name,
+          investorName: investor.name,
+          founderId: founder.id,
+          investorId: investor.id,
+          companyName: companyName,
+          cash: cashAmount,
+          equity: equityPct,
+          loan: loanAmount,
+          royalty: royaltyPct,
+          terms: terms,
+          status: 'accepted'
+        });
       }
 
       founder.capital = (founder.cash / 1000) + founder.valuation - (founder.loan / 1000) - ((founder.survivalLoan || 0) / 1000) - ((founder.investorDebt || 0) / 1000);
@@ -2237,6 +2299,9 @@ const io = new SocketServer(server, {
         const existingDeal = room.deals.find((d: any) => d.id === proposalData.id);
         if (existingDeal) {
           existingDeal.status = 'rejected';
+          if (proposalData.companyName && !existingDeal.companyName) {
+            existingDeal.companyName = proposalData.companyName;
+          }
         }
       }
       if (proposer) {
@@ -2273,6 +2338,15 @@ const io = new SocketServer(server, {
         const proposer = room.players.find((p: any) => p.name === proposerName);
         const partner = room.players.find((p: any) => p.name === partnerName);
 
+        // Auto-resolve companyName if not explicitly passed
+        if (!companyName) {
+          if (proposer?.role?.toLowerCase() === 'founder' && proposer.ownedCompanies?.length) {
+            companyName = proposer.ownedCompanies[0].name;
+          } else if (partner?.role?.toLowerCase() === 'founder' && partner.ownedCompanies?.length) {
+            companyName = partner.ownedCompanies[0].name;
+          }
+        }
+
         // Dummy Investor automated evaluation
         if (proposer && partner && partner.isDummy) {
            const activePeriod = getActiveDummyPeriod(room.round, room.dummyInvestor);
@@ -2294,7 +2368,10 @@ const io = new SocketServer(server, {
               return;
            }
 
-           const targetComp = (proposer.ownedCompanies || []).find((c: any) => c.name?.toUpperCase().trim() === (companyName || '').toUpperCase().trim());
+           const normComp = (companyName || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+           const targetComp = (proposer.ownedCompanies || []).find((c: any) => 
+             (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === normComp
+           );
            if (targetComp && (targetComp.equityGiven || 0) + offeredEquity > 100) {
               socket.emit('notification', `ACTION REJECTED: Aggregate equity for ${targetComp.name} cannot exceed 100%.`);
               return;
@@ -2311,6 +2388,8 @@ const io = new SocketServer(server, {
               partnerName: partnerName,
               founderId: proposer.id,
               investorId: partner.id,
+              founderName: proposer.name,
+              investorName: partner.name,
               cash: requestedCash,
               equity: offeredEquity,
               loan: Number(loan) || 0,
@@ -2328,6 +2407,8 @@ const io = new SocketServer(server, {
 
         if (proposer && partner) {
           const proposalId = `proposal_${Date.now()}`;
+          const isProposerFounder = proposer.role?.toLowerCase() === 'founder';
+
           const royaltyProposal = {
             id: proposalId,
             proposerId: proposer.id,
@@ -2336,8 +2417,10 @@ const io = new SocketServer(server, {
             partnerId: partner.id,
             partner: partnerName,
             partnerName: partnerName,
-            founderId: proposer.role?.toLowerCase() === 'founder' ? proposer.id : partner.id,
-            investorId: proposer.role?.toLowerCase() === 'investor' ? proposer.id : partner.id,
+            founderId: isProposerFounder ? proposer.id : partner.id,
+            investorId: isProposerFounder ? partner.id : proposer.id,
+            founderName: isProposerFounder ? proposer.name : partner.name,
+            investorName: isProposerFounder ? partner.name : proposer.name,
             cash: Number(cash) || 0,
             equity: Number(equity) || 0,
             loan: Number(loan) || 0,
@@ -2352,6 +2435,10 @@ const io = new SocketServer(server, {
             id: proposalId,
             proposer: proposerName,
             partner: partnerName,
+            founderName: royaltyProposal.founderName,
+            investorName: royaltyProposal.investorName,
+            founderId: royaltyProposal.founderId,
+            investorId: royaltyProposal.investorId,
             cash: Number(cash) || 0,
             equity: Number(equity) || 0,
             loan: Number(loan) || 0,
@@ -2360,6 +2447,7 @@ const io = new SocketServer(server, {
             companyName: companyName || '',
             status: 'pending'
           };
+          if (!room.deals) room.deals = [];
           room.deals.push(newDeal);
 
           io.to(partner.id).emit('royalty_proposal_received', royaltyProposal);
@@ -2378,8 +2466,27 @@ const io = new SocketServer(server, {
               const eqOffered = Number(royaltyProposal.equity) || 0;
               const royOffered = Number(royaltyProposal.royalty) || 0;
 
-              // AI accepts if they have enough cash and either get >= 5% equity or >= 5% royalty or loan with interest
-              if (cashReq <= curPartner.cash && (eqOffered >= 5 || royOffered >= 5 || Number(royaltyProposal.loan) > 0)) {
+              const isPartnerInvestor = curPartner.role?.toLowerCase() === 'investor';
+              let shouldAccept = false;
+
+              if (isPartnerInvestor) {
+                // Partner is an Investor receiving equity/royalty and providing cash/loan
+                const hasCash = cashReq <= curPartner.cash;
+                const hasReturn = eqOffered >= 5 || royOffered >= 5 || Number(royaltyProposal.loan) > 0;
+                shouldAccept = hasCash && hasReturn;
+              } else {
+                // Partner is a Founder receiving cash/loan and offering equity/royalty
+                const normComp = (companyName || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const targetComp = (curPartner.ownedCompanies || []).find((c: any) => 
+                  (c.name || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === normComp
+                ) || (curPartner.ownedCompanies || [])[0];
+                const currentEquity = targetComp ? (targetComp.equityGiven || 0) : 0;
+                const canGiveEquity = currentEquity + eqOffered <= 100;
+                const gettingBenefit = cashReq > 0 || Number(royaltyProposal.loan) > 0;
+                shouldAccept = canGiveEquity && gettingBenefit;
+              }
+
+              if (shouldAccept) {
                 processAcceptedDeal(currentRoom, royaltyProposal, null, io, roomId);
                 io.to(roomId).emit('notification', `DEAL ACCEPTED: ${curPartner.name} accepted the deal proposal from ${curProposer ? curProposer.name : 'Founder'}!`);
               } else {
@@ -2446,6 +2553,23 @@ const io = new SocketServer(server, {
               loan: 0,
               royalty: 0,
               converted: false
+           });
+           if (!room.deals) room.deals = [];
+           room.deals.push({
+              id: `deal_${Date.now()}`,
+              proposer: founder?.name || 'Founder',
+              partner: targetPlayer.name,
+              founderName: founder?.name || 'Founder',
+              investorName: targetPlayer.name,
+              founderId: founderId,
+              investorId: targetPlayer.id,
+              companyName: companyName,
+              cash: grantCash,
+              equity: pct,
+              loan: 0,
+              royalty: 0,
+              terms: '',
+              status: 'accepted'
            });
            if (targetComp) {
               targetComp.equityGiven = (targetComp.equityGiven || 0) + pct;
@@ -2546,13 +2670,13 @@ const io = new SocketServer(server, {
       }
     });
 
-    socket.on('phase2_action', ({ roomId, actionType, companyName, cost, teamColor, targetPlayerId }) => {
+    socket.on('phase2_action', ({ roomId, actionType, companyName, cost, teamColor, targetPlayerId, roll }: any) => {
       if (rooms[roomId]) {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
         
         if (player) {
-           const activePlayer = room.players[room.phase2TurnIndex || 0];
+           const activePlayer = getTurnFounders(room)[room.phase2TurnIndex || 0];
            if (!activePlayer || activePlayer.id !== socket.id) {
               socket.emit('notification', 'ACTION REJECTED: It is not your turn!');
               return;
@@ -2819,8 +2943,11 @@ const io = new SocketServer(server, {
                   room.teamTokenPool[nextLvl] -= 1;
                   room.teamTokenPoolModified = true;
 
+                  const diceRoll = roll ? Math.min(10, Math.max(1, Number(roll))) : (Math.floor(Math.random() * 10) + 1);
+
                   comp.teamLevel = nextLvl;
                   comp.team = nextLvl;
+                  comp.workforceRoll = diceRoll;
                   comp.workforceUpgradedRound = room.round;
                   player.capital = (player.cash / 1000) + player.valuation - (player.loan / 1000) - ((player.survivalLoan || 0) / 1000) - ((player.investorDebt || 0) / 1000);
                   
@@ -2829,9 +2956,10 @@ const io = new SocketServer(server, {
                     id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                     type: 'upgrade_workforce',
                     companyName: comp.name,
-                    text: `Upgraded Workforce for ${comp.customName || comp.name} to Level ${nextLvl}`,
+                    text: `Upgraded Workforce for ${comp.customName || comp.name} to Level ${nextLvl} (Rolled ${diceRoll})`,
                     cost: actualCost,
                     targetLevel: nextLvl,
+                    roll: diceRoll,
                     round: room.round,
                     timestamp: Date.now()
                   });
@@ -2840,45 +2968,29 @@ const io = new SocketServer(server, {
                   player.actionCount = (player.actionCount || 0) + 1;
                   
                   io.to(roomId).emit('game_state_update', room);
-                  io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED WORKFORCE FOR ${comp.name.toUpperCase()} TO LEVEL ${nextLvl}`);
+                  io.to(roomId).emit('notification', `${player.name.toUpperCase()} UPGRADED WORKFORCE FOR ${comp.name.toUpperCase()} TO LEVEL ${nextLvl} (ROLLED ${diceRoll})`);
                }
             }
         }
       }
     });
 
-    socket.on('lock_phase1', ({ roomId }) => {
+    socket.on('lock_phase1', ({ roomId, username, playerId }: any) => {
       if (rooms[roomId]) {
         const room = rooms[roomId];
-        const player = room.players.find((p: any) => p.id === socket.id);
+        const player = room.players.find((p: any) => 
+          (playerId && p.id === playerId) || 
+          p.id === socket.id || 
+          (username && p.name?.toLowerCase() === username.toLowerCase())
+        );
         
         if (player) {
            player.isLocked = true;
-           io.to(roomId).emit('game_state_update', room);
            io.to(roomId).emit('notification', `${player.name.toUpperCase()} FINISHED ACTIONS IN PHASE 1.`);
 
-           const activePlayer = room.players[room.phase1TurnIndex || 0];
-           if (activePlayer && activePlayer.id === socket.id) {
-              room.phase1TurnIndex = (room.phase1TurnIndex || 0) + 1;
-              
-              if (room.phase1TurnIndex >= room.players.length) {
-                 room.phase = 2;
-                 room.phase2TurnIndex = 0;
-                 
-                 room.players.forEach((p: any) => {
-                   p.isLocked = false;
-                 });
-                 
-                 const firstP = room.players[0];
-                 io.to(roomId).emit('notification', `PHASE 2 BEGINS: It is ${firstP ? firstP.name : 'Unknown'}'s turn.`);
-              } else {
-                 const nextP = room.players[room.phase1TurnIndex];
-                 if (nextP) {
-                    io.to(roomId).emit('notification', `IT IS NOW ${nextP.name.toUpperCase()}'S TURN.`);
-                 }
-              }
+           const advanced = checkAndAdvancePhase1(room, io, roomId);
+           if (!advanced) {
               io.to(roomId).emit('game_state_update', room);
-              triggerAIIfNeeded(room, io, roomId);
            }
         }
       }
@@ -2893,11 +3005,12 @@ const io = new SocketServer(server, {
            player.isLocked = true;
            io.to(roomId).emit('game_state_update', room);
 
-           const activePlayer = room.players[room.phase2TurnIndex || 0];
+           const activeFounders = getTurnFounders(room);
+           const activePlayer = activeFounders[room.phase2TurnIndex || 0];
            if (activePlayer && activePlayer.id === socket.id) {
               room.phase2TurnIndex = (room.phase2TurnIndex || 0) + 1;
               
-              if (room.phase2TurnIndex >= room.players.length) {
+              if (room.phase2TurnIndex >= activeFounders.length) {
                  room.phase = 3;
                  room.phase3TurnIndex = 0;
                  
@@ -2957,7 +3070,7 @@ const io = new SocketServer(server, {
                  
                  io.to(roomId).emit('notification', 'PHASE 3: REVENUE GENERATION PHASE. IT IS TIME TO ROLL THE DICE!');
               } else {
-                 const nextP = room.players[room.phase2TurnIndex];
+                 const nextP = activeFounders[room.phase2TurnIndex];
                  if (nextP) {
                     io.to(roomId).emit('notification', `IT IS NOW ${nextP.name.toUpperCase()}'S TURN.`);
                  }
@@ -2977,11 +3090,12 @@ const io = new SocketServer(server, {
            player.isLocked = true;
            io.to(roomId).emit('game_state_update', room);
            
-           const activePlayer = room.players[room.phase3TurnIndex || 0];
+           const activeFounders = getTurnFounders(room);
+           const activePlayer = activeFounders[room.phase3TurnIndex || 0];
            if (activePlayer && activePlayer.id === socket.id) {
               room.phase3TurnIndex = (room.phase3TurnIndex || 0) + 1;
               
-              if (room.phase3TurnIndex >= room.players.length) {
+              if (room.phase3TurnIndex >= activeFounders.length) {
                  io.to(roomId).emit('notification', 'ROUND ENDED: Proceeding to next round.');
               }
               io.to(roomId).emit('game_state_update', room);
