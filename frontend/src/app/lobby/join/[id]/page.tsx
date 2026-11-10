@@ -117,14 +117,10 @@ export default function JoinGamePage({
       // Do not mark as taken if it belongs to the current user (e.g. host modifying choices)
       const isMe = currentUserId && slotUserId && slotUserId === currentUserId;
       if (!isMe) {
-        if (s.kind === "human" || s.kind === "you" || (s as any).status === "online") {
+        // Only other real human players mark an avatar as permanently taken.
+        // AI bots never lock out the human player; AI bots will take from remaining characters.
+        if (s.kind === "human" || (s.kind === "you" && !isMe)) {
           taken.add(Number(s.avatarId));
-        } else if (s.kind === "ai") {
-          // AI Founder bots (avatars 1-4) in VS AI cannot be chosen.
-          // AI investor bots (avatars 5-6) can be selected by human players to take over an investor role.
-          if (Number(s.avatarId) <= 4) {
-            taken.add(Number(s.avatarId));
-          }
         }
       }
     }

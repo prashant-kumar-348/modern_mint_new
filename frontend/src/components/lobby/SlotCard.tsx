@@ -25,6 +25,7 @@ interface SlotCardProps {
   onChange?: (dropdown: SlotDropdown) => void;
   isYou?:   boolean;
   allowAI?: boolean;
+  allowDropdown?: boolean;
 }
 
 export default function SlotCard({
@@ -35,10 +36,13 @@ export default function SlotCard({
   onChange,
   isYou = false,
   allowAI = true,
+  allowDropdown = true,
 }: SlotCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const canConfigure = !isYou && allowDropdown !== false;
 
   const [currentUser, setCurrentUser] = useState<StoredUser | null>(() => 
     typeof window !== "undefined" ? getUser() : null
@@ -99,12 +103,12 @@ export default function SlotCard({
       {/* ── Avatar / Open Circle (Clickable when not host) ── */}
       <div
         onClick={() => {
-          if (!isYou) setMenuOpen((prev) => !prev);
+          if (canConfigure) setMenuOpen((prev) => !prev);
         }}
         className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 group ${
-          !isYou ? "cursor-pointer hover:scale-105 active:scale-95" : ""
+          canConfigure ? "cursor-pointer hover:scale-105 active:scale-95" : ""
         }`}
-        title={!isYou ? "Click to toggle between Open Slot and AI Bot" : "Your slot"}
+        title={isYou ? "Your slot" : canConfigure ? "Click to toggle between Open Slot and AI Bot" : undefined}
       >
         {isOpen ? (
           // Dashed mint circle with "+"
@@ -134,11 +138,6 @@ export default function SlotCard({
             }}
           >
             <BotIcon size={56} />
-            {/* Small AI status dot at bottom-left */}
-            <div
-              className="absolute bottom-1 left-1.5 w-3.5 h-3.5 rounded-full border-2 border-[#04190d] bg-[#1de9d6] flex items-center justify-center pointer-events-none z-20"
-              style={{ boxShadow: "0 0 6px #1de9d6" }}
-            />
           </div>
         ) : (
           <>
@@ -186,7 +185,7 @@ export default function SlotCard({
         )}
 
         {/* Small subtle dropdown arrow badge on circle hover */}
-        {!isYou && (
+        {canConfigure && (
           <span
             className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-[#061a12] border border-[#d4af37] text-[#ffe885] text-[9px] flex items-center justify-center shadow-md transition-transform group-hover:scale-110 z-30"
             title="Configure Slot"
@@ -199,17 +198,17 @@ export default function SlotCard({
       {/* ── Name Pill (using Rectangle 582.png from zip) ── */}
       <div
         onClick={() => {
-          if (!isYou) setMenuOpen((prev) => !prev);
+          if (canConfigure) setMenuOpen((prev) => !prev);
         }}
         className={`relative w-[130px] h-8 flex items-center justify-center px-2 transition-transform ${
-          !isYou ? "cursor-pointer hover:scale-[1.03] active:scale-[0.98]" : ""
+          canConfigure ? "cursor-pointer hover:scale-[1.03] active:scale-[0.98]" : ""
         }`}
         style={{
           backgroundImage: "url('/lobby/create/Rectangle 582.png')",
           backgroundSize: "100% 100%",
           backgroundRepeat: "no-repeat",
         }}
-        title={!isYou ? "Click to toggle between Open Slot and AI Bot" : "Your slot"}
+        title={isYou ? "Your slot" : canConfigure ? "Click to toggle between Open Slot and AI Bot" : undefined}
       >
         <span
           className={`text-[11px] font-black tracking-wider uppercase truncate flex items-center gap-1.5 ${
@@ -222,7 +221,7 @@ export default function SlotCard({
           }}
         >
           <span>{displayName}</span>
-          {!isYou && (
+          {canConfigure && (
             <span className="text-[8px] text-[#ffe885] opacity-90 leading-none">▼</span>
           )}
         </span>
@@ -242,7 +241,7 @@ export default function SlotCard({
 
       {/* ── Host slot configuration popup menu (Open Slot / AI Bot) ── */}
       <AnimatePresence>
-        {menuOpen && !isYou && (
+        {menuOpen && canConfigure && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: -4 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}

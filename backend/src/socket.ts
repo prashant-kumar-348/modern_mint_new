@@ -992,6 +992,9 @@ const io = new SocketServer(server, {
   };
 
   const ensureRoomAIBots = async (roomState: any, roomId: string, passedAiBots?: any[]) => {
+    const allFounderAvatars = [1, 2, 3, 4];
+    const allInvestorAvatars = [5, 6];
+
     // 1. Add any AI bots passed directly from client
     if (Array.isArray(passedAiBots) && passedAiBots.length > 0) {
       for (const bot of passedAiBots) {
@@ -1002,7 +1005,13 @@ const io = new SocketServer(server, {
         if (!alreadyExists) {
           const aiRole = bot.role ? (bot.role.charAt(0).toUpperCase() + bot.role.slice(1).toLowerCase()) : 'Founder';
           const aiStartCash = aiRole === 'Investor' ? 5000 : 500;
-          const aiAvId = bot.avatarId || (aiRole === 'Investor' ? 5 : 2);
+          const occupiedAvatars = new Set<number>(roomState.players.map((p: any) => p.avatarId));
+          const rolePool = aiRole === 'Investor' ? allInvestorAvatars : allFounderAvatars;
+          let aiAvId = bot.avatarId || (aiRole === 'Investor' ? 5 : 2);
+          if (occupiedAvatars.has(aiAvId)) {
+            const free = rolePool.find(id => !occupiedAvatars.has(id));
+            if (free) aiAvId = free;
+          }
           console.log(`[Socket] Adding client-passed AI player "${bot.name}" (${aiRole}, avatar ${aiAvId}) to room ${roomId}`);
           roomState.players.push({
             id: `ai_${aiRole.toLowerCase()}_${aiAvId}_${Math.random().toString(36).substring(2, 9)}`,
@@ -1044,7 +1053,13 @@ const io = new SocketServer(server, {
           if (!alreadyExists) {
             const aiRole = aiRow.role ? (aiRow.role.charAt(0).toUpperCase() + aiRow.role.slice(1).toLowerCase()) : 'Founder';
             const aiStartCash = aiRole === 'Investor' ? 5000 : 500;
-            const aiAvId = aiRow.avatar_id || (aiRole === 'Investor' ? 5 : 2);
+            const occupiedAvatars = new Set<number>(roomState.players.map((p: any) => p.avatarId));
+            const rolePool = aiRole === 'Investor' ? allInvestorAvatars : allFounderAvatars;
+            let aiAvId = aiRow.avatar_id || (aiRole === 'Investor' ? 5 : 2);
+            if (occupiedAvatars.has(aiAvId)) {
+              const free = rolePool.find(id => !occupiedAvatars.has(id));
+              if (free) aiAvId = free;
+            }
             console.log(`[Socket] Adding DB-stored AI player "${aiRow.display_name}" (${aiRole}, avatar ${aiAvId}) to room ${roomId}`);
             roomState.players.push({
               id: `ai_db_${aiRow.id}`,
@@ -1074,6 +1089,25 @@ const io = new SocketServer(server, {
     } catch (dbErr) {
       console.warn(`[Socket] Could not query AI players for room ${roomId}:`, dbErr);
     }
+
+    // 3. Ensure no AI bots clash with human players - AI bots pick from remaining available characters
+    const humanAvatars = new Set<number>(
+      roomState.players.filter((p: any) => !p.is_ai).map((p: any) => p.avatarId)
+    );
+    const usedAvatars = new Set<number>(humanAvatars);
+    roomState.players.forEach((p: any) => {
+      if (p.is_ai) {
+        if (usedAvatars.has(p.avatarId)) {
+          const pool = p.role?.toLowerCase() === 'investor' ? allInvestorAvatars : allFounderAvatars;
+          const freeAv = pool.find((id) => !usedAvatars.has(id)) || pool[0];
+          p.avatarId = freeAv;
+          p.color = AVATAR_COLORS[freeAv] || p.color;
+          usedAvatars.add(freeAv);
+        } else {
+          usedAvatars.add(p.avatarId);
+        }
+      }
+    });
   };
 
   const addAIPlayers = (room: any) => {
@@ -1891,8 +1925,8 @@ const io = new SocketServer(server, {
           console.log(`Socket ${socket.id} is already registered as "${username}".`);
         }
         if (avatarId) {
-          const takenByOther = roomState.players.some((p: any) => p.name !== username && p.avatarId === avatarId);
-          if (!takenByOther) {
+          const takenByOtherHuman = roomState.players.some((p: any) => p.name !== username && !p.is_ai && p.avatarId === avatarId);
+          if (!takenByOtherHuman) {
             existingPlayer.avatarId = avatarId;
             if (AVATAR_COLORS[avatarId]) {
               existingPlayer.color = AVATAR_COLORS[avatarId];
@@ -1905,11 +1939,11 @@ const io = new SocketServer(server, {
         const startCash = finalRole === 'Investor' ? 5000 : 500;
         const startCapital = startCash / 1000;
         const playerColors = ['#ef4444', '#55ffb0', '#d4af37', '#00e1ff', '#b06aff', '#ff7a2a'];
-        const takenAvatarIds = new Set(roomState.players.map((p: any) => p.avatarId));
+        const humanTakenAvatarIds = new Set(roomState.players.filter((p: any) => !p.is_ai).map((p: any) => p.avatarId));
         let finalAvatarId = avatarId || (finalRole === 'Investor' ? 5 : 1);
-        if (takenAvatarIds.has(finalAvatarId)) {
+        if (humanTakenAvatarIds.has(finalAvatarId)) {
           const roleAvatars = finalRole === 'Investor' ? [5, 6] : [1, 2, 3, 4];
-          const available = roleAvatars.find(id => !takenAvatarIds.has(id));
+          const available = roleAvatars.find(id => !humanTakenAvatarIds.has(id));
           if (available) {
             finalAvatarId = available;
           }
@@ -1938,6 +1972,28 @@ const io = new SocketServer(server, {
           is_ai: false
         });
       }
+
+      // Reassign any AI bots that clash with human players so bots select from remaining characters
+      const allFounderAvatars = [1, 2, 3, 4];
+      const allInvestorAvatars = [5, 6];
+      const occupiedByHumans = new Set<number>(
+        roomState.players.filter((p: any) => !p.is_ai).map((p: any) => p.avatarId)
+      );
+
+      const usedInRoom = new Set<number>(occupiedByHumans);
+      roomState.players.forEach((p: any) => {
+        if (p.is_ai) {
+          if (usedInRoom.has(p.avatarId)) {
+            const pool = p.role?.toLowerCase() === 'investor' ? allInvestorAvatars : allFounderAvatars;
+            const freeAv = pool.find((id) => !usedInRoom.has(id)) || pool[0];
+            p.avatarId = freeAv;
+            p.color = AVATAR_COLORS[freeAv] || p.color;
+            usedInRoom.add(freeAv);
+          } else {
+            usedInRoom.add(p.avatarId);
+          }
+        }
+      });
 
       // Singleplayer / VS AI mode only
       if (isVsAi) {

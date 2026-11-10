@@ -347,6 +347,13 @@ function processInMemoryQuery(sql: string, params: any[] = []): any {
 
   // Update room player (e.g. host or re-joining player changing avatar or role)
   if (norm.includes("UPDATE ROOM_PLAYERS")) {
+    if (norm.includes("SET AVATAR_ID=$1 WHERE ID=$2")) {
+      const avatar_id = Number(params[0]) || 1;
+      const id = params[1];
+      const rp = roomPlayers.find(p => p.id === id);
+      if (rp) rp.avatar_id = avatar_id;
+      return { rows: rp ? [rp] : [], rowCount: rp ? 1 : 0 };
+    }
     const role = params[0];
     const avatar_id = Number(params[1]) || 1;
     const display_name = (params[2] || "").trim();

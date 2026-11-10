@@ -320,6 +320,7 @@ export default function CreateGamePage() {
                         onChange={(d) => updateFounder(i, d)}
                         isYou={i === 0}
                         allowAI={true}
+                        allowDropdown={!isVsAi}
                       />
                     ))}
                   </div>
@@ -348,6 +349,7 @@ export default function CreateGamePage() {
                         name={slot.name}
                         onChange={(d) => updateInvestor(i, d)}
                         allowAI={true}
+                        allowDropdown={!isVsAi}
                       />
                     ))}
                   </div>

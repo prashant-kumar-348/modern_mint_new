@@ -3,6 +3,7 @@ import pool from "../config/database";
 import { hashPassword, verifyPassword } from "../utils/hash";
 import {
   RoomRow,
+  RoomPlayerRow,
   RoomPlayerJoinedRow,
   RoomResponse,
   PlayerSlotResponse,
@@ -266,6 +267,44 @@ export async function createRoom(
 
 // ── Shared insert helper (called inside an open transaction) ──────────────
 
+async function reassignAiAvatars(
+  client: PoolClient,
+  roomId: string,
+  humanAvatarId: number
+): Promise<void> {
+  const allFounderAvatars = [1, 2, 3, 4];
+  const allInvestorAvatars = [5, 6];
+
+  // Avatars taken by real human players in this room
+  const humanPlayersRes = await client.query<{ avatar_id: number }>(
+    `SELECT avatar_id FROM room_players WHERE room_id=$1 AND is_ai=false`,
+    [roomId]
+  );
+  const occupiedAvatars = new Set<number>(humanPlayersRes.rows.map(r => Number(r.avatar_id)));
+  occupiedAvatars.add(Number(humanAvatarId));
+
+  // AI players in the room
+  const aiPlayersRes = await client.query<RoomPlayerRow>(
+    `SELECT * FROM room_players WHERE room_id=$1 AND is_ai=true ORDER BY joined_at ASC`,
+    [roomId]
+  );
+
+  const used = new Set<number>(occupiedAvatars);
+  for (const ai of aiPlayersRes.rows) {
+    if (used.has(ai.avatar_id)) {
+      const pool = ai.role === "founder" ? allFounderAvatars : allInvestorAvatars;
+      const freeAv = pool.find(id => !used.has(id)) || pool[0];
+      used.add(freeAv);
+      await client.query(
+        `UPDATE room_players SET avatar_id=$1 WHERE id=$2`,
+        [freeAv, ai.id]
+      );
+    } else {
+      used.add(ai.avatar_id);
+    }
+  }
+}
+
 async function insertPlayer(
   client: PoolClient,
   roomId: string,
@@ -275,9 +314,9 @@ async function insertPlayer(
   avatar_id: number,
   display_name: string
 ): Promise<void> {
-  // Check if avatar is already taken by another player in this room
+  // Check if avatar is already taken by another human player in this room
   const avatarTaken = await client.query(
-    `SELECT id FROM room_players WHERE room_id=$1 AND avatar_id=$2 AND user_id!=$3 LIMIT 1`,
+    `SELECT id FROM room_players WHERE room_id=$1 AND avatar_id=$2 AND is_ai=false AND (user_id IS NULL OR user_id!=$3) LIMIT 1`,
     [roomId, avatar_id, userId]
   );
   if (avatarTaken.rowCount && avatarTaken.rowCount > 0) {
@@ -297,6 +336,7 @@ async function insertPlayer(
        WHERE room_id=$4 AND user_id=$5`,
       [role, avatar_id, display_name.trim(), roomId, userId]
     );
+    await reassignAiAvatars(client, roomId, avatar_id);
     return;
   }
 
@@ -328,6 +368,9 @@ async function insertPlayer(
      VALUES ($1,$2,$3,$4,$5,false)`,
     [roomId, userId, role, avatar_id, display_name.trim()]
   );
+
+  // Reassign any AI bots that were using this avatar to remaining available characters
+  await reassignAiAvatars(client, roomId, avatar_id);
 }
 
 // ── joinRoom (open rooms only) ────────────────────────────────────────────
