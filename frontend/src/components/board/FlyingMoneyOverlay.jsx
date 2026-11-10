@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CURRENCY_NOTES, getBestNoteForAmount } from '../../utils/currencyNotes';
+import { soundEffects } from '../../utils/soundEffects';
 
 export default function FlyingMoneyOverlay() {
   const [batches, setBatches] = useState([]);
@@ -40,6 +41,20 @@ export default function FlyingMoneyOverlay() {
     }
 
     recentEventsRef.current.push({ amount: absAmount, type, timestamp: now });
+
+    // Play tactile cash wallet sounds (counting rustle on flight, register chime on landing for gains)
+    try {
+      if (type === 'gain') {
+        soundEffects.play('cash_count');
+        setTimeout(() => {
+          try {
+            soundEffects.play('cash_register');
+          } catch (_) {}
+        }, 450);
+      } else {
+        soundEffects.play('cash_spend');
+      }
+    } catch (_) {}
 
     // Resolve start coordinates
     let startX = window.innerWidth - 120;

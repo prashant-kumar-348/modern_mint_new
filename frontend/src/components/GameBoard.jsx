@@ -30,6 +30,7 @@ import BankLoanModal from './modals/BankLoanModal';
 import DealSheetModal from './modals/DealSheetModal';
 import WalletModal from './modals/WalletModal';
 import FlyingMoneyOverlay from './board/FlyingMoneyOverlay';
+import { soundEffects } from '../utils/soundEffects';
 import MentorCardModal from './modals/MentorCardModal';
 import MentorInventoryModal from './modals/MentorInventoryModal';
 import PersonaSelectModal from './modals/PersonaSelectModal';
@@ -1731,7 +1732,17 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
               
               <div className="flex items-center gap-3">
                 <span className="text-white uppercase font-bold tracking-widest text-[10px] md:text-xs text-right leading-tight">Cash in<br/>Hand</span>
-                <div id="player-cash-in-hand" className="bg-[#2A7553] text-[#55ffb0] font-mono font-bold px-4 py-2 rounded-lg shadow-md text-xs md:text-sm transition-transform duration-200">${cash}K</div>
+                <div 
+                  id="player-cash-in-hand" 
+                  onClick={() => {
+                    try { soundEffects.play('wallet_open'); } catch (_) {}
+                    setActiveModal('wallet');
+                  }}
+                  className="bg-[#2A7553] text-[#55ffb0] font-mono font-bold px-4 py-2 rounded-lg shadow-md text-xs md:text-sm transition-all duration-200 cursor-pointer hover:scale-105 hover:bg-[#348b63]"
+                  title="Your Cash Wallet (Click to Open Reserve Notes)"
+                >
+                  ${cash}K
+                </div>
               </div>
               
               <div className="flex items-center gap-3">
@@ -1744,7 +1755,10 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
             {/* Blue Cash Deck Visual / Interactive Wallet */}
             <div 
               id="game-wallet-deck"
-              onClick={() => setActiveModal('wallet')}
+              onClick={() => {
+                try { soundEffects.play('wallet_open'); } catch (_) {}
+                setActiveModal('wallet');
+              }}
               className="absolute right-12 md:right-20 bottom-1 flex flex-col items-center pointer-events-auto cursor-pointer hover:-translate-y-1.5 transition-all group z-50 select-none"
               title="Modern Mint Wallet & Reserve Notes (Click to Open)"
             >

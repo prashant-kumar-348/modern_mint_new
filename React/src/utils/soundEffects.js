@@ -91,6 +91,32 @@ class SoundEffectsEngine {
         case 'card':
           this.playCardDraw(ctx, now);
           break;
+        case 'wallet':
+        case 'wallet_open':
+          this.playWalletOpen(ctx, now);
+          break;
+        case 'wallet_close':
+          this.playWalletClose(ctx, now);
+          break;
+        case 'banknote':
+        case 'note':
+        case 'bill':
+        case 'cash_flutter':
+          this.playBanknote(ctx, now);
+          break;
+        case 'cash_count':
+        case 'count':
+          this.playCashCount(ctx, now);
+          break;
+        case 'cash_register':
+        case 'register':
+        case 'cha_ching':
+          this.playCashRegister(ctx, now);
+          break;
+        case 'cash_spend':
+        case 'spend':
+          this.playCashSpend(ctx, now);
+          break;
         case 'phase':
           this.playPhaseTransition(ctx, now);
           break;
@@ -224,6 +250,255 @@ class SoundEffectsEngine {
     gain.connect(this.masterGain);
 
     noise.start(now);
+  }
+
+  // 4b. Tactile leather/fabric wallet opening with snap unfasten and currency paper flutter
+  playWalletOpen(ctx, now) {
+    // 1. Clasp / magnetic snap click
+    const snapOsc = ctx.createOscillator();
+    const snapGain = ctx.createGain();
+    const snapFilter = ctx.createBiquadFilter();
+
+    snapFilter.type = 'bandpass';
+    snapFilter.frequency.setValueAtTime(2200, now);
+    snapFilter.Q.setValueAtTime(2.5, now);
+
+    snapOsc.type = 'triangle';
+    snapOsc.frequency.setValueAtTime(1700, now);
+    snapOsc.frequency.exponentialRampToValueAtTime(280, now + 0.022);
+
+    snapGain.gain.setValueAtTime(0.22, now);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.022);
+
+    snapOsc.connect(snapFilter);
+    snapFilter.connect(snapGain);
+    snapGain.connect(this.masterGain);
+
+    snapOsc.start(now);
+    snapOsc.stop(now + 0.025);
+
+    // 2. Leather wallet unfold body thump
+    const thumpOsc = ctx.createOscillator();
+    const thumpGain = ctx.createGain();
+    thumpOsc.type = 'sine';
+    thumpOsc.frequency.setValueAtTime(160, now + 0.008);
+    thumpOsc.frequency.exponentialRampToValueAtTime(50, now + 0.075);
+
+    thumpGain.gain.setValueAtTime(0.22, now + 0.008);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    thumpOsc.connect(thumpGain);
+    thumpGain.connect(this.masterGain);
+
+    thumpOsc.start(now + 0.008);
+    thumpOsc.stop(now + 0.085);
+
+    // 3. Crisp currency notes rustle inside wallet
+    const bufferSize = Math.floor(ctx.sampleRate * 0.12);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.sin((i / bufferSize) * Math.PI);
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.setValueAtTime(2900, now + 0.015);
+    noiseFilter.frequency.exponentialRampToValueAtTime(1100, now + 0.11);
+    noiseFilter.Q.setValueAtTime(1.6, now + 0.015);
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.001, now + 0.015);
+    noiseGain.gain.linearRampToValueAtTime(0.19, now + 0.035);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.masterGain);
+
+    noise.start(now + 0.015);
+  }
+
+  // 4c. Soft leather flap closure + crisp magnetic fastener click
+  playWalletClose(ctx, now) {
+    const flapOsc = ctx.createOscillator();
+    const flapGain = ctx.createGain();
+    flapOsc.type = 'sine';
+    flapOsc.frequency.setValueAtTime(140, now);
+    flapOsc.frequency.exponentialRampToValueAtTime(45, now + 0.06);
+
+    flapGain.gain.setValueAtTime(0.18, now);
+    flapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+
+    flapOsc.connect(flapGain);
+    flapGain.connect(this.masterGain);
+    flapOsc.start(now);
+    flapOsc.stop(now + 0.07);
+
+    // Magnetic snap
+    const snapOsc = ctx.createOscillator();
+    const snapGain = ctx.createGain();
+    snapOsc.type = 'triangle';
+    snapOsc.frequency.setValueAtTime(1400, now + 0.03);
+    snapOsc.frequency.exponentialRampToValueAtTime(240, now + 0.06);
+
+    snapGain.gain.setValueAtTime(0.2, now + 0.03);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+
+    snapOsc.connect(snapGain);
+    snapGain.connect(this.masterGain);
+    snapOsc.start(now + 0.03);
+    snapOsc.stop(now + 0.07);
+  }
+
+  // 4d. Crisp currency note rustle / paper note sliding & flick
+  playBanknote(ctx, now) {
+    const bufferSize = Math.floor(ctx.sampleRate * 0.085);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(3400, now);
+    filter.frequency.exponentialRampToValueAtTime(1600, now + 0.08);
+    filter.Q.setValueAtTime(2.2, now);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.24, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.082);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+
+    noise.start(now);
+
+    // Subtle airy flick
+    const osc = ctx.createOscillator();
+    const oscGain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(950, now);
+    osc.frequency.exponentialRampToValueAtTime(320, now + 0.045);
+
+    oscGain.gain.setValueAtTime(0.06, now);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+    osc.connect(oscGain);
+    oscGain.connect(this.masterGain);
+
+    osc.start(now);
+    osc.stop(now + 0.055);
+  }
+
+  // 4e. Rapid banknote counting / riffle of currency bills
+  playCashCount(ctx, now) {
+    const flicks = [0, 0.042, 0.085, 0.13];
+    flicks.forEach((delay, idx) => {
+      const isLast = idx === flicks.length - 1;
+      const bufferSize = Math.floor(ctx.sampleRate * 0.055);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.sin((i / bufferSize) * Math.PI);
+      }
+
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(2600 + idx * 300, now + delay);
+      filter.frequency.exponentialRampToValueAtTime(1300, now + delay + 0.05);
+      filter.Q.setValueAtTime(2.8, now + delay);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(isLast ? 0.22 : 0.15, now + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + delay + 0.052);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+
+      noise.start(now + delay);
+    });
+  }
+
+  // 4f. Classic mechanical register "ka-ching" drawer latch + resonant bell chimes
+  playCashRegister(ctx, now) {
+    // Drawer latch transient double-click
+    [0, 0.034].forEach((offset, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(i === 0 ? 820 : 1550, now + offset);
+      filter.Q.setValueAtTime(3.0, now + offset);
+
+      osc.type = i === 0 ? 'triangle' : 'square';
+      osc.frequency.setValueAtTime(i === 0 ? 300 : 620, now + offset);
+      osc.frequency.exponentialRampToValueAtTime(80, now + offset + 0.024);
+
+      gain.gain.setValueAtTime(0.18, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.026);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.03);
+    });
+
+    // Pristine register bell chimes (E6, B6, E7)
+    const bellDelay = 0.065;
+    const bells = [1318.51, 1975.53, 2637.02];
+    bells.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const d = bellDelay + idx * 0.035;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + d);
+
+      gain.gain.setValueAtTime(0.16, now + d);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + d + 0.55);
+
+      osc.connect(gain);
+      gain.connect(this.masterGain);
+
+      osc.start(now + d);
+      osc.stop(now + d + 0.6);
+    });
+  }
+
+  // 4g. Crisp paper bill leaving wallet + soft descending financial spend tone
+  playCashSpend(ctx, now) {
+    this.playBanknote(ctx, now);
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(420, now + 0.025);
+    osc.frequency.exponentialRampToValueAtTime(210, now + 0.16);
+
+    gain.gain.setValueAtTime(0.12, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    osc.start(now + 0.025);
+    osc.stop(now + 0.2);
   }
 
   // 5. Cinematic phase transition whoosh + sparkle

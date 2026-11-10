@@ -1,15 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Wallet, Sparkles, Building2, Layers, Send, Eye } from 'lucide-react';
 import { CURRENCY_NOTES, breakdownCashIntoNotes } from '../../utils/currencyNotes';
+import { soundEffects } from '../../utils/soundEffects';
 
 export default function WalletModal({ onClose, cash = 0, player = null }) {
   const [selectedNote, setSelectedNote] = useState(null);
   const [filter, setFilter] = useState('ALL'); // 'ALL', 'MILLION', 'THOUSAND'
 
+  // Play realistic leather wallet open audio on mount
+  useEffect(() => {
+    try {
+      soundEffects.play('wallet_open');
+    } catch (_) {}
+  }, []);
+
+  const handleClose = () => {
+    try {
+      soundEffects.play('wallet_close');
+    } catch (_) {}
+    onClose();
+  };
+
   // Player's notes breakdown
   const playerNoteBreakdown = breakdownCashIntoNotes(cash);
 
   const handleTestFlight = (noteValue = 1000) => {
+    try {
+      soundEffects.play('cash_count');
+    } catch (_) {}
     window.dispatchEvent(new CustomEvent('fly_money', {
       detail: {
         amount: noteValue,
@@ -17,6 +35,20 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
         type: 'gain'
       }
     }));
+  };
+
+  const handleSelectNote = (note) => {
+    try {
+      soundEffects.play('banknote');
+    } catch (_) {}
+    setSelectedNote(prev => (prev?.id === note.id ? null : note));
+  };
+
+  const handleFilterClick = (newFilter) => {
+    try {
+      soundEffects.play('click');
+    } catch (_) {}
+    setFilter(newFilter);
   };
 
   const filteredNotes = CURRENCY_NOTES.filter(note => {
@@ -63,7 +95,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
 
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 border border-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
             >
               <X size={18} />
@@ -130,7 +162,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
               <div className="flex items-center gap-1.5 bg-black/40 border border-white/10 p-1 rounded-xl self-start sm:self-auto">
                 <button
                   type="button"
-                  onClick={() => setFilter('ALL')}
+                  onClick={() => handleFilterClick('ALL')}
                   className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                     filter === 'ALL'
                       ? 'bg-[#d4af37] text-black shadow-sm'
@@ -141,7 +173,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFilter('MILLION')}
+                  onClick={() => handleFilterClick('MILLION')}
                   className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                     filter === 'MILLION'
                       ? 'bg-[#d4af37] text-black shadow-sm'
@@ -152,7 +184,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFilter('THOUSAND')}
+                  onClick={() => handleFilterClick('THOUSAND')}
                   className={`px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                     filter === 'THOUSAND'
                       ? 'bg-[#d4af37] text-black shadow-sm'
@@ -171,7 +203,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
                 return (
                   <div
                     key={note.id}
-                    onClick={() => setSelectedNote(isSelected ? null : note)}
+                    onClick={() => handleSelectNote(note)}
                     className={`group bg-[#112a22]/80 hover:bg-[#14352b] border rounded-2xl p-3.5 transition-all cursor-pointer flex flex-col gap-2.5 relative overflow-hidden ${
                       isSelected 
                         ? 'border-[#d4af37] shadow-[0_0_25px_rgba(212,175,55,0.4)] scale-[1.01]' 
@@ -240,7 +272,10 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setSelectedNote(null)}
+                  onClick={() => {
+                    try { soundEffects.play('click'); } catch (_) {}
+                    setSelectedNote(null);
+                  }}
                   className="text-white/60 hover:text-white text-xs font-bold uppercase cursor-pointer"
                 >
                   ✕ Close Preview
@@ -277,7 +312,7 @@ export default function WalletModal({ onClose, cash = 0, player = null }) {
           </span>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
           >
             Close Wallet
