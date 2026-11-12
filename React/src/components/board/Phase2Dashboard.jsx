@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Phase2Dashboard = ({ isLocked, onActionClick }) => {
+const Phase2Dashboard = ({ isLocked, onActionClick, isInvestor = false }) => {
   const buttonBaseClass = "px-4 md:px-6 py-2.5 md:py-3.5 rounded-2xl text-[10px] md:text-xs font-bold transition-all shadow-[0_4px_12px_rgba(0,0,0,0.3)] border border-[#14532d]/40 flex-1 whitespace-nowrap";
   
   const getButtonClass = (actionName) => {
@@ -9,6 +9,14 @@ const Phase2Dashboard = ({ isLocked, onActionClick }) => {
     }
     return `${buttonBaseClass} bg-gradient-to-br from-[#4ade80] to-[#166534] text-white hover:from-[#52ea90] hover:to-[#1b753d] hover:scale-105 active:scale-95`;
   };
+
+  if (isInvestor) {
+    return (
+      <div className="flex items-center justify-center px-4 py-2 text-white/70 text-[11px] md:text-xs font-semibold tracking-wide italic select-none">
+        Investors do not have Phase 2 Operations. Click End Actions to lock your turn.
+      </div>
+    );
+  }
 
   return (
     <>

@@ -28,9 +28,24 @@ export default function MiddleBoard({
   activeEvent = null,
   revealedEvents = {},
   onCompanyClick = undefined,
-  localPlayer = null
+  localPlayer = null,
+  isInvestor: isInvestorProp = undefined
 }) {
   const totalRounds = 9;
+
+  const isInvestor = Boolean(
+    isInvestorProp !== undefined
+      ? isInvestorProp
+      : (
+          localPlayer?.role?.toLowerCase() === 'investor' || 
+          localPlayer?.isInvestor ||
+          Number(localPlayer?.avatarId) === 5 ||
+          Number(localPlayer?.avatarId) === 6 ||
+          String(localPlayer?.name || '').toLowerCase().includes('investor') ||
+          String(localPlayer?.role || '').toLowerCase().includes('investor') ||
+          String(localPlayer?.character || '').toLowerCase().includes('investor')
+        )
+  );
 
   const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
 
@@ -236,15 +251,20 @@ export default function MiddleBoard({
               return (
                 <div 
                   key={idx}
-                  onClick={() => onCompanyClick && onCompanyClick(comp)}
-                  className="absolute z-30 pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer hover:scale-110 active:scale-95 transition-all select-none"
+                  onClick={() => {
+                    if (isInvestor) return;
+                    onCompanyClick && onCompanyClick(comp);
+                  }}
+                  className={`absolute z-30 pointer-events-auto transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center select-none ${
+                    isInvestor ? 'cursor-default' : 'group cursor-pointer hover:scale-110 active:scale-95 transition-all'
+                  }`}
                   style={{ top, left }}
-                  title={isOwnedByMe ? `${comp.name} (Launched)` : `Click to Launch ${comp.name}`}
+                  title={isInvestor ? comp.name : (isOwnedByMe ? `${comp.name} (Launched)` : `Click to Launch ${comp.name}`)}
                 >
                   <div className="relative flex flex-col items-center gap-1">
                      
-                     {/* Launch Chip on Hover if Unlaunched */}
-                     {!isOwnedByMe && (
+                     {/* Launch Chip on Hover if Unlaunched (Founders Only - Hidden for Investors) */}
+                     {!isOwnedByMe && !isInvestor && (
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -top-4 bg-[#FFC240] text-[#2A0D12] text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-[0_0_10px_rgba(255,194,64,0.6)] z-50 pointer-events-none whitespace-nowrap border border-[#2A0D12]/40">
                           🚀 Launch
                         </div>

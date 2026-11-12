@@ -3337,6 +3337,11 @@ const io = new SocketServer(server, {
         const room = rooms[roomId];
         const player = room.players.find((p: any) => p.id === socket.id);
         if (player) {
+           if (player.role?.toLowerCase() === 'investor' || player.isInvestor || player.avatarId === 5 || player.avatarId === 6 || String(player.name || '').toLowerCase().includes('investor')) {
+              socket.emit('notification', 'ACTION REJECTED: Investors cannot buy mentor cards.');
+              return;
+           }
+
            if (player.boughtMentorRound === room.round) {
               socket.emit('notification', 'ACTION REJECTED: You can only buy 1 mentor card per round.');
               return;
@@ -3613,6 +3618,10 @@ const io = new SocketServer(server, {
       if (rooms[roomId]) {
         const player = rooms[roomId].players.find((p: any) => p.id === targetPlayerId);
         if (player) {
+          if (player.role?.toLowerCase() === 'investor' || player.isInvestor || player.avatarId === 5 || player.avatarId === 6 || String(player.name || '').toLowerCase().includes('investor')) {
+            socket.emit('notification', 'ACTION REJECTED: Investors cannot launch companies.');
+            return;
+          }
           const COMPANY_TEMPLATES = [
             { name: "CONTRACT FARMING", icon: "/mat-icons/mat-icon-contract-farming.png", invest: 10, revenue: 100, valuation: 500, loan: 0 },
             { name: "AGRI IoT", icon: "/mat-icons/mat-icon-agri-iot.png", invest: 100, revenue: 10, valuation: 1000, loan: 0 },

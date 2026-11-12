@@ -480,10 +480,20 @@ function App() {
   const rawLocalPlayer = (socketId ? players.find(p => p.id === socketId) : null) || players.find(p => p.name === username) || players[0];
   const localPlayer = rawLocalPlayer ? {
     ...rawLocalPlayer,
+    role: rawLocalPlayer.role || (rawLocalPlayer.avatarId === 5 || rawLocalPlayer.avatarId === 6 ? 'Investor' : rawLocalPlayer.role),
     avatarId: rawLocalPlayer.avatarId || (rawLocalPlayer.role?.toLowerCase() === 'investor' ? 5 : 1)
   } : null;
   const localPlayerName = localPlayer?.name || username;
   const localPlayerMatTheme = getPlayerMatTheme(localPlayer);
+  const isInvestorPlayer = Boolean(
+    localPlayerMatTheme?.isInvestor || 
+    localPlayer?.role?.toLowerCase() === 'investor' || 
+    localPlayer?.isInvestor ||
+    Number(localPlayer?.avatarId) === 5 ||
+    Number(localPlayer?.avatarId) === 6 ||
+    String(localPlayer?.name || '').toLowerCase().includes('investor') ||
+    String(localPlayer?.role || '').toLowerCase().includes('investor')
+  );
   
   const capital = localPlayer?.capital ?? 0;
   const globalLoan = localPlayer?.loan ?? 0;
@@ -1137,10 +1147,22 @@ function App() {
             <div className="w-full max-w-[1450px] h-full max-h-[760px] pointer-events-auto relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[#1c4d3d] rounded-xl overflow-hidden bg-[#0a1914] scale-[0.9] origin-top">
                <MiddleBoard 
                  players={augmentedPlayers} 
-                 onDeckClick={() => setActiveModal('buy_mentor')} 
+                 onDeckClick={() => {
+                   if (isInvestorPlayer) {
+                     setNotification({
+                       show: true,
+                       message: 'Investors cannot pick or buy Mentor Cards.'
+                     });
+                     setTimeout(() => setNotification({ show: false, message: '' }), 2500);
+                     return;
+                   }
+                   setActiveModal('buy_mentor');
+                 }} 
                  currentRound={gameRound} 
                  onBankLoanClick={() => setActiveModal('loan')} 
                  onPRServicesClick={() => setActiveModal('buy_pr')} 
+                 localPlayer={localPlayer}
+                 isInvestor={isInvestorPlayer}
                />
             </div>
 
@@ -1196,63 +1218,65 @@ function App() {
               )}
             </div>
 
-            {/* Desk Element 1: Launch Status List */}
-            <div className="flex flex-col gap-2.5 mb-2 pointer-events-auto min-w-[145px]">
-              {Array.from({ length: 4 }).map((_, idx) => {
-                const comp = localPlayer?.ownedCompanies?.[idx] || null;
-                const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
+            {/* Desk Element 1: Launch Status List (Founders Only) */}
+            {!isInvestorPlayer && (
+              <div className="flex flex-col gap-2.5 mb-2 pointer-events-auto min-w-[145px]">
+                {Array.from({ length: 4 }).map((_, idx) => {
+                  const comp = localPlayer?.ownedCompanies?.[idx] || null;
+                  const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
 
-                return (
-                  <div key={idx} className="flex items-center gap-2.5 h-[36px]">
-                    <span className="text-sm md:text-base font-bold text-white w-4 shrink-0 text-left select-none">
-                      {idx + 1}.
-                    </span>
+                  return (
+                    <div key={idx} className="flex items-center gap-2.5 h-[36px]">
+                      <span className="text-sm md:text-base font-bold text-white w-4 shrink-0 text-left select-none">
+                        {idx + 1}.
+                      </span>
 
-                    {comp ? (
-                      <div 
-                        onClick={() => setActiveModal('playerMat')}
-                        className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
-                      >
-                        {/* Company Original 3D Logo */}
-                        <div className="w-9 h-9 flex items-center justify-center shrink-0">
-                          <img 
-                            src={getCompanyLogoImage(comp.name)} 
-                            alt={comp.name} 
-                            className="w-full h-full object-contain drop-shadow-md select-none" 
-                          />
+                      {comp ? (
+                        <div 
+                          onClick={() => setActiveModal('playerMat')}
+                          className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                        >
+                          {/* Company Original 3D Logo */}
+                          <div className="w-9 h-9 flex items-center justify-center shrink-0">
+                            <img 
+                              src={getCompanyLogoImage(comp.name)} 
+                              alt={comp.name} 
+                              className="w-full h-full object-contain drop-shadow-md select-none" 
+                            />
+                          </div>
+
+                          {/* Stage Level Token */}
+                          <div className="w-8 h-8 flex items-center justify-center rounded-sm overflow-hidden shadow-sm shrink-0">
+                            <img 
+                              src={getStageTokenImage(comp.stage, 0, localPlayer?.color)} 
+                              alt={getStageInitial(comp.stage)} 
+                              className="w-full h-full object-contain select-none" 
+                            />
+                          </div>
+
+                          {/* Team Token Coin */}
+                          <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                            <img 
+                              src={getTeamTokenCoinImage(comp.team)} 
+                              alt="Team Token" 
+                              className="w-full h-full object-contain drop-shadow-md select-none" 
+                            />
+                          </div>
                         </div>
-
-                        {/* Stage Level Token */}
-                        <div className="w-8 h-8 flex items-center justify-center rounded-sm overflow-hidden shadow-sm shrink-0">
-                          <img 
-                            src={getStageTokenImage(comp.stage, 0, localPlayer?.color)} 
-                            alt={getStageInitial(comp.stage)} 
-                            className="w-full h-full object-contain select-none" 
-                          />
-                        </div>
-
-                        {/* Team Token Coin */}
-                        <div className="w-8 h-8 flex items-center justify-center shrink-0">
-                          <img 
-                            src={getTeamTokenCoinImage(comp.team)} 
-                            alt="Team Token" 
-                            className="w-full h-full object-contain drop-shadow-md select-none" 
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => setActiveModal('playerMat')}
-                        className="w-[78px] h-[32px] rounded-[8px] bg-[#546461] hover:bg-[#637571] text-white text-[9px] font-bold uppercase tracking-wider leading-tight flex flex-col items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
-                      >
-                        <span>LAUNCH</span>
-                        <span>COMPANY</span>
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      ) : (
+                        <button 
+                          onClick={() => setActiveModal('playerMat')}
+                          className="w-[78px] h-[32px] rounded-[8px] bg-[#546461] hover:bg-[#637571] text-white text-[9px] font-bold uppercase tracking-wider leading-tight flex flex-col items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
+                        >
+                          <span>LAUNCH</span>
+                          <span>COMPANY</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Desk Element 2: Mini Player Mat */}
             <div 
@@ -1337,8 +1361,8 @@ function App() {
               </div>
             </div>
 
-            {/* Desk Element 3: Owned Mentor Cards (Inventory) */}
-            {localPlayer && localPlayer.mentorCards && (
+            {/* Desk Element 3: Owned Mentor Cards (Founders Only - Investors cannot store or pick mentor cards) */}
+            {!isInvestorPlayer && localPlayer && localPlayer.mentorCards && (
               <div 
                 onClick={() => setActiveModal('mentorInventory')}
                 className="relative w-[160px] h-[160px] pointer-events-auto cursor-pointer group mb-6 ml-6"
@@ -1492,7 +1516,7 @@ function App() {
                   </button>
                 </>
               ) : gamePhase === 2 ? (
-                <Phase2Dashboard isLocked={isTurnLocked} onActionClick={(action) => setActiveModal(action)} />
+                <Phase2Dashboard isLocked={isTurnLocked} onActionClick={(action) => setActiveModal(action)} isInvestor={isInvestorPlayer} />
               ) : (
                 <>
                   <button
@@ -1644,7 +1668,7 @@ function App() {
         </div>
 
         {/* PHASE 2 MODAL MANAGER */}
-        {(gamePhase === 2 || ['launch', 'stage_up', 'buy_pr', 'upgrade_workforce'].includes(activeModal)) && (
+        {(gamePhase === 2 || ['launch', 'stage_up', 'buy_pr', 'upgrade_workforce'].includes(activeModal)) && !isInvestorPlayer && (
           <Phase2Manager 
             activeModal={activeModal} 
             setActiveModal={setActiveModal} 
@@ -1654,8 +1678,8 @@ function App() {
           />
         )}
 
-        {/* MENTOR CARD MODAL (Accessible Anytime) */}
-        {activeModal === 'buy_mentor' && (
+        {/* MENTOR CARD MODAL (Accessible Anytime - Founders Only) */}
+        {activeModal === 'buy_mentor' && !isInvestorPlayer && (
           <MentorCardModal 
             onClose={() => setActiveModal(null)} 
             onBuy={() => {
@@ -1765,7 +1789,7 @@ function App() {
               />
             )}
 
-            {activeModal === 'mentorInventory' && (
+            {activeModal === 'mentorInventory' && !isInvestorPlayer && (
               <MentorInventoryModal 
                 onClose={() => setActiveModal(null)} 
                 player={localPlayer}

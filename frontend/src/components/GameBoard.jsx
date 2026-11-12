@@ -555,10 +555,22 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
   const rawLocalPlayer = (socketId ? players.find(p => p.id === socketId) : null) || players.find(p => p.name === username) || players[0];
   const localPlayer = rawLocalPlayer ? {
     ...rawLocalPlayer,
-    avatarId: rawLocalPlayer.avatarId || avatarId || (rawLocalPlayer.role?.toLowerCase() === 'investor' ? 5 : 1)
+    role: rawLocalPlayer.role || role || propRole || (rawLocalPlayer.avatarId === 5 || rawLocalPlayer.avatarId === 6 || avatarId === 5 || avatarId === 6 ? 'Investor' : rawLocalPlayer.role),
+    avatarId: rawLocalPlayer.avatarId || avatarId || ((rawLocalPlayer.role || role || propRole)?.toLowerCase() === 'investor' ? 5 : 1)
   } : null;
   const localPlayerName = localPlayer?.name || username;
   const localPlayerMatTheme = getPlayerMatTheme(localPlayer);
+  const isInvestorPlayer = Boolean(
+    localPlayerMatTheme?.isInvestor || 
+    localPlayer?.role?.toLowerCase() === 'investor' || 
+    localPlayer?.isInvestor ||
+    Number(localPlayer?.avatarId) === 5 ||
+    Number(localPlayer?.avatarId) === 6 ||
+    String(localPlayer?.name || '').toLowerCase().includes('investor') ||
+    String(role || propRole || '').toLowerCase() === 'investor' ||
+    Number(avatarId) === 5 ||
+    Number(avatarId) === 6
+  );
   
   const capital = localPlayer?.capital ?? 0;
   const globalLoan = localPlayer?.loan ?? 0;
@@ -1275,7 +1287,16 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
             <div data-tutorial="tutorial-game-board" className="w-full max-w-[1450px] h-full max-h-[760px] pointer-events-auto relative shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-[#1c4d3d] rounded-xl overflow-hidden bg-[#0a1914] scale-[0.9] origin-top">
                <MiddleBoard 
                  players={augmentedPlayers} 
-                 onDeckClick={() => setActiveModal('buy_mentor')} 
+                 onDeckClick={() => {
+                   if (isInvestorPlayer) {
+                     setPendingNotification({
+                       title: 'FOUNDER ONLY ACTION',
+                       message: 'Investors cannot pick or buy Mentor Cards.'
+                     });
+                     return;
+                   }
+                   setActiveModal('buy_mentor');
+                 }} 
                  currentRound={gameRound} 
                  onBankLoanClick={() => setActiveModal('loan')} 
                  onPRServicesClick={() => setActiveModal('buy_pr')} 
@@ -1287,6 +1308,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                  revealedEvents={gameState?.revealedEvents}
                  onCompanyClick={handleCompanyClick}
                  localPlayer={localPlayer}
+                 isInvestor={isInvestorPlayer}
                />
             </div>
 
@@ -1342,69 +1364,71 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
               )}
             </div>
 
-            {/* Desk Element 1: Launch Status List */}
-            <div className="flex flex-col gap-2.5 mb-2 pointer-events-auto min-w-[145px]">
-              {Array.from({ length: 4 }).map((_, idx) => {
-                const comp = localPlayer?.ownedCompanies?.[idx] || null;
-                const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
+            {/* Desk Element 1: Launch Status List (Founders Only) */}
+            {!isInvestorPlayer && (
+              <div className="flex flex-col gap-2.5 mb-2 pointer-events-auto min-w-[145px]">
+                {Array.from({ length: 4 }).map((_, idx) => {
+                  const comp = localPlayer?.ownedCompanies?.[idx] || null;
+                  const getStageInitial = (stageIdx) => ['L', 'R', 'G', 'S'][stageIdx] || 'L';
 
-                return (
-                  <div key={idx} className="flex items-center gap-2.5 h-[36px]">
-                    <span className="text-sm md:text-base font-bold text-white w-4 shrink-0 text-left select-none">
-                      {idx + 1}.
-                    </span>
+                  return (
+                    <div key={idx} className="flex items-center gap-2.5 h-[36px]">
+                      <span className="text-sm md:text-base font-bold text-white w-4 shrink-0 text-left select-none">
+                        {idx + 1}.
+                      </span>
 
-                    {comp ? (
-                      <div 
-                        onClick={() => setActiveModal('playerMat')}
-                        className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
-                      >
-                        {/* Company Original 3D Logo */}
-                        <div className="w-9 h-9 flex items-center justify-center shrink-0">
-                          <img 
-                            src={getCompanyLogoImage(comp.name)} 
-                            alt={comp.name} 
-                            className="w-full h-full object-contain drop-shadow-md select-none" 
-                          />
-                        </div>
-
-                        {/* Stage Level Token */}
-                        <div className="w-8 h-8 flex items-center justify-center rounded-sm overflow-hidden shadow-sm shrink-0">
-                          <img 
-                            src={getStageTokenImage(comp.stage, 0, localPlayer?.color)} 
-                            alt={getStageInitial(comp.stage)} 
-                            className="w-full h-full object-contain select-none" 
-                          />
-                        </div>
-
-                        {/* Team Token Coin */}
-                        <div className="w-8 h-8 flex items-center justify-center shrink-0">
-                          {getTeamTokenCoinImage(comp.teamLevel || comp.team) ? (
+                      {comp ? (
+                        <div 
+                          onClick={() => setActiveModal('playerMat')}
+                          className="flex items-center gap-2 cursor-pointer hover:scale-105 transition-transform"
+                        >
+                          {/* Company Original 3D Logo */}
+                          <div className="w-9 h-9 flex items-center justify-center shrink-0">
                             <img 
-                              src={getTeamTokenCoinImage(comp.teamLevel || comp.team)} 
-                              alt="Team Token" 
+                              src={getCompanyLogoImage(comp.name)} 
+                              alt={comp.name} 
                               className="w-full h-full object-contain drop-shadow-md select-none" 
                             />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full border border-white/20 bg-black/40 flex items-center justify-center text-[10px] text-white/70 font-bold" title="Team Level 1 (Solo Founder)">
-                              1
-                            </div>
-                          )}
+                          </div>
+
+                          {/* Stage Level Token */}
+                          <div className="w-8 h-8 flex items-center justify-center rounded-sm overflow-hidden shadow-sm shrink-0">
+                            <img 
+                              src={getStageTokenImage(comp.stage, 0, localPlayer?.color)} 
+                              alt={getStageInitial(comp.stage)} 
+                              className="w-full h-full object-contain select-none" 
+                            />
+                          </div>
+
+                          {/* Team Token Coin */}
+                          <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                            {getTeamTokenCoinImage(comp.teamLevel || comp.team) ? (
+                              <img 
+                                src={getTeamTokenCoinImage(comp.teamLevel || comp.team)} 
+                                alt="Team Token" 
+                                className="w-full h-full object-contain drop-shadow-md select-none" 
+                              />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full border border-white/20 bg-black/40 flex items-center justify-center text-[10px] text-white/70 font-bold" title="Team Level 1 (Solo Founder)">
+                                1
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => setActiveModal('launch')}
-                        className="w-[78px] h-[32px] rounded-[8px] bg-[#546461] hover:bg-[#637571] text-white text-[9px] font-bold uppercase tracking-wider leading-tight flex flex-col items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
-                      >
-                        <span>LAUNCH</span>
-                        <span>COMPANY</span>
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      ) : (
+                        <button 
+                          onClick={() => setActiveModal('launch')}
+                          className="w-[78px] h-[32px] rounded-[8px] bg-[#546461] hover:bg-[#637571] text-white text-[9px] font-bold uppercase tracking-wider leading-tight flex flex-col items-center justify-center shadow-md transition-all hover:scale-105 active:scale-95 cursor-pointer select-none"
+                        >
+                          <span>LAUNCH</span>
+                          <span>COMPANY</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Desk Element 2: Mini Player Mat */}
             <div 
@@ -1489,8 +1513,8 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
               </div>
             </div>
 
-            {/* Desk Element 3: Owned Mentor Cards (Inventory) */}
-            {localPlayer && localPlayer.mentorCards && (
+            {/* Desk Element 3: Owned Mentor Cards (Founders Only - Investors cannot store or pick mentor cards) */}
+            {!isInvestorPlayer && localPlayer && localPlayer.mentorCards && (
               <div 
                 data-tutorial="tutorial-card-area"
                 onClick={() => setActiveModal('mentorInventory')}
@@ -1658,7 +1682,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                   </button>
                 </>
               ) : gamePhase === 2 ? (
-                <Phase2Dashboard isLocked={isTurnLocked} onActionClick={(action) => setActiveModal(action)} />
+                <Phase2Dashboard isLocked={isTurnLocked} onActionClick={(action) => setActiveModal(action)} isInvestor={isInvestorPlayer} />
               ) : (
                 <>
                   <button
@@ -1815,8 +1839,8 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
           />
         )}
 
-        {/* MENTOR CARD MODAL (Accessible Anytime) */}
-        {activeModal === 'buy_mentor' && (
+        {/* MENTOR CARD MODAL (Accessible Anytime - Founders Only) */}
+        {activeModal === 'buy_mentor' && !isInvestorPlayer && (
           <MentorCardModal 
             onClose={() => setActiveModal(null)} 
             onBuy={() => {
@@ -1984,7 +2008,7 @@ function GameBoard({ roomId: propRoomId, username: propUsername, role: propRole,
                 currentRound={gameRound}
               />
             )}
-{activeModal === 'mentorInventory' && (
+            {activeModal === 'mentorInventory' && !isInvestorPlayer && (
               <MentorInventoryModal 
                 onClose={() => setActiveModal(null)} 
                 player={localPlayer}
